@@ -68,11 +68,11 @@ class Chapter:
 
 # ================= 解析逻辑 =================
 class LightNovelParser:
-    def __init__(self, epub_path: str, output_dir: Optional[str] = None, max_chunk_size: int = 40000):
+    def __init__(self, epub_path: str, output_dir: Optional[str] = None, max_chunk_size: int = 1024):
         """
         :param epub_path: EPUB 文件路径
         :param output_dir: 静态资源输出目录 (用于存解压后的图片)，默认使用 config.UPLOAD_DIR
-        :param max_chunk_size: Sudachi 分词本身的限制, 不建议设置超过40k
+        :param max_chunk_size: 一个Segment最大文本长度, 受 Sudachi 分词本身的限制不建议设置超过40k
         """
         self.epub_path = epub_path
         self.max_chunk_size = max_chunk_size
