@@ -1,5 +1,5 @@
 # app/schemas/book.py
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Union, Any, Dict
 from enum import Enum
 from datetime import datetime
@@ -75,3 +75,37 @@ class ImageSegmentSchema(SegmentBase):
     alt: str = Field(default="", description="替代文本")
 
 ContentSegment = Union[TextSegmentSchema, ImageSegmentSchema]
+
+
+# 划线
+class HighlightBase(BaseModel):
+    """划线基础属性"""
+    style_category: str = "default"
+    selected_text: str = Field(..., description="选中的纯文本内容，用于校验或回显")
+
+class HighlightCreate(HighlightBase):
+    """创建划线请求"""
+    book_id: str
+    chapter_index: int
+    
+    # === 坐标系统 ===
+    start_segment_index: int = Field(..., ge=0)
+    start_token_idx: int = Field(..., ge=0)
+    end_segment_index: int = Field(..., ge=0)
+    end_token_idx: int = Field(..., ge=0)
+
+    @model_validator(mode='after')
+    def validate_coords(self):
+        if self.end_segment_index < self.start_segment_index:
+            raise ValueError("end_segment_index must be >= start_segment_index")
+        if self.end_segment_index == self.start_segment_index and self.end_token_idx < self.start_token_idx:
+            raise ValueError("end_token_idx must be >= start_token_idx in same segment")
+        return self
+
+class HighlightResponse(HighlightCreate):
+    """划线响应"""
+    id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True # Pydantic v2 (v1 使用 orm_mode = True)
