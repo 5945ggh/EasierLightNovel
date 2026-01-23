@@ -55,7 +55,7 @@ class UserProgress(Base):
     
     current_chapter_index = Column(Integer, default=0)
     current_segment_index = Column(Integer, default=0)
-    current_segment_offset = Column(Integer, default=0, nullable=True) # segment 的偏移量, 通过 token 数计算; 由于 ImageSegment 的存在, 该字段可以为空
+    current_segment_offset = Column(Integer, default=0, nullable=True) # segment 的偏移量, 记录当前视口顶部第一个可见的 Token 的 index(Target Token Index); 由于 ImageSegment 的存在, 该字段可以为空
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     book = relationship("Book", back_populates="progress")
@@ -107,9 +107,12 @@ class UserHighlight(Base):
     book_id = Column(String(32), ForeignKey("books.id"), index=True)
     chapter_index = Column(Integer, nullable=False)
     
-    # === 定位坐标 (Snap-to-Token 策略) ===
-    segment_index = Column(Integer, nullable=False)
+    # === 起点坐标 (Start Anchor) ===
+    start_segment_index = Column(Integer, nullable=False)
     start_token_idx = Column(Integer, nullable=False)
+
+    # === 终点坐标 (End Anchor) ===
+    end_segment_index = Column(Integer, nullable=False)
     end_token_idx = Column(Integer, nullable=False)
     
     # === 视觉属性 ===
