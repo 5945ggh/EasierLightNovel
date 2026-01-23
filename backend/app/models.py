@@ -46,6 +46,7 @@ class Chapter(Base):
     book = relationship("Book", back_populates="chapters")
 
 
+# 难点预警：React 渲染是异步的。不能在组件 mount 时立刻 scroll。必须等待 DOM 里的 Token 渲染完毕。建议使用 useLayoutEffect 或监听最后一个 Token 的渲染回调，然后再执行 document.querySelector([data-token-index="${offset}"]).scrollIntoView()。
 class UserProgress(Base):
     """记录阅读进度"""
     __tablename__ = "user_progress"
