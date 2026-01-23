@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Literal, Dict, Any
 from sudachipy import tokenizer, dictionary
 import jaconv
 
@@ -27,7 +27,7 @@ class Token:
 
 # ================= 核心逻辑 =================
 class JapaneseTokenizer:
-    def __init__(self, mode="B"):
+    def __init__(self, mode: Literal["A", "B", "C"] = "B"):
         mode_map = {
             "A": tokenizer.Tokenizer.SplitMode.A,
             "B": tokenizer.Tokenizer.SplitMode.B, # 推荐 B：语义平衡
