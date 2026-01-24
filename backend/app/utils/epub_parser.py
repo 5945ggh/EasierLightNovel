@@ -13,6 +13,10 @@ from app.config import UPLOAD_DIR, STATIC_URL_PREFIX
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
+# ==================== 章节标题提取配置 ====================
+# 正文首行最大截取长度（作为标题时）
+MAX_TITLE_LENGTH_FROM_CONTENT = 32
+
 # ================= 数据模型 =================
 # 为了保证保证原顺序的图文交错排布, 我们在Chapter内划分出了Segment
 # 基本逻辑是: 解析Epub的一个Chapter时, 我们维护一个text cache. 
@@ -94,6 +98,12 @@ class LightNovelParser:
         self.images_map = {} # map internal filename -> saved web path
         self._extract_all_images()
 
+        # 建立 TOC 映射: spine_id -> chapter_title
+        self.toc_map = self._build_toc_map()
+
+        # 记录上一个有 TOC 标题的章节（用于标题继承）
+        self._last_toc_title: Optional[str] = None
+
     def _generate_book_id(self, path: str) -> str:
         """读取文件头 1KB 生成简单的 Hash ID，用于目录隔离"""
         with open(path, 'rb') as f:
@@ -105,7 +115,88 @@ class LightNovelParser:
         """读取文件头 1KB 生成简单的 Hash ID"""
         with open(path, 'rb') as f:
             content_head = f.read(1024)
-        return hashlib.md5(content_head).hexdigest()[:12] 
+        return hashlib.md5(content_head).hexdigest()[:12]
+
+    def _build_toc_map(self) -> Dict[str, str]:
+        """
+        建立 TOC 映射表: spine_id -> chapter_title
+
+        EPUB 的 TOC (book.toc) 是一个 Link 对象列表，每个 Link 有:
+        - title: 章节标题
+        - href: 如 "xhtml/p-001.xhtml"
+
+        从 href 中提取 spine_id (如 "p-001")，建立映射关系。
+        """
+        toc_map = {}
+        for link in self.book.toc:
+            href = getattr(link, 'href', '')
+            if not href:
+                continue
+
+            # href 可能是 "xhtml/p-001.xhtml" 或 "../item/xhtml/p-001.xhtml"
+            # 提取文件名并去掉扩展名
+            filename = os.path.basename(href)
+            spine_id = os.path.splitext(filename)[0]
+
+            title = getattr(link, 'title', '')
+            if spine_id and title:
+                toc_map[spine_id] = title
+
+        return toc_map
+
+    def _extract_chapter_title(
+        self,
+        spine_id: str,
+        soup: BeautifulSoup,
+        chapter_index: int,
+        first_text_line: Optional[str] = None
+    ) -> str:
+        """
+        提取章节标题（组合策略）
+
+        优先级：
+        1. TOC 标题（如果存在）
+        2. 继承上一个 TOC 标题（用于同一章的后续部分，如 p-002, p-003）
+        3. 正文首行截取（不超过 MAX_TITLE_LENGTH_FROM_CONTENT）
+        4. Fallback: "Chapter X"
+
+        Args:
+            spine_id: spine 中的 item_id (如 "p-001")
+            soup: BeautifulSoup 解析后的文档对象
+            chapter_index: 章节索引（用于 fallback）
+            first_text_line: 正文第一行文本（如果已提取）
+
+        Returns:
+            章节标题字符串
+        """
+        # 1. 优先使用 TOC 标题
+        if spine_id in self.toc_map:
+            title = self.toc_map[spine_id].strip()
+            if title:
+                self._last_toc_title = title  # 更新上一个 TOC 标题
+                return title
+
+        # 2. 继承上一个 TOC 标题（同一章的后续部分）
+        if self._last_toc_title:
+            return self._last_toc_title
+
+        # 3. 尝试从文档的 h1-h6 标签获取
+        header_tag = soup.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+        if header_tag:
+            title = header_tag.get_text().strip()
+            if title:
+                return title
+
+        # 4. 使用正文首行截取
+        if first_text_line:
+            title = first_text_line.strip()
+            # 截取到第一个换行符或最大长度
+            title = title.split('\n')[0][:MAX_TITLE_LENGTH_FROM_CONTENT]
+            if title:
+                return title
+
+        # 5. Fallback
+        return f"Chapter {chapter_index + 1}" 
     
     def _extract_all_images(self):
         """预先解压所有图片，建立映射关系"""
@@ -267,17 +358,48 @@ class LightNovelParser:
         
         buffer.clear()
 
+    def _extract_first_text_line(self, soup: BeautifulSoup) -> Optional[str]:
+        """
+        提取正文第一行文本（用于作为章节标题的 fallback）
+
+        遍历 body 的所有文本节点，找到第一个非空行。
+        """
+        if not soup.body:
+            return None
+
+        for text in soup.body.stripped_strings:
+            line = text.strip()
+            if line:
+                # 过滤掉一些明显不是标题的内容
+                # 如纯数字、单个标点等
+                if len(line) > 1 and not line.isdigit():
+                    return line
+
+        return None
+
     def parse(self) -> List[Chapter]:
+        """
+        解析 EPUB，返回章节列表
+
+        注意：
+        - 返回的每个 Chapter 对应 EPUB spine 中的一个 item
+        - 同一章节可能跨越多个 spine item（如 p-001, p-002, p-003 都是同一章）
+        - 这种情况下，相邻的 Chapter 会有相同的 title（通过标题继承实现）
+        - **章节合并显示由前端处理**，后端保持原始 spine 结构以便精确定位
+
+        返回：
+            List[Chapter]: 章节列表，每个章节的 index 对应 spine 索引
+        """
         chapters = []
         # spine 格式通常是 ('item_id', 'yes/no')
-        
+
         for i, spine_item in enumerate(self.book.spine):
             if isinstance(spine_item, tuple):
                 item_id = spine_item[0]
             else:
                 item_id = spine_item
             item = self.book.get_item_with_id(item_id)
-            
+
             if not item or item.get_type() != ebooklib.ITEM_DOCUMENT:
                 continue
 
@@ -285,12 +407,16 @@ class LightNovelParser:
             # item.get_content() 返回 bytes，BS4 会自动探测编码，通常不需要手动 decode
             soup = BeautifulSoup(item.get_content(), 'lxml')
 
-            # 安全获取标题
-            title_str = f"Chapter {i+1}" # TODO: 章节名称提取逻辑待完善
-            header_tag = soup.find(['h1', 'h2', 'h3', 'title'])
-            if header_tag:
-                t = header_tag.get_text().strip()
-                if t: title_str = t
+            # 提取正文第一行（用于标题 fallback）
+            first_text_line = self._extract_first_text_line(soup)
+
+            # 使用组合策略提取章节标题
+            title_str = self._extract_chapter_title(
+                spine_id=item_id,
+                soup=soup,
+                chapter_index=i,
+                first_text_line=first_text_line
+            )
 
             current_chapter = Chapter(title_str, i)
             text_buffer = []
