@@ -2,8 +2,8 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from models import Base
-from config import SQLALCHEMY_DATABASE_URL, DATA_DIR, DB_PATH, UPLOAD_DIR
+from app.models import Base
+from app.config import SQLALCHEMY_DATABASE_URL, DATA_DIR, DB_PATH, UPLOAD_DIR
 
 # 使用 SQLite，check_same_thread=False 允许在 FastAPI 的多线程环境中使用同一个连接对象
 # 虽然 SQLAlchemy 的 Session 不是线程安全的，但每个请求会创建新的 Session

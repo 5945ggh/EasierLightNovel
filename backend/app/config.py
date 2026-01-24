@@ -1,6 +1,7 @@
 # app/core/config.py
-# 可选配置env: 
-# "DATA_DIR" - 资源文件(解析后书籍的图片, 上传的封面, ...) 
+# 可选配置env:
+# "DATA_DIR" - 资源文件(解析后书籍的图片, 上传的封面, ...)
+# "PORT" - 服务器端口
 import os
 from pathlib import Path
 
@@ -20,3 +21,7 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL",
     f"sqlite:///{DB_PATH}"
 )
+
+# 服务器配置
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", 8010))
