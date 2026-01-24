@@ -72,7 +72,7 @@ class Chapter:
 
 # ================= 解析逻辑 =================
 class LightNovelParser:
-    def __init__(self, epub_path: str, book_id: str, output_dir: Optional[str] = None, max_chunk_size: int = 1024):
+    def __init__(self, epub_path: str, book_id: str, output_dir: Optional[str] = None, max_chunk_size: int = 2048):
         """
         :param epub_path: EPUB 文件路径
         :param book_id: 书籍唯一 ID（由调用方生成的 UUID）
