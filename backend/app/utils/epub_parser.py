@@ -9,7 +9,7 @@ from ebooklib import epub
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 from bs4.element import NavigableString, Tag, Comment
 
-from backend.app.config import UPLOAD_DIR, STATIC_URL_PREFIX
+from app.config import UPLOAD_DIR, STATIC_URL_PREFIX
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
