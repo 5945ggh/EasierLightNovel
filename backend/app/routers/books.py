@@ -6,9 +6,14 @@ from fastapi import APIRouter, Depends, UploadFile, File, BackgroundTasks, HTTPE
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import BookListItem, BookDetail, BookUpdate
+from app.schemas import (
+    BookListItem, BookDetail, BookUpdate,
+    ChapterListItem, ChapterResponse, ChapterHighlightData,
+    VocabularyBaseFormsResponse
+)
 from app.services.book_service import BookService
 from app.config import UPLOAD_DIR
+from app.models import Chapter
 
 router = APIRouter(prefix="/api/books", tags=["Books"])
 
@@ -123,3 +128,69 @@ def delete_book(book_id: str, book_service: BookService = Depends(get_book_servi
     if not success:
         raise HTTPException(status_code=404, detail="Book not found")
     return {"ok": True}
+
+@router.get("/{book_id}/toc", response_model=List[ChapterListItem])
+def get_table_of_contents(book_id: str, book_service: BookService = Depends(get_book_service)):
+    """获取书籍目录（章节列表，不含正文）"""
+    # 检查书籍是否存在
+    book = book_service.get_book(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    # 获取章节列表
+    chapters = book_service.get_chapters(book_id)
+
+    # 转换为 ChapterListItem（只包含 index 和 title）
+    return [
+        ChapterListItem(index=ch.index, title=ch.title) #type: ignore
+        for ch in chapters
+    ]
+
+@router.get("/{book_id}/chapters/{chapter_index}", response_model=ChapterResponse)
+def get_chapter_content(
+    book_id: str,
+    chapter_index: int,
+    book_service: BookService = Depends(get_book_service)
+):
+    """
+    获取特定章节的完整内容（含分词数据）
+
+    同时返回本章节的高亮数据，前端可以根据坐标渲染高亮样式
+    """
+    # 1. 获取章节内容
+    chapter = book_service.get_chapter_content(book_id, chapter_index)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+
+    # 2. 获取本章节高亮
+    highlights = book_service.get_chapter_highlights(book_id, chapter_index)
+
+    # 3. 构造响应
+    return ChapterResponse(
+        index=chapter.index,  # type: ignore
+        title=chapter.title,  # type: ignore
+        segments=chapter.content_json,  # type: ignore
+        highlights=highlights, # type: ignore  已经设置ChapterHighlightData.Config.from_attributes = True
+    )
+
+
+@router.get("/{book_id}/vocabularies/base_forms", response_model=VocabularyBaseFormsResponse)
+def get_vocabularies_base_forms(
+    book_id: str,
+    book_service: BookService = Depends(get_book_service)
+):
+    """
+    获取书籍的生词原型集合（全书范围）
+
+    用途：进入阅读器时调用一次，前端存入全局状态
+    渲染时根据 token.base_form 是否在集合中来判断是否为生词
+    """
+    # 检查书籍是否存在
+    book = book_service.get_book(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    base_forms = book_service.get_vocabularies_base_forms(book_id)
+
+    return VocabularyBaseFormsResponse(base_forms=base_forms)
+

@@ -6,7 +6,7 @@ from typing import List, Optional, Literal
 from sqlalchemy.orm import Session
 from fastapi import UploadFile, BackgroundTasks
 
-from app.models import Book, Chapter, ProcessingStatus
+from app.models import Book, Chapter, ProcessingStatus, UserHighlight, Vocabulary
 from app.schemas import BookCreate, BookUpdate
 from app.utils.epub_parser import LightNovelParser, TextSegment, ImageSegment
 from app.utils.tokenizer import JapaneseTokenizer
@@ -50,12 +50,78 @@ class BookService:
             book_dir = os.path.join(UPLOAD_DIR, book_id)
             if os.path.exists(book_dir):
                 shutil.rmtree(book_dir, ignore_errors=True)
-            
+
             # 2. 删除数据库记录 (Cascade delete 会自动删除 chapters, progress 等)
             self.db.delete(book)
             self.db.commit()
             return True
         return False
+
+    def get_chapters(self, book_id: str) -> List[Chapter]:
+        """
+        获取书籍的章节列表（仅 index 和 title，不含正文内容）
+
+        Returns:
+            List[Chapter]: 章节列表，按 index 排序
+        """
+        return self.db.query(Chapter)\
+            .filter(Chapter.book_id == book_id)\
+            .order_by(Chapter.index)\
+            .all()
+
+    def get_chapter_content(self, book_id: str, chapter_index: int) -> Optional[Chapter]:
+        """
+        获取特定章节的完整内容（含分词数据）
+
+        Args:
+            book_id: 书籍 ID
+            chapter_index: 章节索引（对应 spine 索引）
+
+        Returns:
+            Chapter: 章节对象，包含 content_json 字段
+            None: 章节不存在
+        """
+        return self.db.query(Chapter)\
+            .filter(
+                Chapter.book_id == book_id,
+                Chapter.index == chapter_index
+            )\
+            .first()
+
+    def get_chapter_highlights(self, book_id: str, chapter_index: int) -> List[UserHighlight]:
+        """
+        获取特定章节的高亮列表（ORM 对象）
+
+        Args:
+            book_id: 书籍 ID
+            chapter_index: 章节索引
+
+        Returns:
+            List[UserHighlight]: 本章节的高亮列表
+        """
+        
+        return self.db.query(UserHighlight)\
+            .filter(
+                UserHighlight.book_id == book_id,
+                UserHighlight.chapter_index == chapter_index
+            )\
+            .all()
+
+    def get_vocabularies_base_forms(self, book_id: str) -> List[str]: # TODO: 后续可以拆分
+        """
+        获取书籍的所有生词原型（去重后的集合）
+
+        Args:
+            book_id: 书籍 ID
+
+        Returns:
+            List[str]: 去重后的生词原型列表
+        """
+        result = self.db.query(Vocabulary.base_form)\
+            .filter(Vocabulary.book_id == book_id)\
+            .distinct()\
+            .all()
+        return [row[0] for row in result]
 
     def _extract_epub_metadata(self, epub_path: str, fallback_title: str) -> tuple[str, Optional[str]]:
         """
