@@ -108,6 +108,32 @@ class VocabularyBaseFormsResponse(BaseModel):
     """生词原型集合响应（全书范围）"""
     base_forms: List[str]  # 去重后的生词原型列表
 
+class VocabularyBase(BaseModel):
+    """生词基础信息"""
+    word: str = Field(..., description="表层形")
+    reading: Optional[str] = Field(None, description="读音")
+    base_form: str = Field(..., description="原型")
+    part_of_speech: Optional[str] = Field(None, description="词性")
+    definition: Optional[str] = Field(None, description="释义json")
+
+class VocabularyCreate(VocabularyBase):
+    """添加生词请求"""
+    book_id: str
+
+class VocabularyResponse(VocabularyBase):
+    """生词响应"""
+    id: int
+    book_id: str
+    definition: Optional[str] = None
+    status: int = 0
+    next_review_at: Optional[datetime] = None
+    context_sentences: Optional[List[str]] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # 划线
 class HighlightBase(BaseModel):
     """划线基础属性"""
@@ -153,7 +179,7 @@ class UserProgressBase(BaseModel):
 
 class UserProgressUpdate(UserProgressBase):
     """更新阅读进度请求"""
-    pass
+    pass # 继承了 UserProgressBase
 
 class UserProgressResponse(UserProgressBase):
     """阅读进度响应"""
