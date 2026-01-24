@@ -9,9 +9,11 @@ from app.database import get_db
 from app.schemas import (
     BookListItem, BookDetail, BookUpdate,
     ChapterListItem, ChapterResponse, ChapterHighlightData,
-    VocabularyBaseFormsResponse
+    VocabularyBaseFormsResponse,
+    UserProgressResponse, UserProgressUpdate
 )
 from app.services.book_service import BookService
+from app.services.progress_service import ProgressService
 from app.config import UPLOAD_DIR
 from app.models import Chapter
 
@@ -24,6 +26,13 @@ def get_book_service(db: Session = Depends(get_db)) -> BookService:
     并把 Service 实例注入 Router。
     """
     return BookService(db)
+
+def get_progress_service(db: Session = Depends(get_db)) -> ProgressService:
+    """
+    依赖注入：将 DB Session 注入 ProgressService
+    """
+    return ProgressService(db)
+
 
 @router.post("/upload", response_model=BookDetail) 
 async def upload_book( # TODO: 解析过程中前端页面显示加载在解析结束后不会自动结束，需手动刷新, 在前端需要写一个 Hooks 或者逻辑来处理这个“等待”的过程。
@@ -173,7 +182,6 @@ def get_chapter_content(
         highlights=highlights, # type: ignore  已经设置ChapterHighlightData.Config.from_attributes = True
     )
 
-
 @router.get("/{book_id}/vocabularies/base_forms", response_model=VocabularyBaseFormsResponse)
 def get_vocabularies_base_forms(
     book_id: str,
@@ -193,4 +201,47 @@ def get_vocabularies_base_forms(
     base_forms = book_service.get_vocabularies_base_forms(book_id)
 
     return VocabularyBaseFormsResponse(base_forms=base_forms)
+
+
+# ================= 阅读进度接口 =================
+@router.get("/{book_id}/progress", response_model=UserProgressResponse)
+def get_reading_progress(
+    book_id: str,
+    progress_service: ProgressService = Depends(get_progress_service)
+):
+    """
+    获取书籍的阅读进度
+
+    如果没有进度记录，返回默认值（全为 0）
+
+    **响应字段**:
+    - book_id: 书籍 ID
+    - current_chapter_index: 当前章节索引
+    - current_segment_index: 当前段落索引
+    - current_segment_offset: 当前 token 索引（滚动定位用）
+    - updated_at: 更新时间
+    """
+    return progress_service.get_progress(book_id)
+
+@router.put("/{book_id}/progress", response_model=UserProgressResponse)
+def update_reading_progress(
+    book_id: str,
+    data: UserProgressUpdate,
+    progress_service: ProgressService = Depends(get_progress_service)
+):
+    """
+    更新书籍的阅读进度
+
+    **请求体示例**:
+    ```json
+    {
+      "current_chapter_index": 5,
+      "current_segment_index": 12,
+      "current_segment_offset": 8
+    }
+    ```
+
+    如果没有进度记录，会自动创建新记录
+    """
+    return progress_service.update_progress(book_id, data)
 
