@@ -1,4 +1,4 @@
-# app/services/book_services.py
+# app/services/book_service.py
 import os
 import shutil
 import logging
@@ -6,11 +6,11 @@ from typing import List, Optional, Literal
 from sqlalchemy.orm import Session
 from fastapi import UploadFile, BackgroundTasks
 
-from models import Book, Chapter, ProcessingStatus
-from schemas import BookCreate
-from utils.epub_parser import LightNovelParser, TextSegment, ImageSegment
-from utils.tokenizer import JapaneseTokenizer
-from config import UPLOAD_DIR
+from app.models import Book, Chapter, ProcessingStatus
+from app.schemas import BookCreate, BookUpdate
+from app.utils.epub_parser import LightNovelParser, TextSegment, ImageSegment
+from app.utils.tokenizer import JapaneseTokenizer
+from app.config import UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,25 @@ class BookService:
 
     def get_book(self, book_id: str) -> Optional[Book]:
         return self.db.query(Book).filter(Book.id == book_id).first()
+
+    def update_book(self, book_id: str, update_data: BookUpdate) -> Optional[Book]:
+        """
+        更新书籍元数据（标题、作者、封面）
+
+        注意：此接口仅用于修改元数据，不修改 status 或 content
+        """
+        book = self.get_book(book_id)
+        if not book:
+            return None
+
+        # 只更新提供的字段
+        update_dict = update_data.model_dump(exclude_unset=True)
+        for field, value in update_dict.items():
+            setattr(book, field, value)
+
+        self.db.commit()
+        self.db.refresh(book)
+        return book
 
     def delete_book(self, book_id: str):
         book = self.get_book(book_id)
@@ -174,7 +193,7 @@ class BookService:
         需要创建新的 DB Session，因为原来的请求 Session 可能已关闭
         """
         # 这里的 SessionLocal 是 database.py 里定义的
-        from database import SessionLocal 
+        from app.database import SessionLocal
         db = SessionLocal()
         
         try:
