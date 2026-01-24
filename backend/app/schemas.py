@@ -76,6 +76,17 @@ class ImageSegmentSchema(SegmentBase):
 
 ContentSegment = Union[TextSegmentSchema, ImageSegmentSchema]
 
+# ==================== Chapter 相关 ====================
+class ChapterResponse(BaseModel):
+    """章节内容响应"""
+    index: int
+    title: str
+    segments: List[ContentSegment]
+
+class ChapterListItem(BaseModel):
+    """章节列表项"""
+    index: int
+    title: str
 
 # 划线
 class HighlightBase(BaseModel):
