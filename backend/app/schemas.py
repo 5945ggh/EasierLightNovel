@@ -102,6 +102,11 @@ class ChapterListItem(BaseModel):
     """章节列表项"""
     index: int
     title: str
+    
+# ==================== Vocabulary 相关 ====================
+class VocabularyBaseFormsResponse(BaseModel):
+    """生词原型集合响应（全书范围）"""
+    base_forms: List[str]  # 去重后的生词原型列表
 
 # 划线
 class HighlightBase(BaseModel):
@@ -136,12 +141,15 @@ class HighlightResponse(HighlightCreate):
     class Config:
         from_attributes = True
         
-        
 # ==================== UserProgress 相关 ====================
 class UserProgressBase(BaseModel):
     """阅读进度基础"""
-    current_chapter_index: int = 0
-    current_segment_index: int = 0
+    current_chapter_index: int = Field(default=0, ge=0)
+    current_segment_index: int = Field(default=0, ge=0)
+    
+    # 注意：models.py 里这个字段是 nullable=True，但为了前端处理方便，
+    # 我们在 Schema 层将其收敛为 int (如果为 None 则由后端逻辑转为 0)
+    current_segment_offset: int = Field(default=0, ge=0) 
 
 class UserProgressUpdate(UserProgressBase):
     """更新阅读进度请求"""
@@ -152,8 +160,5 @@ class UserProgressResponse(UserProgressBase):
     book_id: str
     updated_at: Optional[datetime] = None
 
-
-# ==================== Vocabulary 相关 ====================
-class VocabularyBaseFormsResponse(BaseModel):
-    """生词原型集合响应（全书范围）"""
-    base_forms: List[str]  # 去重后的生词原型列表
+    class Config:
+        from_attributes = True 
