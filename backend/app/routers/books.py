@@ -115,3 +115,11 @@ async def upload_book_cover(
     )
 
     return book
+
+@router.delete("/{book_id}")
+def delete_book(book_id: str, book_service: BookService = Depends(get_book_service)):
+    """删除书籍"""
+    success = book_service.delete_book(book_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return {"ok": True}
