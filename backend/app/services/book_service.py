@@ -8,7 +8,7 @@ from fastapi import UploadFile, BackgroundTasks
 
 from models import Book, Chapter, ProcessingStatus
 from schemas import BookCreate
-from utils.epub_parser import LightNovelParser, TextSegment
+from utils.epub_parser import LightNovelParser, TextSegment, ImageSegment
 from utils.tokenizer import JapaneseTokenizer
 from config import UPLOAD_DIR
 
@@ -66,9 +66,9 @@ class BookService:
             logger.warning(f"Failed to extract EPUB metadata: {e}, using fallback")
             return fallback_title, None
 
-    def _find_cover_image(self, book_id: str) -> Optional[str]: # TODO: 封面的寻找逻辑仍有问题, 待修复; 实际上正文部分的第一张图片(不是按字典序排好的文件夹内的第一张图片)似乎就是封面, 可能需要在epub_parse的时候记录一下
+    def _find_cover_image_fallback(self, book_id: str) -> Optional[str]: 
         """
-        查找书籍封面图片
+        当process_book_task中寻找封面的逻辑失效时用来模糊查找书籍封面图片
 
         策略：
         1. 优先查找文件名包含 'cover' 的图片
@@ -89,10 +89,10 @@ class BookService:
 
         try:
             # 获取所有图片文件
-            image_files = [
+            image_files = sorted([
                 f for f in os.listdir(images_dir)
                 if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp'))
-            ]
+            ])
 
             if not image_files:
                 logger.warning(f"No images found in {images_dir}")
@@ -131,10 +131,7 @@ class BookService:
         with open(temp_file_path, "wb") as f:
             f.write(content)
 
-        # 实例化解析器仅为了获取 ID (这里稍微有些冗余，但为了复用你的逻辑)
-        # 也可以单独提取 generate_book_id 逻辑
-        parser_preview = LightNovelParser(temp_file_path, UPLOAD_DIR)
-        book_id = parser_preview.book_id
+        book_id = LightNovelParser.generate_book_id_from_head(temp_file_path)
 
         # 2. 检查是否已存在
         existing_book = self.get_book(book_id)
@@ -154,7 +151,7 @@ class BookService:
             author=author,
             status=ProcessingStatus.PENDING,
             total_chapters=0,
-            cover_url=None,  # 封面在后台任务中查找
+            cover_url=None,  # TODO: 我们可以在提取EPUB元数据时找一下cover? 不过没有images_map, 不好操作
             error_message=None
         )
         self.db.add(new_book)
@@ -191,20 +188,32 @@ class BookService:
 
             # A. 解析 EPUB 结构
             parser = LightNovelParser(file_path, UPLOAD_DIR)
-            raw_chapters = parser.parse() # 返回 List[Chapter] (这里的 Chapter 是你的 parser 类，非 ORM)
+            raw_chapters = parser.parse() # 返回 List[Chapter] (这里的 Chapter 是 parser 类，非 ORM) 
 
             # B. 初始化分词器
-            tokenizer = JapaneseTokenizer(mode="B")
+            tokenizer = JapaneseTokenizer(mode=mode)
 
             # C. 遍历处理每个章节
+            detected_cover_url: Optional[str] = None
             total_chapters = len(raw_chapters)
             orm_chapters = []
 
             for raw_chap in raw_chapters:
                 # 遍历 segment，如果是 text 类型，进行分词
                 for seg in raw_chap.segments:
-                    if getattr(seg, 'type', '') == 'text' and getattr(seg, 'text', ''): # 如果是 TextSegment; 这里使用isinstance可能受导入方式的不同而产生意外的后果
-                        assert isinstance(seg, TextSegment)
+                    if detected_cover_url is None:
+                        # 兼容处理：检查类型是否为 ImageSegment 或 type 字段为 image
+                        is_image = False
+                        if hasattr(seg, 'type') and getattr(seg, "type") == 'image':
+                            is_image = True
+                        elif isinstance(seg, ImageSegment):
+                            is_image = True
+                            
+                        if is_image and (src := getattr(seg, 'src', None)):
+                            detected_cover_url = src
+                            logger.info(f"Detected cover from content stream: {detected_cover_url}")
+                            
+                    if isinstance(seg, TextSegment) and seg.text: # 这里使用isinstance判断究竟是否可能因导入方式的不同而产生意外的后果?
                         # 调用 Sudachi 分词
                         tokens_obj_list = tokenizer.process_text(seg.text)
                         # 转换成 dict 存储
@@ -225,8 +234,8 @@ class BookService:
             # D. 批量写入章节
             db.bulk_save_objects(orm_chapters)
 
-            # E. 查找封面图片
-            cover_url = self._find_cover_image(book_id)
+            # E. 若遍历时落空, 兜底查找封面图片
+            cover_url = detected_cover_url or self._find_cover_image_fallback(book_id)
 
             # F. 更新书籍状态
             book.status = ProcessingStatus.COMPLETED # type: ignore

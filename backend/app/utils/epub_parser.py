@@ -99,7 +99,14 @@ class LightNovelParser:
         with open(path, 'rb') as f:
             content_head = f.read(1024)
         return hashlib.md5(content_head).hexdigest()[:12] 
-
+    
+    @staticmethod
+    def generate_book_id_from_head(path: str) -> str:
+        """读取文件头 1KB 生成简单的 Hash ID"""
+        with open(path, 'rb') as f:
+            content_head = f.read(1024)
+        return hashlib.md5(content_head).hexdigest()[:12] 
+    
     def _extract_all_images(self):
         """预先解压所有图片，建立映射关系"""
         for item in self.book.get_items():
