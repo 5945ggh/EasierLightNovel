@@ -1,6 +1,6 @@
 import os
 import re
-import hashlib
+import uuid
 import warnings
 from urllib.parse import unquote
 from typing import List, Dict, Any, Optional
@@ -72,13 +72,15 @@ class Chapter:
 
 # ================= 解析逻辑 =================
 class LightNovelParser:
-    def __init__(self, epub_path: str, output_dir: Optional[str] = None, max_chunk_size: int = 1024):
+    def __init__(self, epub_path: str, book_id: str, output_dir: Optional[str] = None, max_chunk_size: int = 1024):
         """
         :param epub_path: EPUB 文件路径
+        :param book_id: 书籍唯一 ID（由调用方生成的 UUID）
         :param output_dir: 静态资源输出目录 (用于存解压后的图片)，默认使用 config.UPLOAD_DIR
         :param max_chunk_size: 一个Segment最大文本长度, 受 Sudachi 分词本身的限制不建议设置超过40k
         """
         self.epub_path = epub_path
+        self.book_id = book_id
         self.max_chunk_size = max_chunk_size
 
         # 如果未指定 output_dir，使用配置文件中的默认值
@@ -86,8 +88,6 @@ class LightNovelParser:
             output_dir = UPLOAD_DIR
 
         # 创建图片存储目录
-        self.book_id = self._generate_book_id(epub_path)
-
         self.image_output_dir = os.path.join(output_dir, self.book_id, "images")
         os.makedirs(self.image_output_dir, exist_ok=True)
 
@@ -104,18 +104,15 @@ class LightNovelParser:
         # 记录上一个有 TOC 标题的章节（用于标题继承）
         self._last_toc_title: Optional[str] = None
 
-    def _generate_book_id(self, path: str) -> str:
-        """读取文件头 1KB 生成简单的 Hash ID，用于目录隔离"""
-        with open(path, 'rb') as f:
-            content_head = f.read(1024)
-        return hashlib.md5(content_head).hexdigest()[:12] 
-    
     @staticmethod
-    def generate_book_id_from_head(path: str) -> str:
-        """读取文件头 1KB 生成简单的 Hash ID"""
-        with open(path, 'rb') as f:
-            content_head = f.read(1024)
-        return hashlib.md5(content_head).hexdigest()[:12]
+    def generate_book_id() -> str:
+        """
+        生成唯一的书籍 ID
+
+        使用 UUID v4 确保唯一性，避免基于文件内容的哈希冲突。
+        EPUB 文件头高度相似（ZIP + mimetype），使用内容哈希会导致冲突。
+        """
+        return uuid.uuid4().hex
 
     def _build_toc_map(self) -> Dict[str, str]:
         """

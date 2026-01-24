@@ -12,7 +12,7 @@ Base = declarative_base()
 class Book(Base):
     __tablename__ = "books"
 
-    id = Column(String(32), primary_key=True)  # 使用你的 hash ID
+    id = Column(String(32), primary_key=True) # uuid 32位
     title = Column(String(255), nullable=False)
     author = Column(String(255), nullable=True)
     cover_url = Column(String(255)) # API Web 相对URL, 如: /static/books/{id}/images/cover.jpg 

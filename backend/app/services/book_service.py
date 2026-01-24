@@ -136,28 +136,23 @@ class BookService:
     async def create_book_from_file(self, file: UploadFile, background_tasks: BackgroundTasks) -> Book:
         """
         接收上传文件，创建 Book 记录 (Pending 状态)，并触发后台解析任务
-        """
-        # 1. 预读取文件头计算 Hash (作为 ID)
-        # 注意：对于大文件，read() 可能会耗内存，但 EPUB 通常不大
-        if file.filename is None: raise ValueError("Upload File Error: No filename")
-        content = await file.read()
 
-        # 临时保存文件以便解析器读取
+        注意：使用 UUID 生成书籍 ID，不再基于文件内容哈希（避免 EPUB 文件头相似导致的冲突）
+        """
+        if file.filename is None:
+            raise ValueError("Upload File Error: No filename")
+
+        # 1. 生成唯一书籍 ID（UUID）
+        book_id = LightNovelParser.generate_book_id()
+
+        # 2. 读取文件内容并保存到临时目录
+        content = await file.read()
         temp_dir = "./temp_uploads"
         os.makedirs(temp_dir, exist_ok=True)
         temp_file_path = os.path.join(temp_dir, file.filename)
 
         with open(temp_file_path, "wb") as f:
             f.write(content)
-
-        book_id = LightNovelParser.generate_book_id_from_head(temp_file_path)
-
-        # 2. 检查是否已存在
-        existing_book = self.get_book(book_id)
-        if existing_book:
-            # 清理临时文件
-            os.remove(temp_file_path)
-            return existing_book
 
         # 3. 提取 EPUB 元数据
         fallback_title = file.filename.replace(".epub", "")
@@ -170,7 +165,7 @@ class BookService:
             author=author,
             status=ProcessingStatus.PENDING,
             total_chapters=0,
-            cover_url=None,  # TODO: 我们可以在提取EPUB元数据时找一下cover? 不过没有images_map, 不好操作
+            cover_url=None,
             error_message=None
         )
         self.db.add(new_book)
@@ -206,7 +201,7 @@ class BookService:
             logger.info(f"Start processing book: {book.title} ({book_id})")
 
             # A. 解析 EPUB 结构
-            parser = LightNovelParser(file_path, UPLOAD_DIR)
+            parser = LightNovelParser(file_path, book_id, UPLOAD_DIR)
             raw_chapters = parser.parse() # 返回 List[Chapter] (这里的 Chapter 是 parser 类，非 ORM) 
 
             # B. 初始化分词器
