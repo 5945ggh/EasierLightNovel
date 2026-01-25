@@ -167,6 +167,35 @@ class HighlightResponse(HighlightCreate):
     class Config:
         from_attributes = True
         
+# ==================== Dictionary 相关 ====================
+class SenseEntry(BaseModel):
+    """释义条目"""
+    pos: List[str] = Field(default_factory=list, description="词性列表")
+    definitions: List[str] = Field(default_factory=list, description="释义列表")
+
+
+class DictEntry(BaseModel):
+    """字典条目"""
+    id: str = Field(..., description="JMDict IDSeq")
+    kanji: List[str] = Field(default_factory=list, description="汉字形式列表")
+    reading: List[str] = Field(default_factory=list, description="读音列表")
+    senses: List[SenseEntry] = Field(default_factory=list, description="释义列表")
+
+    # 音调信息：预留字段，暂时返回空列表
+    # 格式示例: [0] (平板), [1] (头高), [2] (中高)
+    # 同一个词可能有多个音调（不同方言），用列表存储
+    pitch_accent: Optional[List[int]] = Field(None, description="音调核位置列表（预留）")
+
+
+class DictResult(BaseModel):
+    """字典查询结果"""
+    query: str = Field(..., description="查询词")
+    found: bool = Field(..., description="是否找到结果")
+    is_exact_match: bool = Field(default=False, description="是否精确匹配")
+    entries: List[DictEntry] = Field(default_factory=list, description="字典条目列表")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
 # ==================== UserProgress 相关 ====================
 class UserProgressBase(BaseModel):
     """阅读进度基础"""
