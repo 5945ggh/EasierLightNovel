@@ -1,4 +1,5 @@
 # app/routers/vocabularies.py
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -46,21 +47,30 @@ def add_vocabulary(
         data=data
     )
 
-@router.delete("/{vocabulary_id}")
-def delete_vocabulary(
-    vocabulary_id: int,
+
+# ================= 查询接口 =================
+# 注意：更具体的路由（如 /book/{book_id}）必须放在通配路由（如 /{vocabulary_id}）之前
+
+@router.get("/book/{book_id}", response_model=List[VocabularyResponse])
+def get_book_vocabularies(
+    book_id: str,
     vocabulary_service: VocabularyService = Depends(get_vocabulary_service)
 ):
     """
-    删除生词
+    获取书籍的生词列表（完整数据）
 
     **路径参数**:
-    - vocabulary_id: 生词记录 ID
+    - book_id: 书籍 ID
 
-    **响应**: `{"ok": true}`
+    **性能注意**:
+    此接口返回完整的生词记录（包含 word, reading, definition, status 等所有字段）。
+    如果前端仅需要渲染"是否为生词"的高亮样式，应优先使用更轻量的接口：
+    - GET /api/books/{book_id}/vocabularies/base_forms
+
+    仅在需要显示生词本详情（如释义、学习状态等）时使用此接口。
     """
-    vocabulary_service.delete_vocabulary(vocabulary_id)
-    return {"ok": True}
+    return vocabulary_service.get_book_vocabularies(book_id)
+
 
 @router.get("/{vocabulary_id}", response_model=VocabularyResponse)
 def get_vocabulary(
@@ -81,3 +91,20 @@ def get_vocabulary(
         )
     return vocabulary
 
+
+# ================= 删除接口 =================
+@router.delete("/{vocabulary_id}")
+def delete_vocabulary(
+    vocabulary_id: int,
+    vocabulary_service: VocabularyService = Depends(get_vocabulary_service)
+):
+    """
+    删除生词
+
+    **路径参数**:
+    - vocabulary_id: 生词记录 ID
+
+    **响应**: `{"ok": true}`
+    """
+    vocabulary_service.delete_vocabulary(vocabulary_id)
+    return {"ok": True}

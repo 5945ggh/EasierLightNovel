@@ -111,3 +111,21 @@ class VocabularyService:
         return self.db.query(Vocabulary).filter(
             Vocabulary.id == vocabulary_id
         ).first()
+
+    def get_book_vocabularies(self, book_id: str) -> List[Vocabulary]:
+        """
+        获取书籍的生词列表（完整数据）
+
+        注意：此接口返回完整的生词记录，包含所有字段。
+        如果前端仅需要判断某个 token 是否为生词，应使用 get_vocabularies_base_forms() 获取 base_form 集合，
+        该接口更轻量，只返回原型列表。
+
+        Args:
+            book_id: 书籍 ID
+
+        Returns:
+            List[Vocabulary]: 生词记录列表
+        """
+        return self.db.query(Vocabulary).filter(
+            Vocabulary.book_id == book_id
+        ).all()
