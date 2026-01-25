@@ -35,6 +35,8 @@ interface ReaderState {
 
   // 滚动位置
   currentSegmentIndex: number;
+  /** 段落偏移比例 (0~1)，用于精确恢复阅读位置 */
+  segmentOffset: number;
 
   // 交互状态
   selectedToken: SelectedToken | null;
@@ -63,6 +65,7 @@ interface ReaderActions {
 
   // 滚动位置
   setCurrentSegmentIndex: (index: number) => void;
+  setSegmentOffset: (offset: number) => void;
 
   // 交互状态
   setSelectedToken: (token: SelectedToken | null) => void;
@@ -88,6 +91,7 @@ const createDefaultState = (): ReaderState => ({
   chapter: null,
   vocabularySet: new Set<string>(),
   currentSegmentIndex: 0,
+  segmentOffset: 0,
   selectedToken: null,
   isSidebarOpen: false,
   activeTab: 'dictionary',
@@ -135,6 +139,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
 
   // 滚动位置
   setCurrentSegmentIndex: (currentSegmentIndex) => set({ currentSegmentIndex }),
+  setSegmentOffset: (segmentOffset) => set({ segmentOffset }),
 
   // 交互状态
   setSelectedToken: (selectedToken) => set({ selectedToken }),

@@ -30,12 +30,14 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   const chapter = useReaderStore((s) => s.chapter);
   const bookId = useReaderStore((s) => s.bookId);
   const currentSegmentIndex = useReaderStore((s) => s.currentSegmentIndex);
+  const segmentOffset = useReaderStore((s) => s.segmentOffset);
   const setCurrentSegmentIndex = useReaderStore((s) => s.setCurrentSegmentIndex);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const saveProgressTimeoutRef = useRef<number | null>(null); // 浏览器环境使用 number
   const initialScrollDoneRef = useRef(false);
+  const prevChapterIndexRef = useRef<number | null>(null); // 记录上一章索引，用于检测章节切换
   const [isSaving, setIsSaving] = useState(false);
 
   // 立即保存进度（不经过 debounce）
@@ -46,11 +48,26 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     }
 
     if (bookId && chapter && currentSegmentIndex >= 0) {
+      // 计算段落顶部在文档中的相对位置（百分比 0~1）
+      // 后端期望整数，所以乘以 10000 转换（精度为 0.0001）
+      const segmentEl = containerRef.current?.querySelector(
+        `[data-segment-index="${currentSegmentIndex}"]`
+      );
+      let offsetRatio = 0;
+      if (segmentEl) {
+        const rect = segmentEl.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const segmentTop = rect.top + scrollTop; // 段落顶部距离文档顶部的距离
+        const documentHeight = document.documentElement.scrollHeight;
+        offsetRatio = Math.min(Math.max(segmentTop / documentHeight, 0), 1); // 限制在 0~1 范围
+      }
+
       setIsSaving(true);
       return updateReadingProgress(bookId, {
         current_chapter_index: chapter.index,
         current_segment_index: currentSegmentIndex,
-        current_segment_offset: 0,
+        // 转换为整数发送给后端（0~10000）
+        current_segment_offset: Math.round(offsetRatio * 10000),
       })
         .then(() => {
           setIsSaving(false);
@@ -148,20 +165,57 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   useEffect(() => {
     if (!chapter || initialScrollDoneRef.current) return;
 
+    // 检测是否是章节切换（而非首次加载）
+    const isChapterSwitch =
+      prevChapterIndexRef.current !== null &&
+      prevChapterIndexRef.current !== chapter.index;
+
+    // 使用双重 rAF 确保 DOM 完全渲染后再滚动
     const rafId = requestAnimationFrame(() => {
-      const el = containerRef.current?.querySelector(
-        `[data-segment-index="${currentSegmentIndex}"]`
-      );
-      if (el) {
-        // 新章节从顶部开始，其他位置尽量保持原位
-        const blockOption = currentSegmentIndex === 0 ? 'start' : 'nearest';
-        el.scrollIntoView({ block: blockOption });
-        initialScrollDoneRef.current = true;
-      }
+      requestAnimationFrame(() => {
+        // 章节切换：滚动到页面最顶部
+        if (isChapterSwitch) {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          // 再次确保滚动到顶部（处理可能的异步布局）
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          });
+          initialScrollDoneRef.current = true;
+          prevChapterIndexRef.current = chapter.index;
+          return;
+        }
+
+        // 首次加载：恢复阅读位置
+        const el = containerRef.current?.querySelector(
+          `[data-segment-index="${currentSegmentIndex}"]`
+        );
+        if (!el) {
+          prevChapterIndexRef.current = chapter.index;
+          return;
+        }
+
+        // 恢复阅读位置：先滚动到段落，再根据百分比调整
+        el.scrollIntoView({ block: 'start' });
+
+        // 应用百分比偏移（如果有）
+        if (segmentOffset > 0) {
+          // 使用双重 rAF 确保 DOM 布局完成
+          requestAnimationFrame(() => {
+            const documentHeight = document.documentElement.scrollHeight;
+            const targetScrollTop = segmentOffset * documentHeight;
+            window.scrollTo({ top: targetScrollTop, behavior: 'instant' });
+            initialScrollDoneRef.current = true;
+            prevChapterIndexRef.current = chapter.index;
+          });
+        } else {
+          initialScrollDoneRef.current = true;
+          prevChapterIndexRef.current = chapter.index;
+        }
+      });
     });
 
     return () => cancelAnimationFrame(rafId);
-  }, [chapter, currentSegmentIndex]);
+  }, [chapter, currentSegmentIndex, segmentOffset]);
 
   // 4. 组件卸载时保存进度
   useEffect(() => {
@@ -171,10 +225,24 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       }
       // 组件卸载时立即保存当前进度
       if (bookId && chapter && currentSegmentIndex >= 0) {
+        // 计算百分比偏移，转换为整数发送给后端
+        const segmentEl = containerRef.current?.querySelector(
+          `[data-segment-index="${currentSegmentIndex}"]`
+        );
+        let offsetRatio = 0;
+        if (segmentEl) {
+          const rect = segmentEl.getBoundingClientRect();
+          const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+          const segmentTop = rect.top + scrollTop;
+          const documentHeight = document.documentElement.scrollHeight;
+          offsetRatio = Math.min(Math.max(segmentTop / documentHeight, 0), 1);
+        }
+
         updateReadingProgress(bookId, {
           current_chapter_index: chapter.index,
           current_segment_index: currentSegmentIndex,
-          current_segment_offset: 0,
+          // 转换为整数发送给后端（0~10000）
+          current_segment_offset: Math.round(offsetRatio * 10000),
         }).catch(console.error);
       }
     };
@@ -199,8 +267,8 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
           </div>
         )}
 
-        {/* 章节导航 */}
-        <div className="flex items-center justify-between mb-8 text-sm text-gray-500">
+        {/* 章节导航 - 固定在顶部 */}
+        <div className="sticky top-0 z-10 -mx-6 px-6 md:-mx-12 md:px-12 py-3 bg-white/95 backdrop-blur-sm border-b border-gray-100 flex items-center justify-between text-sm text-gray-500">
           <button
             onClick={handlePrevChapter}
             disabled={!hasPrevChapter}

@@ -35,6 +35,7 @@ export const ReaderPage: React.FC = () => {
     setChapter,
     setVocabularySet,
     setCurrentSegmentIndex,
+    setSegmentOffset,
     resetReader,
   } = useReaderStore();
 
@@ -112,14 +113,18 @@ export const ReaderPage: React.FC = () => {
   useEffect(() => {
     if (chapterData) {
       setChapter(chapterData);
-      // 如果进度数据中的章节索引匹配，设置段落索引
+      // 如果进度数据中的章节索引匹配，设置段落索引和偏移
       if (progressData?.current_chapter_index === currentChapterIndex) {
         setCurrentSegmentIndex(progressData.current_segment_index ?? 0);
+        // current_segment_offset 从后端返回的是整数（0~10000），需要转换为百分比（0~1）
+        const offset = progressData.current_segment_offset ?? 0;
+        setSegmentOffset(offset / 10000);
       } else {
         setCurrentSegmentIndex(0);
+        setSegmentOffset(0);
       }
     }
-  }, [chapterData, progressData, currentChapterIndex, setChapter, setCurrentSegmentIndex]);
+  }, [chapterData, progressData, currentChapterIndex, setChapter, setCurrentSegmentIndex, setSegmentOffset]);
 
   useEffect(() => {
     if (vocabData) {
@@ -134,9 +139,12 @@ export const ReaderPage: React.FC = () => {
     // 找到当前章节在 TOC 中的位置
     const currentIndex = chapterList.findIndex((ch) => ch.index === currentChapterIndex);
     if (currentIndex > 0) {
+      // 切换章节时重置为从顶部开始阅读
+      setCurrentSegmentIndex(0);
+      setSegmentOffset(0);
       setCurrentChapterIndex(chapterList[currentIndex - 1].index);
     }
-  }, [chapterList, currentChapterIndex]);
+  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setSegmentOffset]);
 
   const handleNextChapter = useCallback(() => {
     if (!chapterList || currentChapterIndex === null) return;
@@ -144,9 +152,12 @@ export const ReaderPage: React.FC = () => {
     // 找到当前章节在 TOC 中的位置
     const currentIndex = chapterList.findIndex((ch) => ch.index === currentChapterIndex);
     if (currentIndex >= 0 && currentIndex < chapterList.length - 1) {
+      // 切换章节时重置为从顶部开始阅读
+      setCurrentSegmentIndex(0);
+      setSegmentOffset(0);
       setCurrentChapterIndex(chapterList[currentIndex + 1].index);
     }
-  }, [chapterList, currentChapterIndex]);
+  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setSegmentOffset]);
 
   // 判断是否有上一章/下一章
   const hasPrevChapter =
