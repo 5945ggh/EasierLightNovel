@@ -1,8 +1,8 @@
 # routers/books.py
-from typing import List
+from typing import List, Optional
 import os
 import uuid
-from fastapi import APIRouter, Depends, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, BackgroundTasks, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,10 +10,12 @@ from app.schemas import (
     BookListItem, BookDetail, BookUpdate,
     ChapterListItem, ChapterResponse, ChapterHighlightData,
     VocabularyBaseFormsResponse,
-    UserProgressResponse, UserProgressUpdate
+    UserProgressResponse, UserProgressUpdate,
+    HighlightResponse
 )
 from app.services.book_service import BookService
 from app.services.progress_service import ProgressService
+from app.services.highlight_service import HighlightService
 from app.config import UPLOAD_DIR
 from app.models import Chapter
 
@@ -32,6 +34,12 @@ def get_progress_service(db: Session = Depends(get_db)) -> ProgressService:
     依赖注入：将 DB Session 注入 ProgressService
     """
     return ProgressService(db)
+
+def get_highlight_service(db: Session = Depends(get_db)) -> HighlightService:
+    """
+    依赖注入：将 DB Session 注入 HighlightService
+    """
+    return HighlightService(db)
 
 
 @router.post("/upload", response_model=BookDetail) 
@@ -244,4 +252,33 @@ def update_reading_progress(
     如果没有进度记录，会自动创建新记录
     """
     return progress_service.update_progress(book_id, data)
+
+
+# ================= 划线接口 =================
+
+
+@router.get("/{book_id}/highlights", response_model=List[HighlightResponse])
+def get_book_highlights(
+    book_id: str,
+    chapter_index: Optional[int] = Query(None, description="筛选指定章节的划线"),
+    highlight_service: HighlightService = Depends(get_highlight_service),
+    book_service: BookService = Depends(get_book_service)
+):
+    """
+    获取书籍的划线列表
+
+    **路径参数**:
+    - book_id: 书籍 ID
+
+    **查询参数**:
+    - chapter_index: 可选，筛选指定章节的划线
+
+    **响应**: 划线记录列表，包含坐标和样式信息
+    """
+    # 验证书籍存在
+    book = book_service.get_book(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    return highlight_service.get_book_highlights(book_id, chapter_index)
 
