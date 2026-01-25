@@ -54,8 +54,11 @@ app.mount(
 )
 
 # 注册路由
-from app.routers import books
+from app.routers import books, vocabularies, highlights, dictionary
 app.include_router(books.router)
+app.include_router(vocabularies.router)
+app.include_router(highlights.router)
+app.include_router(dictionary.router)
 
 # 健康检查
 @app.get("/health")
