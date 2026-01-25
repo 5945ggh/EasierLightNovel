@@ -1,6 +1,5 @@
 # app/services/progress_service.py
 import logging
-from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -81,25 +80,20 @@ class ProgressService:
                 detail="Book not found"
             )
 
-        # 2. 查找现有进度
+        # 2. 查找或创建进度记录
         progress = self.db.query(UserProgress).filter(
             UserProgress.book_id == book_id
         ).first()
 
-        if progress:
-            # 更新现有记录
-            progress.current_chapter_index = data.current_chapter_index # type: ignore
-            progress.current_segment_index = data.current_segment_index # type: ignore
-            progress.current_segment_offset = data.current_segment_offset # type: ignore
-        else:
+        if not progress:
             # 创建新记录
-            progress = UserProgress(
-                book_id=book_id,
-                current_chapter_index=data.current_chapter_index,
-                current_segment_index=data.current_segment_index,
-                current_segment_offset=data.current_segment_offset
-            )
+            progress = UserProgress(book_id=book_id)
             self.db.add(progress)
+
+        # 3. 批量更新字段
+        update_data = data.model_dump()
+        for field, value in update_data.items():
+            setattr(progress, field, value)
 
         self.db.commit()
         self.db.refresh(progress)

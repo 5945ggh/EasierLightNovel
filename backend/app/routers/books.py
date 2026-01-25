@@ -167,7 +167,8 @@ def get_table_of_contents(book_id: str, book_service: BookService = Depends(get_
 def get_chapter_content(
     book_id: str,
     chapter_index: int,
-    book_service: BookService = Depends(get_book_service)
+    book_service: BookService = Depends(get_book_service),
+    highlight_service: HighlightService = Depends(get_highlight_service)
 ):
     """
     获取特定章节的完整内容（含分词数据）
@@ -180,7 +181,7 @@ def get_chapter_content(
         raise HTTPException(status_code=404, detail="Chapter not found")
 
     # 2. 获取本章节高亮
-    highlights = book_service.get_chapter_highlights(book_id, chapter_index)
+    highlights = highlight_service.get_chapter_highlights(book_id, chapter_index)
 
     # 3. 构造响应
     return ChapterResponse(

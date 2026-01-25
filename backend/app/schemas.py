@@ -1,4 +1,4 @@
-# app/schemas/book.py
+# app/schemas.py
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Union, Any, Dict
 from enum import Enum

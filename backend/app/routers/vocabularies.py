@@ -1,10 +1,9 @@
 # app/routers/vocabularies.py
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import VocabularyCreate, VocabularyResponse, VocabularyBaseFormsResponse
+from app.schemas import VocabularyCreate, VocabularyResponse
 from app.services.vocabulary_service import VocabularyService
 
 router = APIRouter(prefix="/api/vocabularies", tags=["Vocabularies"])
