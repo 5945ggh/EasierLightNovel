@@ -1,110 +1,193 @@
+/**
+ * 书籍卡片组件
+ * 展示单本书籍的封面、信息和状态
+ * 支持点击进入阅读页、显示处理状态、编辑、删除操作
+ */
+
 import React from 'react';
-import type { BookSummary } from '../../types/book';
-import { Clock, BookOpen, Trash2, Loader2, AlertCircle, Edit2 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { useNavigate } from 'react-router-dom';
+import { MoreVertical, Trash2, BookOpen, AlertCircle, Loader2, ImageOff, Edit } from 'lucide-react';
+import clsx from 'clsx';
+import { ProcessingStatus } from '@/types/common';
+import type { BookDetail } from '@/types/book';
 
 interface BookCardProps {
-  book: BookSummary;
-  onClick: (id: string) => void;
-  onEdit: (book: BookSummary) => void;
-  onDelete: (id: string, e: React.MouseEvent) => void;
+  book: BookDetail;
+  onDelete: (id: string) => void;
+  onEdit?: (book: BookDetail) => void;
+  isDeleting?: boolean;
 }
 
-export const BookCard: React.FC<BookCardProps> = ({ book, onClick, onEdit, onDelete }) => {
-  const isProcessing = book.status === 'pending' || book.status === 'processing';
-  const isFailed = book.status === 'failed';
+export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDeleting = false }) => {
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [imgError, setImgError] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  // 图片加载状态重置（当 book.cover_url 变化时）
+  React.useEffect(() => {
+    setImgError(false);
+  }, [book.cover_url]);
+
+  // 点击外部关闭菜单
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
+
+  // 处理点击卡片主体
+  const handleCardClick = () => {
+    if (book.status === ProcessingStatus.COMPLETED && !isDeleting) {
+      navigate(`/read/${book.id}`);
+    }
+  };
+
+  // 状态辅助函数
+  const isProcessing = book.status === ProcessingStatus.PROCESSING || book.status === ProcessingStatus.PENDING;
+  const isFailed = book.status === ProcessingStatus.FAILED;
 
   return (
     <div
-      className="group relative flex flex-col bg-white rounded-lg shadow-sm border border-zinc-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-      onClick={() => !isProcessing && !isFailed && onClick(book.id)}
+      className={clsx(
+        'group relative flex flex-col w-full bg-white rounded-xl shadow-sm',
+        'hover:shadow-lg hover:-translate-y-1',
+        'transition-all duration-300 ease-out',
+        'border border-gray-100 overflow-hidden',
+        isDeleting && 'opacity-50 pointer-events-none'
+      )}
     >
-      {/* 封面区域 */}
-      <div className="aspect-[2/3] w-full bg-zinc-100 relative overflow-hidden">
-        {book.cover_url ? (
+      {/* 封面区域 (保持 2:3 比例) */}
+      <div
+        onClick={handleCardClick}
+        className={clsx(
+          'relative w-full aspect-[2/3] bg-gradient-to-br from-gray-50 to-gray-100',
+          'overflow-hidden',
+          isProcessing || isFailed ? 'cursor-default' : 'cursor-pointer'
+        )}
+      >
+        {/* 封面图片 */}
+        {book.cover_url && !imgError ? (
           <img
             src={book.cover_url}
             alt={book.title}
-            className={cn(
-              "w-full h-full object-cover transition-transform duration-500 group-hover:scale-105",
-              isProcessing && "opacity-50 blur-sm"
-            )}
+            className='w-full h-full object-cover transition-transform duration-500 group-hover:scale-105'
+            loading='lazy'
+            onError={() => setImgError(true)}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-zinc-300">
-            <BookOpen size={48} />
+          <div className='w-full h-full flex items-center justify-center text-gray-300'>
+            {imgError ? (
+              // 图片加载失败时显示
+              <ImageOff size={48} strokeWidth={1} />
+            ) : (
+              <BookOpen size={48} strokeWidth={1} />
+            )}
           </div>
         )}
 
-        {/* 处理中状态遮罩 */}
+        {/* 状态遮罩层: 处理中 */}
         {isProcessing && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/10 z-10">
-            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-            <span className="text-xs font-medium text-indigo-700 mt-2 bg-white/80 px-2 py-1 rounded">
-              Processing...
-            </span>
+          <div className='absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white'>
+            <Loader2 className='animate-spin mb-3' size={28} />
+            <span className='text-sm font-medium tracking-wide'>处理中...</span>
+            <span className='text-[10px] mt-1 opacity-70'>正在解析 EPUB</span>
           </div>
         )}
 
-        {/* 失败状态遮罩 */}
+        {/* 状态遮罩层: 失败 */}
         {isFailed && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50/90 z-10">
-            <AlertCircle className="w-8 h-8 text-red-500" />
-            <span className="text-xs font-medium text-red-700 mt-2 bg-white/80 px-2 py-1 rounded max-w-[80%] truncate">
-              {book.error_message || "Processing failed"}
+          <div className='absolute inset-0 bg-red-500/90 flex flex-col items-center justify-center text-white px-4 text-center'>
+            <AlertCircle className='mb-2' size={24} />
+            <span className='text-sm font-medium'>解析失败</span>
+            {book.error_message && (
+              <span className='text-[10px] mt-1.5 opacity-90 line-clamp-2 max-w-full'>
+                {book.error_message}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* 完成状态的 hover 提示 */}
+        {book.status === ProcessingStatus.COMPLETED && !isDeleting && (
+          <div className='absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors duration-300 flex items-center justify-center'>
+            <span className='text-blue-600 font-medium text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 translate-y-2 group-hover:translate-y-0'>
+              点击阅读
             </span>
           </div>
         )}
       </div>
 
       {/* 信息区域 */}
-      <div className="p-3 flex-1 flex flex-col">
-        <h3 className="font-bold text-zinc-900 line-clamp-2 text-sm mb-1" title={book.title}>
-          {book.title || "Untitled Book"}
+      <div className='p-3 flex-1 flex flex-col' ref={menuRef}>
+        <h3
+          className='font-bold text-gray-800 line-clamp-2 text-sm leading-tight mb-1'
+          title={book.title}
+        >
+          {book.title}
         </h3>
-        <p className="text-xs text-zinc-500 mb-2 truncate">
-          {book.author || "Unknown Author"}
+        <p className='text-xs text-gray-500 line-clamp-1'>
+          {book.author || '佚名'}
         </p>
 
-        <div className="mt-auto flex justify-between items-center pt-2 border-t border-zinc-100">
-          {/* 显示章节数量和上传时间 */}
-          <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-            <span className="flex items-center gap-1">
-              <BookOpen size={10} />
-              {book.total_chapters} ch
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock size={10} />
-              {book.created_at ? new Date(book.created_at).toLocaleDateString() : '-'}
-            </span>
-          </div>
+        {/* 底部元数据 */}
+        <div className='mt-auto pt-3 flex items-center justify-between text-[10px] text-gray-400'>
+          <span className={clsx(isProcessing && 'text-amber-500')}>
+            {isProcessing ? '处理中' : book.total_chapters > 0 ? `${book.total_chapters} 章节` : 'EPUB'}
+          </span>
 
-          <div className="flex items-center gap-1">
-            {/* Edit Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(book);
-              }}
-              className="text-zinc-400 hover:text-indigo-600 transition-colors p-1"
-              title="Edit metadata"
-            >
-              <Edit2 size={14} />
-            </button>
-
-            {/* Delete Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(book.id, e);
-              }}
-              className="text-zinc-400 hover:text-red-500 transition-colors p-1"
-              title="Delete book"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
+          {/* 更多操作按钮 */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen(!menuOpen);
+            }}
+            className='p-1.5 hover:bg-gray-100 rounded-full transition-colors'
+            aria-label='更多操作'
+          >
+            <MoreVertical size={14} />
+          </button>
         </div>
+
+        {/* 下拉菜单 */}
+        {menuOpen && (
+          <div className='absolute right-2 bottom-12 z-20 w-32 bg-white rounded-lg shadow-xl border border-gray-100 py-1.5 animate-fade-in'>
+            {/* 编辑按钮 */}
+            {onEdit && (
+              <button
+                onClick={() => {
+                  onEdit(book);
+                  setMenuOpen(false);
+                }}
+                className='w-full flex items-center px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors border-b border-gray-100'
+              >
+                <Edit size={13} className='mr-2 flex-shrink-0' />
+                编辑信息
+              </button>
+            )}
+            {/* 删除按钮 */}
+            <button
+              onClick={() => {
+                onDelete(book.id);
+                setMenuOpen(false);
+              }}
+              className='w-full flex items-center px-3 py-2 text-xs text-red-600 hover:bg-red-50 text-left transition-colors'
+            >
+              <Trash2 size={13} className='mr-2 flex-shrink-0' />
+              删除书籍
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
