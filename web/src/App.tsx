@@ -6,6 +6,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LibraryPage } from '@/pages/LibraryPage';
+import { ReaderPage } from '@/pages/ReaderPage';
 
 // 创建 React Query 客户端
 const queryClient = new QueryClient({
@@ -23,8 +24,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LibraryPage />} />
-          {/* 后续添加阅读器路由 */}
-          {/* <Route path="/read/:bookId" element={<ReaderPage />} /> */}
+          <Route path="/read/:bookId" element={<ReaderPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
