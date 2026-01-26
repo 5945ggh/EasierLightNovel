@@ -32,3 +32,112 @@
 .animate-slide-down {
   animation: slide-down 0.3s ease-out forwards;
 }
+
+/* ============================================================
+   阅读器样式 - 注音 (Furigana) 控制
+   ============================================================ */
+
+/* Ruby 标签基础样式 */
+ruby {
+  ruby-position: over;
+}
+
+/* 模式 1: 总是显示注音 */
+.furigana-mode-always rt {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* 模式 2: 悬停时显示注音 */
+.furigana-mode-hover rt {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.furigana-mode-hover ruby:hover rt {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* 模式 3: 隐藏注音 */
+.furigana-mode-hidden rt {
+  display: none;
+}
+
+/* ============================================================
+   阅读器样式 - Token 选中状态（按主题适配）
+   ============================================================ */
+
+/* 白色主题：明显的蓝色背景 + 白色文字 */
+.theme-light .theme-light-selected {
+  background-color: #3b82f6;
+  color: white;
+  border-radius: 2px;
+}
+/* 选中状态的注音 - 使用更深的颜色以提高对比度 */
+.theme-light .theme-light-selected rt {
+  color: #93c5fd;
+}
+
+/* 暗黑主题：浅蓝色背景，不覆盖文字颜色 */
+.theme-dark .theme-dark-selected {
+  background-color: rgba(59, 130, 246, 0.25);
+  color: inherit;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+}
+
+/* 羊皮纸主题：蓝色背景 + 深色文字 */
+.theme-sepia .theme-sepia-selected {
+  background-color: #93c5fd;
+  color: #1e3a5f;
+  border-radius: 2px;
+}
+.theme-sepia .theme-sepia-selected rt {
+  color: #475569;
+}
+
+/* ============================================================
+   羊皮纸主题额外样式
+   ============================================================ */
+
+/* 羊皮纸主题下的 rt 标签颜色 */
+.theme-sepia rt {
+  color: #8b7355;
+}
+
+/* 羊皮纸主题下的标题和分隔线颜色 */
+.theme-sepia h1 {
+  color: #5b4636;
+}
+.theme-sepia .border-b {
+  border-color: #e6dbbf;
+}
+.theme-sepia .border-t {
+  border-color: #e6dbbf;
+}
+
+/* ============================================================
+   LeftDock 导航栏主题样式
+   ============================================================ */
+
+/* 羊皮纸主题下的 LeftDock */
+.theme-sepia aside {
+  background-color: #f4ecd8;
+  border-color: #e6dbbf;
+}
+
+/* 羊皮纸主题下的导航栏 */
+.theme-sepia .sticky {
+  background-color: rgba(244, 236, 216, 0.8);
+  border-bottom-color: #e6dbbf;
+}
+.theme-sepia .sticky button {
+  color: #5b4636;
+}
+.theme-sepia .sticky button:disabled {
+  color: #5b4636 / 0.5;
+}
+.theme-sepia .sticky span {
+  color: #8b7355;
+}

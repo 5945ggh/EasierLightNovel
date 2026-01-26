@@ -7,7 +7,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getBooks, uploadBook, deleteBook, updateBookMetadata, uploadBookCover } from '@/services/books.service';
 import { ProcessingStatus } from '@/types/common';
-import type { BookDetail, BookUpdate } from '@/types/book';
+import type { BookUpdate } from '@/types/book';
 
 export const useLibrary = () => {
   const queryClient = useQueryClient();

@@ -3,6 +3,7 @@
  */
 
 import axios from 'axios';
+import type { AxiosRequestConfig as RawAxiosRequestConfig } from 'axios';
 
 /**
  * API 响应基础类型
@@ -80,19 +81,14 @@ rawApiClient.interceptors.request.use(
  * 导出类型安全的 API 客户端
  * 由于拦截器自动解包 response.data，get/post 等方法直接返回数据类型
  */
-export const apiClient = rawApiClient as {
-  get: <T>(url: string, config?: AxiosRequestConfig) => Promise<T>;
-  post: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) => Promise<T>;
-  put: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) => Promise<T>;
-  patch: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) => Promise<T>;
-  delete: <T>(url: string, config?: AxiosRequestConfig) => Promise<T>;
-  getUri: (config?: AxiosRequestConfig) => string;
+export const apiClient = rawApiClient as unknown as {
+  get: <T>(url: string, config?: RawAxiosRequestConfig) => Promise<T>;
+  post: <T>(url: string, data?: unknown, config?: RawAxiosRequestConfig) => Promise<T>;
+  put: <T>(url: string, data?: unknown, config?: RawAxiosRequestConfig) => Promise<T>;
+  patch: <T>(url: string, data?: unknown, config?: RawAxiosRequestConfig) => Promise<T>;
+  delete: <T>(url: string, config?: RawAxiosRequestConfig) => Promise<T>;
+  getUri: (config?: RawAxiosRequestConfig) => string;
   interceptors: typeof rawApiClient.interceptors;
 };
 
 export default apiClient;
-
-/**
- * Axios 请求配置类型（按需导出）
- */
-export type AxiosRequestConfig = typeof rawApiClient.defaults;

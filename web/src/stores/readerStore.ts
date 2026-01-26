@@ -4,6 +4,8 @@
 
 import { create } from 'zustand';
 import type { TokenData, ChapterResponse } from '@/types';
+import type { ChapterHighlightData } from '@/types/chapter';
+import type { VocabularyResponse } from '@/types/vocabulary';
 
 /**
  * 侧边栏标签页
@@ -22,6 +24,27 @@ export interface SelectedToken {
 }
 
 /**
+ * 高亮样式映射 (key: "segmentIdx-tokenIdx", value: styleCategory)
+ * 用于 O(1) 查询某个 Token 是否被高亮
+ */
+export type HighlightMap = Map<string, string>;
+
+/**
+ * 临时高亮（用于乐观更新，无真实 ID）
+ */
+export interface PendingHighlight {
+  tempId: string;
+  start_segment_index: number;
+  start_token_idx: number;
+  end_segment_index: number;
+  end_token_idx: number;
+  style_category: string;
+  book_id: string;
+  chapter_index: number;
+  selected_text: string;
+}
+
+/**
  * 阅读器状态
  */
 interface ReaderState {
@@ -32,6 +55,14 @@ interface ReaderState {
 
   // 生词集合 (O(1) 查找)
   vocabularySet: Set<string>;
+  // 完整生词列表（包含 ID，用于删除操作）
+  vocabularies: VocabularyResponse[];
+
+  // 高亮数据
+  highlights: ChapterHighlightData[];
+  highlightMap: HighlightMap;
+  // 待同步的高亮（乐观更新但尚未收到服务器响应）
+  pendingHighlights: PendingHighlight[];
 
   // 滚动位置
   currentSegmentIndex: number;
@@ -59,9 +90,20 @@ interface ReaderActions {
 
   // 生词管理
   setVocabularySet: (baseForms: string[]) => void;
+  setVocabularies: (vocabularies: VocabularyResponse[]) => void;
   addVocabulary: (baseForm: string) => void;
+  /** 保存完整的生词记录（包含 id），用于添加生词后保存 API 返回的数据 */
+  addVocabularyRecord: (record: VocabularyResponse) => void;
   removeVocabulary: (baseForm: string) => void;
   isVocabulary: (baseForm: string) => boolean;
+  getVocabularyId: (baseForm: string) => number | null;
+
+  // 高亮管理
+  setHighlights: (highlights: ChapterHighlightData[]) => void;
+  addHighlight: (highlight: ChapterHighlightData) => void;
+  addHighlightOptimistic: (highlight: PendingHighlight) => void;
+  removeHighlight: (id: number) => void;
+  removePendingHighlight: (tempId: string) => void;
 
   // 滚动位置
   setCurrentSegmentIndex: (index: number) => void;
@@ -82,6 +124,76 @@ interface ReaderActions {
 }
 
 /**
+ * 生成高亮 Map 的 key
+ */
+export const getTokenKey = (segIdx: number, tokIdx: number) => `${segIdx}-${tokIdx}`;
+
+/**
+ * 根据章节内容和高亮数据构建 HighlightMap
+ * 这是一个纯函数，方便测试和维护
+ */
+const buildHighlightMap = (
+  highlights: ChapterHighlightData[],
+  pendingHighlights: PendingHighlight[],
+  segments?: ChapterResponse['segments']
+): HighlightMap => {
+  const map = new Map<string, string>();
+
+  // 首先计算每个段落的 token 数量（如果提供了 segments）
+  const segmentTokenCounts = new Map<number, number>();
+  if (segments) {
+    segments.forEach((seg, idx) => {
+      if (seg.type === 'text' && seg.tokens) {
+        segmentTokenCounts.set(idx, seg.tokens.length);
+      }
+    });
+  }
+
+  // 辅助函数：处理单个高亮
+  const processHighlight = (
+    startSeg: number,
+    startTok: number,
+    endSeg: number,
+    endTok: number,
+    style: string
+  ) => {
+    for (let s = startSeg; s <= endSeg; s++) {
+      const startT = s === startSeg ? startTok : 0;
+      // 如果知道该段的 token 数量，使用实际值；否则使用保守的大数
+      const endT = s === endSeg ? endTok : (segmentTokenCounts.get(s) ?? 9999);
+
+      for (let t = startT; t <= endT; t++) {
+        map.set(getTokenKey(s, t), style);
+      }
+    }
+  };
+
+  // 处理已确认的高亮
+  highlights.forEach((h) => {
+    processHighlight(
+      h.start_segment_index,
+      h.start_token_idx,
+      h.end_segment_index,
+      h.end_token_idx,
+      h.style_category
+    );
+  });
+
+  // 处理待同步的高亮（乐观更新）
+  pendingHighlights.forEach((h) => {
+    processHighlight(
+      h.start_segment_index,
+      h.start_token_idx,
+      h.end_segment_index,
+      h.end_token_idx,
+      h.style_category
+    );
+  });
+
+  return map;
+};
+
+/**
  * 创建默认状态工厂函数
  * 避免共享引用导致的 bug (特别是 Set 和 对象)
  */
@@ -90,6 +202,10 @@ const createDefaultState = (): ReaderState => ({
   chapterIndex: null,
   chapter: null,
   vocabularySet: new Set<string>(),
+  vocabularies: [],
+  highlights: [],
+  highlightMap: new Map(),
+  pendingHighlights: [],
   currentSegmentIndex: 0,
   segmentOffset: 0,
   selectedToken: null,
@@ -107,11 +223,25 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
 
   // 书籍/章节加载
   setBookId: (bookId) => set({ bookId }),
-  setChapter: (chapter) => set({ chapter }),
+
+  setChapter: (chapter) => set({
+    // 清理上一章的临时高亮，避免跨章污染
+    pendingHighlights: [],
+    chapter,
+    highlights: chapter?.highlights ?? [],
+    highlightMap: buildHighlightMap(chapter?.highlights ?? [], [], chapter?.segments),
+  }),
+
   setChapterIndex: (chapterIndex) => set({ chapterIndex }),
 
   // 生词管理
   setVocabularySet: (baseForms) => set({ vocabularySet: new Set(baseForms) }),
+
+  setVocabularies: (vocabularies) =>
+    set({
+      vocabularies,
+      vocabularySet: new Set(vocabularies.map((v) => v.base_form)),
+    }),
 
   addVocabulary: (baseForm) =>
     set((state) => {
@@ -124,6 +254,20 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
       return { vocabularySet: newSet };
     }),
 
+  addVocabularyRecord: (record) =>
+    set((state) => {
+      // 检查是否已存在（避免重复添加）
+      if (state.vocabularies.some((v) => v.id === record.id || v.base_form === record.base_form)) {
+        return state;
+      }
+      const newSet = new Set(state.vocabularySet);
+      newSet.add(record.base_form);
+      return {
+        vocabularySet: newSet,
+        vocabularies: [...state.vocabularies, record],
+      };
+    }),
+
   removeVocabulary: (baseForm) =>
     set((state) => {
       // 先检查是否不存在，避免不必要的更新
@@ -131,11 +275,60 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
         return state;
       }
       const newSet = new Set(state.vocabularySet);
+      const newVocabularies = state.vocabularies.filter((v) => v.base_form !== baseForm);
       newSet.delete(baseForm);
-      return { vocabularySet: newSet };
+      return { vocabularySet: newSet, vocabularies: newVocabularies };
     }),
 
   isVocabulary: (baseForm) => get().vocabularySet.has(baseForm),
+
+  getVocabularyId: (baseForm) => {
+    const vocab = get().vocabularies.find((v) => v.base_form === baseForm);
+    return vocab ? vocab.id : null;
+  },
+
+  // 高亮管理
+  setHighlights: (highlights) =>
+    set((state) => ({
+      highlights,
+      highlightMap: buildHighlightMap(highlights, state.pendingHighlights, state.chapter?.segments),
+    })),
+
+  addHighlight: (highlight) =>
+    set((state) => {
+      const newHighlights = [...state.highlights, highlight];
+      return {
+        highlights: newHighlights,
+        highlightMap: buildHighlightMap(newHighlights, state.pendingHighlights, state.chapter?.segments),
+      };
+    }),
+
+  addHighlightOptimistic: (highlight) =>
+    set((state) => {
+      const newPending = [...state.pendingHighlights, highlight];
+      return {
+        pendingHighlights: newPending,
+        highlightMap: buildHighlightMap(state.highlights, newPending, state.chapter?.segments),
+      };
+    }),
+
+  removeHighlight: (id) =>
+    set((state) => {
+      const newHighlights = state.highlights.filter((h) => h.id !== id);
+      return {
+        highlights: newHighlights,
+        highlightMap: buildHighlightMap(newHighlights, state.pendingHighlights, state.chapter?.segments),
+      };
+    }),
+
+  removePendingHighlight: (tempId) =>
+    set((state) => {
+      const newPending = state.pendingHighlights.filter((h) => h.tempId !== tempId);
+      return {
+        pendingHighlights: newPending,
+        highlightMap: buildHighlightMap(state.highlights, newPending, state.chapter?.segments),
+      };
+    }),
 
   // 滚动位置
   setCurrentSegmentIndex: (currentSegmentIndex) => set({ currentSegmentIndex }),

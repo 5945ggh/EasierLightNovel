@@ -6,7 +6,6 @@ import apiClient from './api-client';
 import type {
   VocabularyCreate,
   VocabularyResponse,
-  VocabularyBaseFormsResponse,
 } from '@/types';
 
 /**

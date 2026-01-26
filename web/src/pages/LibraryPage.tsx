@@ -50,7 +50,6 @@ export const LibraryPage: React.FC = () => {
     updateBookMetadata,
     isUpdating,
     uploadBookCover,
-    isUploadingCover,
   } = useLibrary();
 
   const fileInputRef = useRef<HTMLInputElement>(null);

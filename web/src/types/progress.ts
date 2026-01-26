@@ -14,7 +14,7 @@ export interface UserProgressBase {
 /**
  * 更新阅读进度请求
  */
-export interface UserProgressUpdate extends UserProgressBase {}
+export type UserProgressUpdate = UserProgressBase;
 
 /**
  * 阅读进度响应

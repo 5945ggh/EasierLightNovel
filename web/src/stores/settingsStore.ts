@@ -8,20 +8,23 @@ import { persist } from 'zustand/middleware';
 /**
  * 主题类型
  */
-export type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark' | 'sepia' | 'system';
 
 /**
-   * 阅读器设置状态
-   */
+ * 注音模式
+ */
+export type FuriganaMode = 'always' | 'hover' | 'hidden';
+
+/**
+ * 阅读器设置状态
+ */
 interface SettingsState {
   // 外观设置
   theme: Theme;
   fontSize: number;           // 字号 (px)
   lineHeight: number;         // 行高倍数
-  showRuby: boolean;          // 是否显示注音
-
-  // 布局设置
-  showSidebar: boolean;       // 是否默认显示侧边栏
+  furiganaMode: FuriganaMode; // 注音显示模式
+  fontFamily: string;         // 字体
 
   // 阅读设置
   autoScroll: boolean;        // 是否自动滚动
@@ -29,8 +32,8 @@ interface SettingsState {
 }
 
 /**
-   * 设置 Store 操作
-   */
+ * 设置 Store 操作
+ */
 interface SettingsActions {
   // 主题相关
   setTheme: (theme: Theme) => void;
@@ -38,10 +41,8 @@ interface SettingsActions {
   // 字体相关
   setFontSize: (size: number) => void;
   setLineHeight: (height: number) => void;
-  setShowRuby: (show: boolean) => void;
-
-  // 布局相关
-  setShowSidebar: (show: boolean) => void;
+  setFuriganaMode: (mode: FuriganaMode) => void;
+  setFontFamily: (font: string) => void;
 
   // 阅读相关
   setAutoScroll: (auto: boolean) => void;
@@ -52,21 +53,21 @@ interface SettingsActions {
 }
 
 /**
-   * 默认设置
-   */
+ * 默认设置
+ */
 const defaultSettings: SettingsState = {
   theme: 'system',
   fontSize: 18,
   lineHeight: 1.8,
-  showRuby: true,
-  showSidebar: true,
+  furiganaMode: 'always',
+  fontFamily: '"Noto Sans JP", "Hiragino Sans", sans-serif',
   autoScroll: false,
   scrollSpeed: 1,
 };
 
 /**
-   * 设置 Store
-   */
+ * 设置 Store
+ */
 export const useSettingsStore = create<SettingsState & SettingsActions>()(
   persist(
     (set) => ({
@@ -78,10 +79,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       // 字体相关
       setFontSize: (fontSize) => set({ fontSize }),
       setLineHeight: (lineHeight) => set({ lineHeight }),
-      setShowRuby: (showRuby) => set({ showRuby }),
-
-      // 布局相关
-      setShowSidebar: (showSidebar) => set({ showSidebar }),
+      setFuriganaMode: (furiganaMode) => set({ furiganaMode }),
+      setFontFamily: (fontFamily) => set({ fontFamily }),
 
       // 阅读相关
       setAutoScroll: (autoScroll) => set({ autoScroll }),
@@ -91,7 +90,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       resetSettings: () => set(defaultSettings),
     }),
     {
-      name: 'lightnovel-settings', // localStorage key
+      name: 'lightnovel-settings-v2', // 更新版本号，避免与旧数据冲突
     }
   )
 );

@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.128.0",
     "jaconv>=0.4.1",
     "jamdict>=0.1a11.post2",
+    "jamdict-data>=1.5",
     "litellm>=1.81.3",
     "python-multipart>=0.0.21",
     "sqlalchemy>=2.0.46",

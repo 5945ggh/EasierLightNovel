@@ -1,5 +1,6 @@
 # app/services/dictionary_service.py
 import logging
+import threading
 from functools import lru_cache
 from typing import List, Optional
 
@@ -9,17 +10,19 @@ from app.schemas import DictResult, DictEntry, SenseEntry
 
 logger = logging.getLogger(__name__)
 
+# 线程局部存储，每个线程有自己的 Jamdict 实例
+_thread_local = threading.local()
+
 
 class DictionaryService:
     """
     日语词典服务
 
     使用 Jamdict (JMDict) 提供日语词汇查询功能。
-    音调功能已预留，待后续集成数据源。
+    使用线程局部存储解决 SQLite 线程安全问题。
     """
 
     _instance: Optional["DictionaryService"] = None
-    _jmd: Optional[Jamdict] = None
     _initialized: bool = False
 
     def __new__(cls):
@@ -28,23 +31,19 @@ class DictionaryService:
         return cls._instance
 
     def __init__(self):
-        # 防止重复初始化
         if self._initialized:
             return
-
-        self._initialize()
         self._initialized = True
 
-    def _initialize(self):
-        """初始化 Jamdict"""
-        try:
+    @property
+    def _jmd(self) -> Jamdict:
+        """获取当前线程的 Jamdict 实例"""
+        if not hasattr(_thread_local, 'jmd'):
             # memory_mode=False: 不加载到内存，节省资源
             # kd2=False: 不加载汉字字典，节省资源
-            self._jmd = Jamdict(memory_mode=False, kd2=False)
-            logger.info("Jamdict (JMDict) initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Jamdict: {e}")
-            # 不 raise，允许服务降级启动
+            _thread_local.jmd = Jamdict(memory_mode=False, kd2=False)
+            logger.debug(f"Created new Jamdict instance for thread {threading.get_ident()}")
+        return _thread_local.jmd
 
     def _get_pitch_accent(self, word: str, reading: str) -> List[int]:
         """
