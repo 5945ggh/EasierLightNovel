@@ -73,6 +73,7 @@ export const ReaderPage: React.FC = () => {
     pendingChapterIndex,
     pendingScrollTarget,
     clearPendingChapter,
+    isSidebarOpen,
     resetReader,
   } = useReaderStore();
 
@@ -415,7 +416,11 @@ export const ReaderPage: React.FC = () => {
       <LeftDock onToggleToc={() => setIsTocOpen(!isTocOpen)} />
 
       {/* 中间阅读区 */}
-      <main className="flex-1 relative h-full flex flex-col min-w-0">
+      <main className={clsx(
+        'flex-1 relative h-full flex flex-col min-w-0 transition-all duration-300',
+        themeStyles[resolvedTheme],
+        isSidebarOpen && 'mr-80'
+      )}>
         <div
           className={clsx(
             'h-full w-full overflow-y-auto scroll-smooth',

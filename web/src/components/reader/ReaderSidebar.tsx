@@ -771,15 +771,7 @@ export const ReaderSidebar: React.FC = () => {
   if (!isSidebarOpen) return null;
 
   return (
-    <>
-      {/* 遮罩层 */}
-      <div
-        className="fixed inset-0 bg-black/20 z-40 transition-opacity"
-        onClick={handleClose}
-      />
-
-      {/* 侧边栏 */}
-      <aside className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 z-50 flex flex-col shadow-xl">
+    <aside className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 z-50 flex flex-col transition-transform duration-300">
         {/* 头部 */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -821,6 +813,5 @@ export const ReaderSidebar: React.FC = () => {
         {/* 内容区域 */}
         {renderTabContent()}
       </aside>
-    </>
   );
 };

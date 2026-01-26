@@ -330,7 +330,7 @@ export const SelectionMenu: React.FC = () => {
         ref={refs.setFloating}
         style={floatingStyles}
         {...getFloatingProps()}
-        className="z-50 flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
+        className="z-[60] flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
       >
         {existingHighlightId ? (
           // 已有高亮：显示删除选项
