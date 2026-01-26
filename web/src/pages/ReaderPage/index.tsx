@@ -16,6 +16,7 @@ import {
   getReadingProgress,
   getBookDetail,
   getChapterList,
+  getBookHighlights,
 } from '@/services/books.service';
 import { getBookVocabularies } from '@/services/vocabularies.service';
 import { useReaderStore } from '@/stores/readerStore';
@@ -28,6 +29,7 @@ import { LeftDock } from '@/components/reader/LeftDock';
 import { TocModal } from '@/components/reader/TocModal';
 import { SelectionMenu } from '@/components/reader/SelectionMenu';
 import { TokenPopover } from '@/components/reader/TokenPopover';
+import { ReaderSidebar } from '@/components/reader/ReaderSidebar';
 
 export const ReaderPage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
@@ -66,6 +68,11 @@ export const ReaderPage: React.FC = () => {
     setVocabularies,
     setCurrentSegmentIndex,
     setSegmentOffset,
+    setAllHighlights,
+    setAllChapterList,
+    pendingChapterIndex,
+    pendingScrollTarget,
+    clearPendingChapter,
     resetReader,
   } = useReaderStore();
 
@@ -101,9 +108,9 @@ export const ReaderPage: React.FC = () => {
     retry: false,
   });
 
-  // 5. 确定初始章节索引
-  useEffect(() => {
-    if (!chapterList || chapterList.length === 0) return;
+  // 5. 确定初始章节索引（使用派生状态而非 effect + setState）
+  const targetChapterIndex = useMemo(() => {
+    if (!chapterList || chapterList.length === 0) return null;
 
     // 检查进度中的章节索引是否在 TOC 中存在
     const progressIndex = progressData?.current_chapter_index;
@@ -111,13 +118,15 @@ export const ReaderPage: React.FC = () => {
       progressIndex !== undefined &&
       chapterList.some((ch) => ch.index === progressIndex);
 
-    if (isValidProgressIndex) {
-      setCurrentChapterIndex(progressIndex!);
-    } else {
-      // 进度无效或不存在，使用 TOC 第一个章节
-      setCurrentChapterIndex(chapterList[0].index);
-    }
+    return isValidProgressIndex ? progressIndex : chapterList[0].index;
   }, [progressData, chapterList]);
+
+  // 当目标章节索引变化时，更新本地状态
+  useEffect(() => {
+    if (targetChapterIndex !== null) {
+      setCurrentChapterIndex(targetChapterIndex);
+    }
+  }, [targetChapterIndex]);
 
   // 6. Query: 获取章节内容（只有当 currentChapterIndex 不为 null 时才执行）
   const {
@@ -143,6 +152,13 @@ export const ReaderPage: React.FC = () => {
   const { data: vocabBaseFormsData } = useQuery({
     queryKey: ['vocabularies-base-forms', bookId],
     queryFn: () => getVocabulariesBaseForms(bookId!),
+    enabled: !!bookId,
+  });
+
+  // 获取整本书的高亮数据（用于高亮列表跨章节显示）
+  const { data: allHighlightsData } = useQuery({
+    queryKey: ['all-highlights', bookId],
+    queryFn: () => getBookHighlights(bookId!),
     enabled: !!bookId,
   });
 
@@ -175,6 +191,47 @@ export const ReaderPage: React.FC = () => {
       setVocabularies(vocabulariesData);
     }
   }, [vocabulariesData, setVocabularies]);
+
+  // 同步整本书的高亮数据到 store
+  useEffect(() => {
+    if (allHighlightsData) {
+      setAllHighlights(allHighlightsData);
+    }
+  }, [allHighlightsData, setAllHighlights]);
+
+  // 同步章节列表到 store
+  useEffect(() => {
+    if (chapterList) {
+      setAllChapterList(chapterList);
+    }
+  }, [chapterList, setAllChapterList]);
+
+  // 处理来自 HighlightsTab 的章节切换请求
+  useEffect(() => {
+    if (pendingChapterIndex !== null) {
+      // 切换到目标章节
+      setCurrentChapterIndex(pendingChapterIndex);
+      clearPendingChapter();
+    }
+  }, [pendingChapterIndex, setCurrentChapterIndex, clearPendingChapter]);
+
+  // 章节切换完成后，滚动到目标位置
+  useEffect(() => {
+    if (pendingScrollTarget && chapterData) {
+      // 等待 DOM 更新后滚动
+      setTimeout(() => {
+        const selector = `[data-segment-index="${pendingScrollTarget.segmentIndex}"][data-token-index="${pendingScrollTarget.tokenIndex}"]`;
+        const element = document.querySelector(selector);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('ring-2', 'ring-indigo-500');
+          setTimeout(() => {
+            element.classList.remove('ring-2', 'ring-indigo-500');
+          }, 2000);
+        }
+      }, 300);
+    }
+  }, [pendingScrollTarget, chapterData]);
 
   // 章节切换函数
   const handlePrevChapter = useCallback(() => {
@@ -304,7 +361,7 @@ export const ReaderPage: React.FC = () => {
 
   // 错误状态
   if (chapterError) {
-    const errorMsg = (chapterError as any)?.response?.data?.detail || '未知错误';
+    const errorMsg = (chapterError as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '未知错误';
 
     return (
       <div className={clsx('flex h-screen w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
@@ -389,6 +446,9 @@ export const ReaderPage: React.FC = () => {
           onChapterSelect={handleChapterSelect}
         />
       )}
+
+      {/* 侧边栏 */}
+      <ReaderSidebar />
     </div>
   );
 };

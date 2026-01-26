@@ -70,6 +70,10 @@ export interface ChapterHighlightData {
   end_segment_index: number;
   end_token_idx: number;
   style_category: string;
+  /** 选中的文本内容（从 API 获取时包含此字段，用于跨章节显示） */
+  selected_text?: string;
+  /** 所属章节索引（从 API 获取时包含此字段） */
+  chapter_index?: number;
 }
 
 /**

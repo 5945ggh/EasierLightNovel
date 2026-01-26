@@ -3,7 +3,7 @@
  */
 
 import apiClient from './api-client';
-import type { HighlightCreate, HighlightResponse } from '@/types';
+import type { HighlightCreate, HighlightResponse, AIAnalysisResult, ArchiveItemResponse } from '@/types';
 
 /**
  * 创建划线
@@ -30,4 +30,23 @@ export const getHighlight = async (highlightId: number): Promise<HighlightRespon
  */
 export const deleteHighlight = async (highlightId: number): Promise<{ ok: boolean }> => {
   return apiClient.delete<{ ok: boolean }>(`/highlights/${highlightId}`);
+};
+
+/**
+ * 保存 AI 分析到积累本
+ * @param highlightId 划线记录 ID
+ * @param data AI 分析结果
+ * @returns 积累本条目
+ */
+export const saveAIAnalysis = async (highlightId: number, data: AIAnalysisResult): Promise<ArchiveItemResponse> => {
+  return apiClient.put<ArchiveItemResponse>(`/highlights/${highlightId}/ai-analysis`, data);
+};
+
+/**
+ * 获取划线对应的积累本条目
+ * @param highlightId 划线记录 ID
+ * @returns 积累本条目
+ */
+export const getArchiveItem = async (highlightId: number): Promise<ArchiveItemResponse> => {
+  return apiClient.get<ArchiveItemResponse>(`/highlights/${highlightId}/archive`);
 };

@@ -20,7 +20,6 @@ import { X, Plus, BookOpen, Sparkles, Volume2, Loader2, Trash2 } from 'lucide-re
 import { useReaderStore, getTokenKey } from '@/stores/readerStore';
 import { addVocabulary as addVocabularyService, deleteVocabulary } from '@/services/vocabularies.service';
 import { searchDictionary } from '@/services/dictionary.service';
-import type { VocabularyResponse } from '@/types';
 import type { DictResult } from '@/types/dictionary';
 import { clsx } from 'clsx';
 
@@ -37,10 +36,13 @@ export const TokenPopover: React.FC = () => {
   const removeVocabularyOpt = useReaderStore((s) => s.removeVocabulary);
   const getVocabularyId = useReaderStore((s) => s.getVocabularyId);
   const highlightMap = useReaderStore((s) => s.highlightMap);
+  const highlights = useReaderStore((s) => s.highlights);
   const vocabularySet = useReaderStore((s) => s.vocabularySet);
   const bookId = useReaderStore((s) => s.bookId);
   const setIsSidebarOpen = useReaderStore((s) => s.setIsSidebarOpen);
   const setActiveTab = useReaderStore((s) => s.setActiveTab);
+  const triggerAIAnalysis = useReaderStore((s) => s.triggerAIAnalysis);
+  const isHighlightAnalyzed = useReaderStore((s) => s.isHighlightAnalyzed);
 
   // 词典查询结果状态
   const [dictResult, setDictResult] = useState<DictResult | null>(null);
@@ -119,6 +121,36 @@ export const TokenPopover: React.FC = () => {
       )
     : false;
 
+  // 获取当前 token 所在高亮的 ID
+  const currentHighlightId = React.useMemo((): number | null => {
+    if (!selectedToken) return null;
+
+    // 找到对应的高亮记录
+    const highlight = highlights.find((h) => {
+      // 判断 token 是否在高亮范围内
+      if (h.start_segment_index <= selectedToken.segmentIndex &&
+          h.end_segment_index >= selectedToken.segmentIndex) {
+        if (h.start_segment_index === h.end_segment_index) {
+          return h.start_token_idx <= selectedToken.tokenIndex &&
+                 h.end_token_idx >= selectedToken.tokenIndex;
+        }
+        if (selectedToken.segmentIndex === h.start_segment_index) {
+          return selectedToken.tokenIndex >= h.start_token_idx;
+        }
+        if (selectedToken.segmentIndex === h.end_segment_index) {
+          return selectedToken.tokenIndex <= h.end_token_idx;
+        }
+        return true;
+      }
+      return false;
+    });
+
+    return highlight?.id ?? null;
+  }, [selectedToken, highlights]);
+
+  // 判断当前高亮是否已分析
+  const hasAIAnalysis = currentHighlightId !== null && isHighlightAnalyzed(currentHighlightId);
+
   // 判断是否已经是生词
   const isVocab = selectedToken?.token.b
     ? vocabularySet.has(selectedToken.token.b!)
@@ -184,14 +216,48 @@ export const TokenPopover: React.FC = () => {
 
   /**
    * 打开 AI 分析侧边栏
+   * 触发 AI 分析：找到当前 token 所在的高亮句 ID，然后触发分析
    */
   const handleAIAnalyze = useCallback(() => {
     if (!selectedToken) return;
 
-    setActiveTab('ai');
-    setIsSidebarOpen(true);
-    setSelectedToken(null);
-  }, [selectedToken, setActiveTab, setIsSidebarOpen, setSelectedToken]);
+    // 找到当前 token 所在的高亮句
+    const key = getTokenKey(selectedToken.segmentIndex, selectedToken.tokenIndex);
+    const highlightStyle = highlightMap.get(key);
+
+    if (!highlightStyle) {
+      console.warn('[TokenPopover] 当前 token 不在高亮句中');
+      return;
+    }
+
+    // 找到对应的高亮记录
+    const highlight = highlights.find((h) => {
+      // 判断 token 是否在高亮范围内
+      if (h.start_segment_index <= selectedToken.segmentIndex &&
+          h.end_segment_index >= selectedToken.segmentIndex) {
+        if (h.start_segment_index === h.end_segment_index) {
+          return h.start_token_idx <= selectedToken.tokenIndex &&
+                 h.end_token_idx >= selectedToken.tokenIndex;
+        }
+        if (selectedToken.segmentIndex === h.start_segment_index) {
+          return selectedToken.tokenIndex >= h.start_token_idx;
+        }
+        if (selectedToken.segmentIndex === h.end_segment_index) {
+          return selectedToken.tokenIndex <= h.end_token_idx;
+        }
+        return true;
+      }
+      return false;
+    });
+
+    if (highlight) {
+      triggerAIAnalysis(highlight.id);
+      setActiveTab('ai');
+      setIsSidebarOpen(true);
+    } else {
+      console.warn('[TokenPopover] 找不到对应的高亮记录');
+    }
+  }, [selectedToken, highlightMap, highlights, triggerAIAnalysis, setActiveTab, setIsSidebarOpen]);
 
   /**
    * 朗读该 Token
@@ -382,7 +448,7 @@ export const TokenPopover: React.FC = () => {
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-700 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 dark:text-indigo-300 rounded-lg transition-all"
             >
               <Sparkles size={16} />
-              AI 解析
+              {hasAIAnalysis ? '查看AI解析' : 'AI解析'}
             </button>
           )}
         </div>

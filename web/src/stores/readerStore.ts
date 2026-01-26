@@ -4,8 +4,9 @@
 
 import { create } from 'zustand';
 import type { TokenData, ChapterResponse } from '@/types';
-import type { ChapterHighlightData } from '@/types/chapter';
+import type { ChapterHighlightData, ChapterListItem } from '@/types/chapter';
 import type { VocabularyResponse } from '@/types/vocabulary';
+import { getArchiveItem } from '@/services/highlights.service';
 
 /**
  * 侧边栏标签页
@@ -59,10 +60,16 @@ interface ReaderState {
   vocabularies: VocabularyResponse[];
 
   // 高亮数据
-  highlights: ChapterHighlightData[];
+  highlights: ChapterHighlightData[];  // 当前章节的高亮
   highlightMap: HighlightMap;
   // 待同步的高亮（乐观更新但尚未收到服务器响应）
   pendingHighlights: PendingHighlight[];
+  // 整本书的高亮数据（用于高亮列表跨章节显示）
+  allHighlights: ChapterHighlightData[];
+  // 所有章节列表（用于高亮列表章节选择）
+  allChapterList: ChapterListItem[];
+  // 高亮列表当前查看的章节索引（null 表示全部）
+  highlightViewChapter: number | null;
 
   // 滚动位置
   currentSegmentIndex: number;
@@ -71,6 +78,14 @@ interface ReaderState {
 
   // 交互状态
   selectedToken: SelectedToken | null;
+  /** AI 分析触发信号（点击"AI解析"按钮时设置，AITab 执行后清除） */
+  aiAnalysisTrigger: number | null;  // 存储要分析的 highlightId
+  /** 已完成 AI 分析的高亮 ID 集合 */
+  analyzedHighlightIds: Set<number>;
+  /** 章节切换请求信号（HighlightsTab 设置，ReaderPage 执行后清除） */
+  pendingChapterIndex: number | null;
+  /** 章节切换后的滚动目标（用于切换后滚动到指定位置） */
+  pendingScrollTarget: { segmentIndex: number; tokenIndex: number } | null;
   isSidebarOpen: boolean;
   activeTab: SidebarTab;
 
@@ -104,6 +119,10 @@ interface ReaderActions {
   addHighlightOptimistic: (highlight: PendingHighlight) => void;
   removeHighlight: (id: number) => void;
   removePendingHighlight: (tempId: string) => void;
+  // 整本书高亮数据管理（用于高亮列表跨章节显示）
+  setAllHighlights: (highlights: ChapterHighlightData[]) => void;
+  setAllChapterList: (chapters: ChapterListItem[]) => void;
+  setHighlightViewChapter: (index: number | null) => void;
 
   // 滚动位置
   setCurrentSegmentIndex: (index: number) => void;
@@ -111,6 +130,18 @@ interface ReaderActions {
 
   // 交互状态
   setSelectedToken: (token: SelectedToken | null) => void;
+  triggerAIAnalysis: (highlightId: number) => void;  // 触发 AI 分析
+  clearAIAnalysisTrigger: () => void;  // 清除触发信号
+  /** 标记高亮已分析 */
+  markHighlightAnalyzed: (highlightId: number) => void;
+  /** 检查高亮是否已分析 */
+  isHighlightAnalyzed: (highlightId: number) => boolean;
+  /** 检查章节内所有高亮的 AI 分析状态 */
+  checkHighlightsAIStatus: (highlights: ChapterHighlightData[]) => Promise<void>;
+  /** 请求章节切换（带滚动目标） */
+  requestChapterChange: (chapterIndex: number, segmentIndex: number, tokenIndex: number) => void;
+  /** 清除章节切换请求 */
+  clearPendingChapter: () => void;
   setIsSidebarOpen: (open: boolean) => void;
   setActiveTab: (tab: SidebarTab) => void;
   toggleSidebar: () => void;
@@ -206,9 +237,16 @@ const createDefaultState = (): ReaderState => ({
   highlights: [],
   highlightMap: new Map(),
   pendingHighlights: [],
+  allHighlights: [],
+  allChapterList: [],
+  highlightViewChapter: null,
   currentSegmentIndex: 0,
   segmentOffset: 0,
   selectedToken: null,
+  aiAnalysisTrigger: null,
+  analyzedHighlightIds: new Set<number>(),
+  pendingChapterIndex: null,
+  pendingScrollTarget: null,
   isSidebarOpen: false,
   activeTab: 'dictionary',
   isLoading: false,
@@ -224,13 +262,20 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
   // 书籍/章节加载
   setBookId: (bookId) => set({ bookId }),
 
-  setChapter: (chapter) => set({
-    // 清理上一章的临时高亮，避免跨章污染
-    pendingHighlights: [],
-    chapter,
-    highlights: chapter?.highlights ?? [],
-    highlightMap: buildHighlightMap(chapter?.highlights ?? [], [], chapter?.segments),
-  }),
+  setChapter: (chapter) => {
+    const highlights = chapter?.highlights ?? [];
+    set({
+      // 清理上一章的临时高亮，避免跨章污染
+      pendingHighlights: [],
+      chapter,
+      highlights,
+      highlightMap: buildHighlightMap(highlights, [], chapter?.segments),
+    });
+    // 异步检查 AI 分析状态
+    if (highlights.length > 0) {
+      get().checkHighlightsAIStatus(highlights);
+    }
+  },
 
   setChapterIndex: (chapterIndex) => set({ chapterIndex }),
 
@@ -330,12 +375,58 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
       };
     }),
 
+  // 整本书高亮数据管理（用于高亮列表跨章节显示）
+  setAllHighlights: (allHighlights) => set({ allHighlights }),
+  setAllChapterList: (allChapterList) => set({ allChapterList }),
+  setHighlightViewChapter: (highlightViewChapter) => set({ highlightViewChapter }),
+
   // 滚动位置
   setCurrentSegmentIndex: (currentSegmentIndex) => set({ currentSegmentIndex }),
   setSegmentOffset: (segmentOffset) => set({ segmentOffset }),
 
   // 交互状态
   setSelectedToken: (selectedToken) => set({ selectedToken }),
+  triggerAIAnalysis: (highlightId) => set({ aiAnalysisTrigger: highlightId }),
+  clearAIAnalysisTrigger: () => set({ aiAnalysisTrigger: null }),
+  markHighlightAnalyzed: (highlightId) =>
+    set((state) => {
+      if (state.analyzedHighlightIds.has(highlightId)) {
+        return state;
+      }
+      const newSet = new Set(state.analyzedHighlightIds);
+      newSet.add(highlightId);
+      return { analyzedHighlightIds: newSet };
+    }),
+  isHighlightAnalyzed: (highlightId) => get().analyzedHighlightIds.has(highlightId),
+  checkHighlightsAIStatus: async (highlights) =>
+    set((state) => {
+      // 并行检查所有高亮的 AI 分析状态
+      highlights.forEach((h) => {
+        getArchiveItem(h.id)
+          .then((item) => {
+            if (item.ai_analysis) {
+              const currentState = get();
+              if (!currentState.analyzedHighlightIds.has(h.id)) {
+                const newSet = new Set(currentState.analyzedHighlightIds);
+                newSet.add(h.id);
+                set({ analyzedHighlightIds: newSet });
+              }
+            }
+          })
+          .catch(() => {
+            // 忽略错误，高亮可能没有积累本记录
+          });
+      });
+      return state;
+    }),
+  requestChapterChange: (chapterIndex, segmentIndex, tokenIndex) => set({
+    pendingChapterIndex: chapterIndex,
+    pendingScrollTarget: { segmentIndex, tokenIndex },
+  }),
+  clearPendingChapter: () => set({
+    pendingChapterIndex: null,
+    pendingScrollTarget: null,
+  }),
   setIsSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
   setActiveTab: (activeTab) => set({ activeTab }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),

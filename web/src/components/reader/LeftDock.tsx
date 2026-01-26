@@ -1,17 +1,26 @@
 /**
  * LeftDock - 左侧固定导航栏
- * 提供返回书架、目录、设置等快捷操作
+ * 提供返回书架、目录、侧边栏切换、设置等快捷操作
  */
 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, List, Settings, X } from 'lucide-react';
+import { Home, List, Settings, X, BookOpen, Sparkles, Bookmark, Highlighter } from 'lucide-react';
 import { clsx } from 'clsx';
 import { SettingsPopover } from './SettingsPopover';
+import { useReaderStore, type SidebarTab } from '@/stores/readerStore';
 
 interface LeftDockProps {
   onToggleToc: () => void;
 }
+
+// Tab 按钮配置
+const TAB_BUTTONS: { tab: SidebarTab; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
+  { tab: 'dictionary', icon: BookOpen, label: '词典' },
+  { tab: 'ai', icon: Sparkles, label: 'AI分析' },
+  { tab: 'vocabulary', icon: Bookmark, label: '生词本' },
+  { tab: 'highlights', icon: Highlighter, label: '高亮列表' },
+];
 
 interface DockButtonProps {
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -46,6 +55,12 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
+  // 侧边栏状态
+  const isSidebarOpen = useReaderStore((s) => s.isSidebarOpen);
+  const activeTab = useReaderStore((s) => s.activeTab);
+  const setIsSidebarOpen = useReaderStore((s) => s.setIsSidebarOpen);
+  const setActiveTab = useReaderStore((s) => s.setActiveTab);
+
   // 点击外部关闭设置面板（使用 useCallback 稳定引用）
   const handleClickOutside = useCallback((event: MouseEvent) => {
     if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
@@ -62,6 +77,18 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
   const handleNavigateHome = useCallback(() => navigate('/'), [navigate]);
   const handleToggleSettings = useCallback(() => setShowSettings(prev => !prev), []);
 
+  // 处理侧边栏 Tab 切换
+  const handleTabToggle = useCallback((tab: SidebarTab) => {
+    if (isSidebarOpen && activeTab === tab) {
+      // 如果当前 tab 已打开，则关闭侧边栏
+      setIsSidebarOpen(false);
+    } else {
+      // 否则打开侧边栏并切换到对应 tab
+      setActiveTab(tab);
+      setIsSidebarOpen(true);
+    }
+  }, [isSidebarOpen, activeTab, setActiveTab, setIsSidebarOpen]);
+
   return (
     <aside className="h-screen w-16 flex-shrink-0 flex flex-col items-center py-6 z-40 select-none border-r border-gray-200 dark:border-gray-700 bg-stone-50 dark:bg-gray-900">
       {/* 顶部导航 */}
@@ -69,20 +96,31 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
         <DockButton icon={Home} label="返回书架" onClick={handleNavigateHome} />
       </div>
 
-      {/* 中间区域 - 目录 */}
-      <div className="flex-1 w-full flex flex-col items-center justify-center gap-6">
-        <DockButton icon={List} label="目录" onClick={onToggleToc} />
+      {/* 中间区域 - 侧边栏 Tab 按钮 */}
+      <div className="flex-1 w-full flex flex-col items-center justify-center gap-3">
+        {TAB_BUTTONS.map(({ tab, icon: Icon, label }) => (
+          <DockButton
+            key={tab}
+            icon={Icon}
+            label={label}
+            active={isSidebarOpen && activeTab === tab}
+            onClick={() => handleTabToggle(tab)}
+          />
+        ))}
       </div>
 
-      {/* 底部设置区 */}
-      <div className="relative space-y-4 flex flex-col items-center" ref={settingsRef}>
-        <DockButton
-          icon={showSettings ? X : Settings}
-          label="阅读设置"
-          active={showSettings}
-          onClick={handleToggleSettings}
-        />
-        {showSettings ? <SettingsPopover /> : null}
+      {/* 底部区域 - 目录和设置 */}
+      <div className="space-y-4 flex flex-col items-center">
+        <DockButton icon={List} label="目录" onClick={onToggleToc} />
+        <div className="relative" ref={settingsRef}>
+          <DockButton
+            icon={showSettings ? X : Settings}
+            label="阅读设置"
+            active={showSettings}
+            onClick={handleToggleSettings}
+          />
+          {showSettings ? <SettingsPopover /> : null}
+        </div>
       </div>
     </aside>
   );
