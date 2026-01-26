@@ -1,6 +1,6 @@
 # database.py
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from app.models import Base
 from app.config import SQLALCHEMY_DATABASE_URL, DATA_DIR, DB_PATH, UPLOAD_DIR
@@ -37,7 +37,7 @@ def check_db_connection() -> bool:
     """检查数据库连接是否正常"""
     try:
         db = SessionLocal()
-        db.execute("SELECT 1") #type: ignore
+        db.execute(text("SELECT 1"))
         print("Database connection OK")
         return True
     except Exception as e:

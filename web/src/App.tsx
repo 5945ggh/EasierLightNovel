@@ -1,18 +1,34 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { LibraryContainer } from './components/library/LibraryContainer';
+/**
+ * 应用入口组件
+ * 配置路由和全局状态管理
+ */
 
-// 创建 QueryClient 实例
-const queryClient = new QueryClient();
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { LibraryPage } from '@/pages/LibraryPage';
+import { ReaderPage } from '@/pages/ReaderPage';
+
+// 创建 React Query 客户端
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-gray-50/50">
-         {/* 暂时直接显示 Library，后续加路由 */}
-        <LibraryContainer />
-      </div>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<LibraryPage />} />
+          <Route path="/read/:bookId" element={<ReaderPage />} />
+        </Routes>
+      </BrowserRouter>
     </QueryClientProvider>
-  )
+  );
 }
 
-export default App
+export default App;

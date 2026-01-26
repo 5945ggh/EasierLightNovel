@@ -2,12 +2,13 @@
 import os
 import shutil
 import logging
-from typing import List, Optional, Literal
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import UploadFile, BackgroundTasks
 
-from app.models import Book, Chapter, ProcessingStatus
-from app.schemas import BookCreate, BookUpdate
+from app.models import Book, Chapter, ProcessingStatus, Vocabulary
+from app.schemas import BookUpdate
+from sqlalchemy.orm import defer
 from app.utils.epub_parser import LightNovelParser, TextSegment, ImageSegment
 from app.utils.tokenizer import JapaneseTokenizer
 from app.config import UPLOAD_DIR
@@ -43,19 +44,88 @@ class BookService:
         self.db.refresh(book)
         return book
 
-    def delete_book(self, book_id: str):
+    def delete_book(self, book_id: str) -> bool:
+        """
+        删除书籍及其关联数据
+
+        Args:
+            book_id: 书籍 ID
+
+        Returns:
+            bool: 删除成功返回 True，书籍不存在返回 False
+        """
         book = self.get_book(book_id)
-        if book:
-            # 1. 删除物理文件 (封面、解压的图片等)
-            book_dir = os.path.join(UPLOAD_DIR, book_id)
-            if os.path.exists(book_dir):
-                shutil.rmtree(book_dir, ignore_errors=True)
-            
-            # 2. 删除数据库记录 (Cascade delete 会自动删除 chapters, progress 等)
+        if not book:
+            return False
+
+        # 1. 先删除数据库记录 (Cascade delete 会自动删除 chapters, progress 等)
+        try:
             self.db.delete(book)
             self.db.commit()
-            return True
-        return False
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete book {book_id} from database: {e}")
+            raise
+
+        # 2. 再删除物理文件 (封面、解压的图片等)
+        # 即使文件删除失败，数据库记录也已删除，避免数据不一致
+        book_dir = os.path.join(UPLOAD_DIR, book_id)
+        if os.path.exists(book_dir):
+            try:
+                shutil.rmtree(book_dir, ignore_errors=True)
+                logger.info(f"Deleted book directory: {book_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to delete book directory {book_dir}: {e}")
+
+        return True
+
+    def get_chapters(self, book_id: str) -> List[Chapter]:
+        """
+        获取书籍的章节列表（仅 index 和 title，不含正文内容）
+
+        Returns:
+            List[Chapter]: 章节列表，按 index 排序
+        """
+        return self.db.query(Chapter)\
+            .options(defer(Chapter.content_json))\
+            .filter(Chapter.book_id == book_id)\
+            .order_by(Chapter.index)\
+            .all()
+
+    def get_chapter_content(self, book_id: str, chapter_index: int) -> Optional[Chapter]:
+        """
+        获取特定章节的完整内容（含分词数据）
+
+        Args:
+            book_id: 书籍 ID
+            chapter_index: 章节索引（对应 spine 索引）
+
+        Returns:
+            Chapter: 章节对象，包含 content_json 字段
+            None: 章节不存在
+        """
+        return self.db.query(Chapter)\
+            .filter(
+                Chapter.book_id == book_id,
+                Chapter.index == chapter_index
+            )\
+            .first()
+
+    def get_vocabularies_base_forms(self, book_id: str) -> List[str]:  # TODO: 后续可以拆分
+        """
+        获取书籍的所有生词原型（去重后的集合）
+
+        Args:
+            book_id: 书籍 ID
+
+        Returns:
+            List[str]: 去重后的生词原型列表
+        """
+        result = self.db.query(Vocabulary.base_form)\
+            .filter(Vocabulary.book_id == book_id)\
+            .distinct()\
+            .all()
+        return [row[0] for row in result]
 
     def _extract_epub_metadata(self, epub_path: str, fallback_title: str) -> tuple[str, Optional[str]]:
         """
@@ -182,30 +252,40 @@ class BookService:
 
         return new_book
 
-    def process_book_task(self, book_id: str, file_path: str, mode: Literal["A", "B", "C"] = "B"):
+    def process_book_task(self, book_id: str, file_path: str, mode: str = "B"):
         """
         后台任务：解析 EPUB -> 分词 -> 存入数据库
         需要创建新的 DB Session，因为原来的请求 Session 可能已关闭
+
+        Args:
+            book_id: 书籍 ID
+            file_path: EPUB 文件路径
+            mode: 分词模式 ("A", "B", "C")
         """
         # 这里的 SessionLocal 是 database.py 里定义的
         from app.database import SessionLocal
         db = SessionLocal()
-        
+
+        book: Optional[Book] = None  # 提前声明，避免 except 块中 UnboundLocalError
+
         try:
             book = db.query(Book).filter(Book.id == book_id).first()
-            if not book: return # 甚至可能在解析前被删了
-            
-            book.status = ProcessingStatus.PROCESSING # type: ignore
+            if not book:
+                logger.warning(f"Book {book_id} not found, skipping processing")
+                return
+
+            book.status = ProcessingStatus.PROCESSING  # type: ignore
             db.commit()
-            
+
             logger.info(f"Start processing book: {book.title} ({book_id})")
 
             # A. 解析 EPUB 结构
             parser = LightNovelParser(file_path, book_id, UPLOAD_DIR)
-            raw_chapters = parser.parse() # 返回 List[Chapter] (这里的 Chapter 是 parser 类，非 ORM) 
+            raw_chapters = parser.parse()  # 返回 List[Chapter] (这里的 Chapter 是 parser 类，非 ORM)
 
             # B. 初始化分词器
-            tokenizer = JapaneseTokenizer(mode=mode)
+            assert mode in ["A", "B", "C"]
+            tokenizer = JapaneseTokenizer(mode=mode) #type: ignore
 
             # C. 遍历处理每个章节
             detected_cover_url: Optional[str] = None
@@ -222,12 +302,12 @@ class BookService:
                             is_image = True
                         elif isinstance(seg, ImageSegment):
                             is_image = True
-                            
+
                         if is_image and (src := getattr(seg, 'src', None)):
                             detected_cover_url = src
                             logger.info(f"Detected cover from content stream: {detected_cover_url}")
-                            
-                    if isinstance(seg, TextSegment) and seg.text: # 这里使用isinstance判断究竟是否可能因导入方式的不同而产生意外的后果?
+
+                    if isinstance(seg, TextSegment) and seg.text:
                         # 调用 Sudachi 分词
                         tokens_obj_list = tokenizer.process_text(seg.text)
                         # 转换成 dict 存储
@@ -236,7 +316,7 @@ class BookService:
                 # 创建 ORM 对象
                 # 注意：content_json 需要存储为 Python 对象 (List[Dict])，SQLAlchemy 会自动转 JSON
                 segments_json = [seg.to_dict() for seg in raw_chap.segments]
-                
+
                 new_chapter = Chapter(
                     book_id=book_id,
                     index=raw_chap.index,
@@ -252,20 +332,22 @@ class BookService:
             cover_url = detected_cover_url or self._find_cover_image_fallback(book_id)
 
             # F. 更新书籍状态
-            book.status = ProcessingStatus.COMPLETED # type: ignore
-            book.total_chapters = total_chapters # type: ignore
+            book.status = ProcessingStatus.COMPLETED  # type: ignore
+            book.total_chapters = total_chapters  # type: ignore
             if cover_url:
-                book.cover_url = cover_url # type: ignore
+                book.cover_url = cover_url  # type: ignore
 
             db.commit()
             logger.info(f"Successfully processed book: {book.title} ({total_chapters} chapters)")
 
         except Exception as e:
             logger.error(f"Failed to process book {book_id}: {e}", exc_info=True)
-            book.status = ProcessingStatus.FAILED # type: ignore
-            book.error_message = str(e)[:250] # type: ignore
-            db.commit()
-        
+            # book 可能为 None（如果查询时就不存在）
+            if book is not None:
+                book.status = ProcessingStatus.FAILED  # type: ignore
+                book.error_message = str(e)[:250]  # type: ignore
+                db.commit()
+
         finally:
             db.close()
             # 清理上传的临时文件

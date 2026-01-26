@@ -1,4 +1,4 @@
-# app/schemas/book.py
+# app/schemas.py
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Union, Any, Dict
 from enum import Enum
@@ -51,10 +51,10 @@ class TokenData(BaseModel):
     gap: Optional[bool] = None                # 是否有间隔
     RUBY: Optional[List[RubyPart]] = None     # 振假名 parts（强类型）
 
-    # 可选字段（按需添加，分词时不包含）
-    is_vocabulary: Optional[bool] = None      # 是否在生词本中
-    highlight_id: Optional[int] = None        # 所属划线的 ID
-    highlight_style: Optional[str] = None     # 划线样式
+    # 我们保证数据的分离传输, 不再包含以下字段:
+    # is_vocabulary: Optional[bool] = None      # 是否在生词本中
+    # highlight_id: Optional[int] = None        # 所属划线的 ID
+    # highlight_style: Optional[str] = None     # 划线样式
     
     
 # ==================== 章节内容段 ====================
@@ -76,24 +76,70 @@ class ImageSegmentSchema(SegmentBase):
 
 ContentSegment = Union[TextSegmentSchema, ImageSegmentSchema]
 
+
 # ==================== Chapter 相关 ====================
+class ChapterHighlightData(BaseModel):
+    id: int
+    # 本章节内的定位信息
+    start_segment_index: int
+    start_token_idx: int
+    end_segment_index: int
+    end_token_idx: int
+    style_category: str
+    
+    class Config:
+        from_attributes = True
+    
 class ChapterResponse(BaseModel):
-    """章节内容响应"""
     index: int
     title: str
-    segments: List[ContentSegment]
+    segments: List[ContentSegment]  # 包含 TokenData 的列表
+
+    # === 动态数据（本章范围）===
+    highlights: List[ChapterHighlightData] = [] 
 
 class ChapterListItem(BaseModel):
     """章节列表项"""
     index: int
     title: str
+    
+# ==================== Vocabulary 相关 ====================
+class VocabularyBaseFormsResponse(BaseModel):
+    """生词原型集合响应（全书范围）"""
+    base_forms: List[str]  # 去重后的生词原型列表
+
+class VocabularyBase(BaseModel):
+    """生词基础信息"""
+    word: str = Field(..., description="表层形")
+    reading: Optional[str] = Field(None, description="读音")
+    base_form: str = Field(..., description="原型")
+    part_of_speech: Optional[str] = Field(None, description="词性")
+    definition: Optional[str] = Field(None, description="释义json")
+
+class VocabularyCreate(VocabularyBase):
+    """添加生词请求"""
+    book_id: str
+
+class VocabularyResponse(VocabularyBase):
+    """生词响应"""
+    id: int
+    book_id: str
+    definition: Optional[str] = None
+    status: int = 0
+    next_review_at: Optional[datetime] = None
+    context_sentences: Optional[List[str]] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 # 划线
 class HighlightBase(BaseModel):
     """划线基础属性"""
     style_category: str = "default"
     selected_text: str = Field(..., description="选中的纯文本内容，用于校验或回显")
-
+    
 class HighlightCreate(HighlightBase):
     """创建划线请求"""
     book_id: str
@@ -119,4 +165,55 @@ class HighlightResponse(HighlightCreate):
     created_at: datetime
     
     class Config:
-        from_attributes = True # Pydantic v2 (v1 使用 orm_mode = True)
+        from_attributes = True
+        
+# ==================== Dictionary 相关 ====================
+class SenseEntry(BaseModel):
+    """释义条目"""
+    pos: List[str] = Field(default_factory=list, description="词性列表")
+    definitions: List[str] = Field(default_factory=list, description="释义列表")
+
+
+class DictEntry(BaseModel):
+    """字典条目"""
+    id: str = Field(..., description="JMDict IDSeq")
+    kanji: List[str] = Field(default_factory=list, description="汉字形式列表")
+    reading: List[str] = Field(default_factory=list, description="读音列表")
+    senses: List[SenseEntry] = Field(default_factory=list, description="释义列表")
+
+    # 音调信息：预留字段，暂时返回空列表
+    # 格式示例: [0] (平板), [1] (头高), [2] (中高)
+    # 同一个词可能有多个音调（不同方言），用列表存储
+    pitch_accent: Optional[List[int]] = Field(None, description="音调核位置列表（预留）")
+
+
+class DictResult(BaseModel):
+    """字典查询结果"""
+    query: str = Field(..., description="查询词")
+    found: bool = Field(..., description="是否找到结果")
+    is_exact_match: bool = Field(default=False, description="是否精确匹配")
+    entries: List[DictEntry] = Field(default_factory=list, description="字典条目列表")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
+# ==================== UserProgress 相关 ====================
+class UserProgressBase(BaseModel):
+    """阅读进度基础"""
+    current_chapter_index: int = Field(default=0, ge=0)
+    current_segment_index: int = Field(default=0, ge=0)
+    
+    # 注意：models.py 里这个字段是 nullable=True，但为了前端处理方便，
+    # 我们在 Schema 层将其收敛为 int (如果为 None 则由后端逻辑转为 0)
+    current_segment_offset: int = Field(default=0, ge=0) 
+
+class UserProgressUpdate(UserProgressBase):
+    """更新阅读进度请求"""
+    pass # 继承了 UserProgressBase
+
+class UserProgressResponse(UserProgressBase):
+    """阅读进度响应"""
+    book_id: str
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True 

@@ -1,161 +1,254 @@
-import React, { useState, useEffect } from 'react';
-import type { BookSummary } from '../../types/book';
-import { X, Upload, Loader2, Save } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { updateBookMetadata, updateBookCover } from '../../lib/api';
-import { cn } from '../../lib/utils';
+/**
+ * 编辑书籍元数据弹窗
+ * 支持修改标题、作者和上传封面
+ */
+
+import React, { useRef, useState, useEffect } from 'react';
+import { X, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
+import clsx from 'clsx';
+import type { BookDetail } from '@/types/book';
 
 interface EditBookModalProps {
-  book: BookSummary | null;
+  book: BookDetail | null;
   isOpen: boolean;
   onClose: () => void;
+  onSave: (data: { title: string; author: string; coverFile?: File }) => Promise<void>;
+  isSaving?: boolean;
 }
 
-export const EditBookModal: React.FC<EditBookModalProps> = ({ book, isOpen, onClose }) => {
-  const queryClient = useQueryClient();
-
-  // 表单状态
+export const EditBookModal: React.FC<EditBookModalProps> = ({
+  book,
+  isOpen,
+  onClose,
+  onSave,
+  isSaving = false,
+}) => {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 当 book 变化时初始化表单
+  // 当 book 变化时重置表单
   useEffect(() => {
     if (book) {
       setTitle(book.title);
       setAuthor(book.author || '');
-      setPreviewUrl(book.cover_url || '');
-      setCoverFile(null);
+      setPreviewUrl(book.cover_url);
+      setPendingCoverFile(null);
     }
   }, [book]);
 
-  // 处理封面选择
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setCoverFile(file);
-      setPreviewUrl(URL.createObjectURL(file)); // 本地预览
+  // 处理封面上传选择（只做本地预览，不立即上传）
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+
+      // 验证文件类型
+      if (!file.type.startsWith('image/')) {
+        alert('请选择图片文件');
+        return;
+      }
+
+      // 创建本地预览
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewUrl(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // 保存待上传的文件，等点击保存时才上传
+      setPendingCoverFile(file);
     }
+
+    // 清空 input
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // 提交 Mutation
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!book) return;
+  // 处理保存（此时才真正上传封面）
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-      const promises = [];
+    const trimmedTitle = title.trim();
+    const trimmedAuthor = author.trim();
 
-      // 1. 如果文本有变化，更新文本
-      if (title !== book.title || author !== (book.author || '')) {
-        promises.push(updateBookMetadata(book.id, { title, author }));
-      }
-
-      // 2. 如果选了新封面，上传封面
-      if (coverFile) {
-        promises.push(updateBookCover(book.id, coverFile));
-      }
-
-      await Promise.all(promises);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['books'] });
-      onClose();
-    },
-    onError: (err) => {
-      console.error('Update failed', err);
-      alert('Failed to update book details.');
+    if (!trimmedTitle) {
+      alert('书名不能为空');
+      return;
     }
-  });
 
-  // 清理预览 URL
+    await onSave({
+      title: trimmedTitle,
+      author: trimmedAuthor,
+      coverFile: pendingCoverFile ?? undefined,
+    });
+    onClose();
+  };
+
+  // ESC 键关闭
   useEffect(() => {
-    return () => {
-      if (previewUrl && previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previewUrl);
-      }
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
     };
-  }, [previewUrl]);
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEsc);
+      return () => document.removeEventListener('keydown', handleEsc);
+    }
+  }, [isOpen, onClose]);
 
   if (!isOpen || !book) return null;
 
+  const hasNewCover = pendingCoverFile !== null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+    <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
+      {/* 背景遮罩 */}
+      <div
+        className='absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in'
+        onClick={onClose}
+      />
 
-        {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b border-zinc-100">
-          <h2 className="text-lg font-bold text-zinc-800">Edit Book Details</h2>
-          <button onClick={onClose} className="p-1 hover:bg-zinc-100 rounded-full transition">
-            <X size={20} className="text-zinc-500" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 space-y-4">
-
-          {/* Cover Image Input */}
-          <div className="flex justify-center mb-6">
-            <div className="relative group w-32 h-48 bg-zinc-100 rounded-lg overflow-hidden border border-zinc-200 shadow-sm cursor-pointer">
-              {previewUrl ? (
-                <img src={previewUrl} alt="Cover preview" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-zinc-300">
-                  <Upload size={32} />
-                </div>
-              )}
-
-              {/* Overlay for upload */}
-              <label className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center cursor-pointer">
-                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-                <span className="text-white opacity-0 group-hover:opacity-100 font-medium text-xs bg-black/50 px-2 py-1 rounded backdrop-blur-md">
-                  Change Cover
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Text Inputs */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Title</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 mb-1">Author</label>
-              <input
-                type="text"
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 bg-zinc-50 flex justify-end gap-3 border-t border-zinc-100">
+      {/* 弹窗内容 */}
+      <div className='relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in overflow-hidden'>
+        {/* 头部 */}
+        <div className='flex items-center justify-between px-6 py-4 border-b border-gray-100'>
+          <h2 className='text-lg font-bold text-gray-800'>编辑书籍信息</h2>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-zinc-600 font-medium hover:text-zinc-900 transition"
+            className='p-1 hover:bg-gray-100 rounded-full transition-colors'
+            disabled={isSaving}
           >
-            Cancel
-          </button>
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 text-sm font-medium shadow-sm"
-          >
-            {mutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Save Changes
+            <X size={20} className='text-gray-500' />
           </button>
         </div>
+
+        {/* 表单 */}
+        <form onSubmit={handleSave} className='p-6 space-y-5'>
+          {/* 封面预览与上传 */}
+          <div className='flex gap-4'>
+            {/* 封面预览 */}
+            <div className='flex-shrink-0 w-24 h-36 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg overflow-hidden border border-gray-200 relative'>
+              {previewUrl ? (
+                <>
+                  <img
+                    src={previewUrl}
+                    alt='封面预览'
+                    className='w-full h-full object-cover'
+                  />
+                  {/* 新封面标记 */}
+                  {hasNewCover && (
+                    <div className='absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full' />
+                  )}
+                </>
+              ) : (
+                <div className='w-full h-full flex items-center justify-center text-gray-300'>
+                  <ImageIcon size={32} strokeWidth={1} />
+                </div>
+              )}
+            </div>
+
+            {/* 封面上传按钮 */}
+            <div className='flex-1 flex flex-col justify-between'>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  封面图片
+                </label>
+                <p className='text-xs text-gray-500 mb-3'>
+                  支持 JPG、PNG 格式，建议比例 2:3
+                </p>
+                {hasNewCover && (
+                  <p className='text-xs text-blue-600 mb-2'>
+                    新封面将在保存后上传
+                  </p>
+                )}
+              </div>
+              <input
+                type='file'
+                ref={fileInputRef}
+                className='hidden'
+                accept='image/jpeg,image/png,image/webp'
+                onChange={handleCoverChange}
+                disabled={isSaving}
+              />
+              <button
+                type='button'
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSaving}
+                className='flex items-center justify-center gap-2 w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+              >
+                <Upload size={16} />
+                <span>{hasNewCover ? '更换图片' : '选择图片'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 书名输入 */}
+          <div>
+            <label htmlFor='title' className='block text-sm font-medium text-gray-700 mb-1.5'>
+              书名 <span className='text-red-500'>*</span>
+            </label>
+            <input
+              id='title'
+              type='text'
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder='输入书名'
+              className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all'
+              disabled={isSaving}
+              maxLength={200}
+            />
+          </div>
+
+          {/* 作者输入 */}
+          <div>
+            <label htmlFor='author' className='block text-sm font-medium text-gray-700 mb-1.5'>
+              作者
+            </label>
+            <input
+              id='author'
+              type='text'
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              placeholder='输入作者名'
+              className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all'
+              disabled={isSaving}
+              maxLength={100}
+            />
+          </div>
+
+          {/* 底部按钮 */}
+          <div className='flex gap-3 pt-2'>
+            <button
+              type='button'
+              onClick={onClose}
+              disabled={isSaving}
+              className='flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50'
+            >
+              取消
+            </button>
+            <button
+              type='submit'
+              disabled={isSaving}
+              className={clsx(
+                'flex-1 px-4 py-2.5 rounded-lg font-medium text-white transition-colors flex items-center justify-center gap-2',
+                isSaving
+                  ? 'bg-blue-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              )}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 size={16} className='animate-spin' />
+                  <span>保存中...</span>
+                </>
+              ) : (
+                '保存'
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
