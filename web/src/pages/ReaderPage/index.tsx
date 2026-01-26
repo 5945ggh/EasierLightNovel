@@ -3,10 +3,11 @@
  * 负责数据获取、状态编排和路由处理
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Home, RefreshCw } from 'lucide-react';
+import { clsx } from 'clsx';
 
 // Services & Stores
 import {
@@ -17,10 +18,13 @@ import {
   getChapterList,
 } from '@/services/books.service';
 import { useReaderStore } from '@/stores/readerStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { ProcessingStatus } from '@/types/common';
 
 // Components
 import { ContentCanvas } from '@/components/reader/ContentCanvas';
+import { LeftDock } from '@/components/reader/LeftDock';
+import { TocModal } from '@/components/reader/TocModal';
 
 export const ReaderPage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
@@ -28,6 +32,27 @@ export const ReaderPage: React.FC = () => {
 
   // 本地状态：当前章节索引（初始为 null，等待 TOC 或进度数据）
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number | null>(null);
+  // TOC 模态框状态
+  const [isTocOpen, setIsTocOpen] = useState(false);
+
+  // 设置 Store
+  const { theme, furiganaMode, fontSize, lineHeight, fontFamily } = useSettingsStore();
+
+  // 计算实际应用的主题（处理 system 主题）
+  const resolvedTheme = useMemo(() => {
+    if (theme === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    if (theme === 'sepia') return 'sepia';
+    return theme;
+  }, [theme]);
+
+  // 主题样式映射
+  const themeStyles = useMemo(() => ({
+    light: 'bg-stone-50 text-gray-900',
+    dark: 'bg-gray-900 text-gray-100',
+    sepia: 'bg-[#f4ecd8] text-[#5b4636]',
+  }), []);
 
   // Store Actions
   const {
@@ -159,6 +184,13 @@ export const ReaderPage: React.FC = () => {
     }
   }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setSegmentOffset]);
 
+  // 章节选择处理 - 移到所有条件返回之前
+  const handleChapterSelect = useCallback((index: number) => {
+    setCurrentSegmentIndex(0);
+    setSegmentOffset(0);
+    setCurrentChapterIndex(index);
+  }, [setCurrentSegmentIndex, setSegmentOffset]);
+
   // 判断是否有上一章/下一章
   const hasPrevChapter =
     chapterList && currentChapterIndex !== null
@@ -178,8 +210,8 @@ export const ReaderPage: React.FC = () => {
   // 加载中
   if (isTocLoading || isProgressLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-stone-50">
-        <div className="flex flex-col items-center gap-4 text-stone-500">
+      <div className={clsx('flex h-screen w-full items-center justify-center', themeStyles[resolvedTheme])}>
+        <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
           <Loader2 className="h-8 w-8 animate-spin" />
           <p>加载阅读器...</p>
         </div>
@@ -190,11 +222,11 @@ export const ReaderPage: React.FC = () => {
   // 没有章节
   if (chapterList && chapterList.length === 0) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-stone-50 px-4">
+      <div className={clsx('flex h-screen w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-orange-500">
           <AlertCircle className="h-12 w-12" />
           <p className="text-lg font-medium">没有可用的章节</p>
-          <p className="text-sm text-gray-500 max-w-md text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md text-center">
             这本书尚未解析出任何章节。请返回书架删除后重新上传，或联系管理员。
           </p>
         </div>
@@ -212,12 +244,12 @@ export const ReaderPage: React.FC = () => {
   // 章节加载中
   if (isChapterLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-stone-50">
-        <div className="flex flex-col items-center gap-4 text-stone-500">
+      <div className={clsx('flex h-screen w-full items-center justify-center', themeStyles[resolvedTheme])}>
+        <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
           <Loader2 className="h-8 w-8 animate-spin" />
           <p>加载章节内容...</p>
           {currentChapterInfo && (
-            <p className="text-sm text-gray-400">{currentChapterInfo.title}</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">{currentChapterInfo.title}</p>
           )}
         </div>
       </div>
@@ -233,11 +265,11 @@ export const ReaderPage: React.FC = () => {
     };
 
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-stone-50 px-4">
-        <div className="flex flex-col items-center gap-4 text-gray-500">
+      <div className={clsx('flex h-screen w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
+        <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
           <AlertCircle className="h-10 w-10" />
           <p>书籍尚未就绪</p>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-400 dark:text-gray-500">
             {statusMessages[bookDetail.status] || bookDetail.status}
           </p>
         </div>
@@ -256,16 +288,16 @@ export const ReaderPage: React.FC = () => {
     const errorMsg = (chapterError as any)?.response?.data?.detail || '未知错误';
 
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-stone-50 px-4">
+      <div className={clsx('flex h-screen w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-red-500">
           <AlertCircle className="h-12 w-12" />
           <p className="text-lg font-medium">章节加载失败</p>
-          <p className="text-sm text-gray-500 text-center max-w-md">
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-md">
             {currentChapterIndex !== null
               ? `第 ${currentChapterIndex + 1} 章加载失败: ${errorMsg}`
               : '无法加载章节内容'}
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             可用章节索引: {chapterList?.map((ch) => ch.index).join(', ') || '无'}
           </p>
         </div>
@@ -279,7 +311,7 @@ export const ReaderPage: React.FC = () => {
           </button>
           <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
           >
             <Home size={16} />
             返回书架
@@ -290,14 +322,50 @@ export const ReaderPage: React.FC = () => {
   }
 
   return (
-    <div className="relative">
-      {/* 主阅读画布 */}
-      <ContentCanvas
-        onPrevChapter={handlePrevChapter}
-        onNextChapter={handleNextChapter}
-        hasPrevChapter={hasPrevChapter}
-        hasNextChapter={hasNextChapter}
-      />
+    <div
+      className={clsx(
+        'flex h-screen w-full overflow-hidden transition-colors duration-300',
+        themeStyles[resolvedTheme],
+        `theme-${resolvedTheme}`,
+        resolvedTheme === 'dark' && 'dark'
+      )}
+      style={{
+        '--reader-font-size': `${fontSize}px`,
+        '--reader-line-height': String(lineHeight),
+        '--reader-font-family': fontFamily,
+      } as React.CSSProperties}
+    >
+      {/* 左侧 Dock */}
+      <LeftDock onToggleToc={() => setIsTocOpen(!isTocOpen)} />
+
+      {/* 中间阅读区 */}
+      <main className="flex-1 relative h-full flex flex-col min-w-0">
+        <div
+          className={clsx(
+            'h-full w-full overflow-y-auto scroll-smooth',
+            `furigana-mode-${furiganaMode}`,
+            `theme-${resolvedTheme}`
+          )}
+        >
+          <ContentCanvas
+            onPrevChapter={handlePrevChapter}
+            onNextChapter={handleNextChapter}
+            hasPrevChapter={hasPrevChapter}
+            hasNextChapter={hasNextChapter}
+          />
+        </div>
+      </main>
+
+      {/* TOC 模态框 */}
+      {chapterList && (
+        <TocModal
+          isOpen={isTocOpen}
+          onClose={() => setIsTocOpen(false)}
+          chapters={chapterList}
+          currentIndex={currentChapterIndex}
+          onChapterSelect={handleChapterSelect}
+        />
+      )}
     </div>
   );
 };

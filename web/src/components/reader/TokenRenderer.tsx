@@ -73,13 +73,18 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
     const tokenClasses = clsx(
       'cursor-pointer transition-colors duration-200 rounded-sm px-[1px]',
       {
-        // 选中状态：深色背景
-        'bg-blue-200 text-blue-900': isSelected,
+        // 选中状态：根据不同主题使用不同的配色
+        // 白色主题：深蓝色背景 + 白色文字
+        'theme-light-selected': isSelected,
+        // 暗黑主题：浅蓝色背景 + 深色文字（不覆盖原文）
+        'theme-dark-selected': isSelected,
+        // 羊皮纸主题：蓝色背景
+        'theme-sepia-selected': isSelected,
         // 生词状态：下划线或颜色标记 (未选中时)
         'text-orange-700 decoration-orange-300 underline decoration-2 underline-offset-2':
           isVocab && !isSelected,
         // 悬停状态
-        'hover:bg-gray-100': !isSelected,
+        'hover:bg-blue-100/50 dark:hover:bg-blue-900/30': !isSelected,
       }
     );
 

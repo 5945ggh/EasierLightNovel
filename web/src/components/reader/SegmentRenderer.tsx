@@ -24,14 +24,13 @@ const TextSegmentRenderer: React.FC<{
 
     return (
       <p
-        data-segment-index={index} // 用于 IntersectionObserver 定位
-        className="mb-6 leading-loose text-lg text-gray-800 tracking-wide text-justify"
-        style={{ textIndent: '1em' }} // 日语习惯首行缩进
+        data-segment-index={index}
+        className="mb-6 text-justify"
+        style={{ textIndent: '1em' }}
       >
         {segment.tokens.map((token, tIdx) => (
           <React.Fragment key={`${index}-${tIdx}`}>
             <TokenRenderer token={token} segmentIndex={index} tokenIndex={tIdx} />
-            {/* 处理间隙 (如英文单词间空格) */}
             {token.gap && <span className="select-none">&nbsp;</span>}
           </React.Fragment>
         ))}
@@ -48,9 +47,8 @@ const ImageSegmentRenderer: React.FC<{
 }> = React.memo(({ segment, index }) => {
   return (
     <div
-      data-segment-index={index} // 用于 IntersectionObserver 定位
+      data-segment-index={index}
       className="my-8 flex justify-center"
-      // 预设最小高度，避免图片加载时布局跳动
       style={{ minHeight: '200px' }}
     >
       <img
