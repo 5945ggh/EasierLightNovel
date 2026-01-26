@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from app.schemas import AIAnalysisRequest, AIAnalysisResult
 from app.services.llm_service import analyze_japanese_content
 
-router = APIRouter(prefix="/ai", tags=["AI Integration"])
+router = APIRouter(prefix="/api/ai", tags=["AI Integration"])
 
 
 @router.post("/analyze", response_model=AIAnalysisResult)
