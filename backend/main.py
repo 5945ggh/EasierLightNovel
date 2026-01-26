@@ -54,11 +54,12 @@ app.mount(
 )
 
 # 注册路由
-from app.routers import books, vocabularies, highlights, dictionary
+from app.routers import books, vocabularies, highlights, dictionary, ai
 app.include_router(books.router)
 app.include_router(vocabularies.router)
 app.include_router(highlights.router)
 app.include_router(dictionary.router)
+app.include_router(ai.router)
 
 # 健康检查
 @app.get("/health")

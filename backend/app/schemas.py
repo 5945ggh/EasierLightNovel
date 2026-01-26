@@ -270,9 +270,22 @@ class AIAnalysisUpdate(BaseModel):
     """
     用户修改后的 AI 分析结果（用于保存到积累本）
     """
-    highlight_id: int = Field(..., description="关联的划线 ID")
     translation: str = Field(..., description="用户编辑后的翻译")
     grammar_analysis: List[GrammarPoint] = Field(default_factory=list)
     vocabulary_nuance: List[VocabularyNuance] = Field(default_factory=list)
     cultural_notes: Optional[str] = Field(None, description="文化注释 (Markdown格式)")
+
+
+class ArchiveItemResponse(BaseModel):
+    """积累本条目响应"""
+    id: int
+    highlight_id: int
+    user_note: Optional[str] = None
+    ai_analysis: Optional[str] = None  # JSON 字符串
+    in_review_queue: bool = False
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
     

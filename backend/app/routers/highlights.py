@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas import HighlightCreate, HighlightResponse
+from app.schemas import HighlightCreate, HighlightResponse, AIAnalysisUpdate, ArchiveItemResponse
 from app.services.highlight_service import HighlightService
 
 router = APIRouter(prefix="/api/highlights", tags=["Highlights"])
@@ -85,3 +85,64 @@ def get_highlight(
             detail="Highlight not found"
         )
     return highlight
+
+
+# ================= 积累本接口 =================
+@router.put("/{highlight_id}/ai-analysis", response_model=ArchiveItemResponse, status_code=status.HTTP_200_OK)
+def save_ai_analysis(
+    highlight_id: int,
+    data: AIAnalysisUpdate,
+    highlight_service: HighlightService = Depends(get_highlight_service)
+):
+    """
+    保存或更新划线的 AI 分析到积累本
+
+    **请求体示例**:
+    ```json
+    {
+      "translation": "中文翻译",
+      "grammar_analysis": [
+        {
+          "target_text": "原文片段",
+          "pattern": "～てしまう",
+          "level": "N4",
+          "explanation": "表示动作完成的遗憾"
+        }
+      ],
+      "vocabulary_nuance": [
+        {
+          "target_text": "食べた",
+          "base_form": "食べる",
+          "conjugation": "タ形",
+          "nuance": "表示已经吃过的状态"
+        }
+      ],
+      "cultural_notes": "这里有一个双关语..."
+    }
+    ```
+    """
+    return highlight_service.save_ai_analysis(highlight_id, data)
+
+
+@router.get("/{highlight_id}/archive", response_model=ArchiveItemResponse)
+def get_archive_item(
+    highlight_id: int,
+    highlight_service: HighlightService = Depends(get_highlight_service)
+):
+    """
+    获取划线对应的积累本条目
+
+    **路径参数**:
+    - highlight_id: 划线记录 ID
+
+    **响应**:
+    - 如果存在积累本条目，返回详情
+    - 如果不存在，返回 404
+    """
+    archive = highlight_service.get_archive_item(highlight_id)
+    if not archive:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Archive item not found"
+        )
+    return archive

@@ -1,11 +1,12 @@
 # app/services/highlight_service.py
 import logging
+import json
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from app.models import UserHighlight, Book, Chapter
-from app.schemas import HighlightCreate
+from app.models import UserHighlight, Book, Chapter, ArchiveItem
+from app.schemas import HighlightCreate, AIAnalysisUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -160,3 +161,61 @@ class HighlightService:
                 UserHighlight.chapter_index == chapter_index
             )\
             .all()
+
+    def save_ai_analysis(
+        self,
+        highlight_id: int,
+        analysis_data: AIAnalysisUpdate
+    ) -> ArchiveItem:
+        """
+        保存或更新划线的 AI 分析到积累本
+
+        Args:
+            highlight_id: 划线记录 ID
+            analysis_data: AI 分析数据
+
+        Returns:
+            ArchiveItem: 更新后的积累本条目
+
+        Raises:
+            HTTPException(404): 划线不存在
+        """
+        # 1. 验证划线存在
+        highlight = self.db.query(UserHighlight).filter(
+            UserHighlight.id == highlight_id
+        ).first()
+
+        if not highlight:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Highlight not found"
+            )
+
+        # 2. 获取或创建 ArchiveItem
+        archive = highlight.archive
+        if not archive:
+            archive = ArchiveItem(highlight_id=highlight_id)
+            self.db.add(archive)
+
+        # 3. 将 AI 分析数据转为 JSON 字符串存储
+        archive.ai_analysis = analysis_data.model_dump_json(exclude_none=True) # type: ignore
+
+        self.db.commit()
+        self.db.refresh(archive)
+
+        logger.info(f"Saved AI analysis for highlight: {highlight_id}")
+        return archive
+
+    def get_archive_item(self, highlight_id: int) -> Optional[ArchiveItem]:
+        """
+        获取划线对应的积累本条目
+
+        Args:
+            highlight_id: 划线记录 ID
+
+        Returns:
+            ArchiveItem | None: 积累本条目（如果存在）
+        """
+        return self.db.query(ArchiveItem).filter(
+            ArchiveItem.highlight_id == highlight_id
+        ).first()
