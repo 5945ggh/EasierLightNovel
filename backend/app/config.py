@@ -25,3 +25,22 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
 # 服务器配置
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8010))
+
+
+# ==================== LLM 配置 ====================
+class LLMConfig:
+    """LLM 相关配置统一管理"""
+    MODEL = os.getenv("MAIN_MODEL_NAME", "deepseek/deepseek-chat")
+    API_KEY = os.getenv("LLM_API_KEY")
+    BASE_URL = os.getenv("LLM_BASE_URL")
+    TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+
+    @classmethod
+    def supports_json_mode(cls) -> bool:
+        """判断模型是否支持 OpenAI 风格的 JSON Mode"""
+        return cls.MODEL.startswith(("gpt-", "o1-", "o3-"))
+
+    @classmethod
+    def supports_thinking(cls) -> bool:
+        """判断模型是否支持 Thinking/Reasoning"""
+        return "claude-3-7" in cls.MODEL or "reasoner" in cls.MODEL

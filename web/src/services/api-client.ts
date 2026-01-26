@@ -2,7 +2,7 @@
  * API 客户端配置
  */
 
-import axios, { AxiosError, AxiosResponse } from 'axios';
+import axios from 'axios';
 
 /**
  * API 响应基础类型
@@ -26,7 +26,7 @@ export interface ApiError {
 /**
  * 创建 axios 实例
  */
-export const apiClient = axios.create({
+const rawApiClient = axios.create({
   baseURL: '/api',
   timeout: 60000,
   headers: {
@@ -37,9 +37,9 @@ export const apiClient = axios.create({
 /**
  * 响应拦截器 - 自动解包 data
  */
-apiClient.interceptors.response.use(
-  (response: AxiosResponse) => response.data,
-  (error: AxiosError<unknown>) => {
+rawApiClient.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
     const apiError: ApiError = {
       message: error.message || '请求失败',
       status: error.response?.status,
@@ -63,7 +63,7 @@ apiClient.interceptors.response.use(
 /**
  * 请求拦截器 - 可用于添加 token 等
  */
-apiClient.interceptors.request.use(
+rawApiClient.interceptors.request.use(
   (config) => {
     // 可在此处添加认证 token
     // if (token) {
@@ -76,4 +76,23 @@ apiClient.interceptors.request.use(
   }
 );
 
+/**
+ * 导出类型安全的 API 客户端
+ * 由于拦截器自动解包 response.data，get/post 等方法直接返回数据类型
+ */
+export const apiClient = rawApiClient as {
+  get: <T>(url: string, config?: AxiosRequestConfig) => Promise<T>;
+  post: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) => Promise<T>;
+  put: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) => Promise<T>;
+  patch: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) => Promise<T>;
+  delete: <T>(url: string, config?: AxiosRequestConfig) => Promise<T>;
+  getUri: (config?: AxiosRequestConfig) => string;
+  interceptors: typeof rawApiClient.interceptors;
+};
+
 export default apiClient;
+
+/**
+ * Axios 请求配置类型（按需导出）
+ */
+export type AxiosRequestConfig = typeof rawApiClient.defaults;
