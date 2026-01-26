@@ -1,10 +1,9 @@
 # app/schemas.py
 from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional, Union, Any, Dict
-from enum import Enum
+from typing import List, Optional, Union
 from datetime import datetime
 
-from app.enums import ProcessingStatus
+from app.enums import ProcessingStatus, JLPTLevel
 
 # ==================== Book 相关 ====================
 class BookBase(BaseModel):
@@ -217,3 +216,63 @@ class UserProgressResponse(UserProgressBase):
 
     class Config:
         from_attributes = True 
+        
+# ==================== AI/Analysis 相关 ====================
+
+class AIAnalysisRequest(BaseModel):
+    """
+    获取AI分析
+    """
+    # 不需要 book_id, chapter_index, tokens_indices 做数据查询
+    # 但保留它们用于日志记录或后续的用户笔记关联
+    book_id: str
+    chapter_index: int
+    highlight_id: Optional[int] = Field(None, description="触发此分析的划线 ID（如果有）")
+
+    # 核心载荷（添加长度限制防止恶意攻击或前端 Bug）
+    target_text: str = Field(..., max_length=200, description="用户选中的文本")
+    context_text: str = Field(..., max_length=1000, description="包含上下文的完整文本片段")
+
+    user_prompt: Optional[str] = None  # 预留用户自定义提示
+    model_preference: Optional[str] = Field(None, description="模型偏好（留空使用默认配置）")
+
+class GrammarPoint(BaseModel):
+    target_text: str = Field(..., description="该语法点对应的原文片段")
+    pattern: str = Field(..., description="语法句型 (如: ～てしまう)")
+    level: Optional[JLPTLevel] = Field(None, description="JLPT 等级")
+    explanation: str = Field(..., description="针对当前语境的解释")
+
+class VocabularyNuance(BaseModel):
+    """
+    针对单个词汇的语感分析，区别于字典，这里专注于语境中的活用变形和细微差别
+    """
+    target_text: str = Field(..., description="原文中的词汇形式（含活用变形）")
+    base_form: str = Field(..., description="原型（辞典形）")
+    conjugation: Optional[str] = Field(None, description="活用形类型 (e.g., 使役受身形、タ形、テ形等)")
+    nuance: str = Field(..., description="在当前语境下的具体语感、潜台词或修辞效果")
+
+class AIAnalysisResult(BaseModel):
+    """
+    LLM 返回的结构化结果
+    """
+    # 翻译针对的是用户选中的整个范围（Selection）
+    translation: str = Field(..., description="选中内容的流畅中文翻译")
+
+    # 语法和语感分析列表
+    grammar_analysis: List[GrammarPoint] = Field(default_factory=list)
+    vocabulary_nuance: List[VocabularyNuance] = Field(default_factory=list)
+
+    # 文化注释（针对整个 selection）
+    cultural_notes: Optional[str] = Field(None, description="梗/文化背景/双关语 (Markdown格式)")
+
+
+class AIAnalysisUpdate(BaseModel):
+    """
+    用户修改后的 AI 分析结果（用于保存到积累本）
+    """
+    highlight_id: int = Field(..., description="关联的划线 ID")
+    translation: str = Field(..., description="用户编辑后的翻译")
+    grammar_analysis: List[GrammarPoint] = Field(default_factory=list)
+    vocabulary_nuance: List[VocabularyNuance] = Field(default_factory=list)
+    cultural_notes: Optional[str] = Field(None, description="文化注释 (Markdown格式)")
+    
