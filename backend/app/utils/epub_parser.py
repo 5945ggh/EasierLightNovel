@@ -188,7 +188,7 @@ class LightNovelParser:
         if first_text_line:
             title = first_text_line.strip()
             # 截取到第一个换行符或最大长度
-            title = title.split('\n')[0][:MAX_TITLE_LENGTH_FROM_CONTENT]
+            title = title.split('\n')[0][:MAX_TITLE_LENGTH_FROM_CONTENT] # TODO: 截取逻辑似乎仍有问题, 将换行符修改为全角空格无法解决, 待修复
             if title:
                 return title
 
