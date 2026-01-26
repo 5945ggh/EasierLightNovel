@@ -176,6 +176,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "jaconv" },
     { name = "jamdict" },
+    { name = "jamdict-data" },
     { name = "litellm" },
     { name = "python-multipart" },
     { name = "sqlalchemy" },
@@ -198,6 +199,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "jaconv", specifier = ">=0.4.1" },
     { name = "jamdict", specifier = ">=0.1a11.post2" },
+    { name = "jamdict-data", specifier = ">=1.5" },
     { name = "litellm", specifier = ">=1.81.3" },
     { name = "python-multipart", specifier = ">=0.0.21" },
     { name = "sqlalchemy", specifier = ">=2.0.46" },
@@ -821,6 +823,12 @@ dependencies = [
     { name = "puchikarui" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/20/98bcf088707850f0c9104b6499b9afff7a4db2e5849a9a99e436400e0a6d/jamdict-0.1a11.post2.tar.gz", hash = "sha256:fbb54de3d58ecdb9b53498ae873ab6519312c86bc848a9769d92b1b238d4c914", size = 203716, upload-time = "2021-06-06T04:20:36.947Z" }
+
+[[package]]
+name = "jamdict-data"
+version = "1.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/a5/075928aed2b3b70459fc1db396397dfa6714d266c143c51af9b648551a4e/jamdict_data-1.5.tar.gz", hash = "sha256:a4247dd9bb3148ab17c1b32fc56d7a7f1c35293b0d6ff2838c811f896d13f415", size = 53940912, upload-time = "2021-04-17T09:02:19.842Z" }
 
 [[package]]
 name = "jinja2"

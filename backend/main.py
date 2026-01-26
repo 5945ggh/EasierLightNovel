@@ -23,6 +23,12 @@ async def lifespan(app: FastAPI):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs("./temp_uploads", exist_ok=True)
 
+    # 预热词典服务（可选，首次请求会自动初始化）
+    print("Warming up dictionary service...")
+    from app.services.dictionary_service import DictionaryService
+    DictionaryService()._jmd  # 触发线程局部实例创建
+    print("Dictionary service ready")
+
     yield
 
     # 关闭时

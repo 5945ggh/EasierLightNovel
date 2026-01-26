@@ -17,6 +17,7 @@ import {
   getBookDetail,
   getChapterList,
 } from '@/services/books.service';
+import { getBookVocabularies } from '@/services/vocabularies.service';
 import { useReaderStore } from '@/stores/readerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ProcessingStatus } from '@/types/common';
@@ -25,6 +26,8 @@ import { ProcessingStatus } from '@/types/common';
 import { ContentCanvas } from '@/components/reader/ContentCanvas';
 import { LeftDock } from '@/components/reader/LeftDock';
 import { TocModal } from '@/components/reader/TocModal';
+import { SelectionMenu } from '@/components/reader/SelectionMenu';
+import { TokenPopover } from '@/components/reader/TokenPopover';
 
 export const ReaderPage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
@@ -58,7 +61,9 @@ export const ReaderPage: React.FC = () => {
   const {
     setBookId,
     setChapter,
+    setChapterIndex,
     setVocabularySet,
+    setVocabularies,
     setCurrentSegmentIndex,
     setSegmentOffset,
     resetReader,
@@ -127,17 +132,25 @@ export const ReaderPage: React.FC = () => {
     staleTime: Infinity,
   });
 
-  // 7. Query: 获取生词本
-  const { data: vocabData } = useQuery({
-    queryKey: ['vocabularies', bookId],
+  // 7. Query: 获取生词本（完整数据，包含 ID 用于删除）
+  const { data: vocabulariesData } = useQuery({
+    queryKey: ['vocabularies-full', bookId],
+    queryFn: () => getBookVocabularies(bookId!),
+    enabled: !!bookId,
+  });
+
+  // 同时获取轻量的 base_forms 用于快速判断
+  const { data: vocabBaseFormsData } = useQuery({
+    queryKey: ['vocabularies-base-forms', bookId],
     queryFn: () => getVocabulariesBaseForms(bookId!),
     enabled: !!bookId,
   });
 
   // 8. 同步数据到 Store
   useEffect(() => {
-    if (chapterData) {
+    if (chapterData && currentChapterIndex !== null) {
       setChapter(chapterData);
+      setChapterIndex(currentChapterIndex);
       // 如果进度数据中的章节索引匹配，设置段落索引和偏移
       if (progressData?.current_chapter_index === currentChapterIndex) {
         setCurrentSegmentIndex(progressData.current_segment_index ?? 0);
@@ -149,13 +162,19 @@ export const ReaderPage: React.FC = () => {
         setSegmentOffset(0);
       }
     }
-  }, [chapterData, progressData, currentChapterIndex, setChapter, setCurrentSegmentIndex, setSegmentOffset]);
+  }, [chapterData, progressData, currentChapterIndex, setChapter, setChapterIndex, setCurrentSegmentIndex, setSegmentOffset]);
 
   useEffect(() => {
-    if (vocabData) {
-      setVocabularySet(vocabData.base_forms);
+    if (vocabBaseFormsData) {
+      setVocabularySet(vocabBaseFormsData.base_forms);
     }
-  }, [vocabData, setVocabularySet]);
+  }, [vocabBaseFormsData, setVocabularySet]);
+
+  useEffect(() => {
+    if (vocabulariesData) {
+      setVocabularies(vocabulariesData);
+    }
+  }, [vocabulariesData, setVocabularies]);
 
   // 章节切换函数
   const handlePrevChapter = useCallback(() => {
@@ -354,6 +373,10 @@ export const ReaderPage: React.FC = () => {
             hasNextChapter={hasNextChapter}
           />
         </div>
+
+        {/* 悬浮组件层 */}
+        <SelectionMenu />
+        <TokenPopover />
       </main>
 
       {/* TOC 模态框 */}
