@@ -7,6 +7,7 @@ from typing import List, Optional
 from jamdict import Jamdict
 
 from app.schemas import DictResult, DictEntry, SenseEntry
+from app.config import DICTIONARY_CACHE_SIZE, DICTIONARY_MEMORY_MODE, DICTIONARY_LOAD_KANJI_DICT
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,11 @@ class DictionaryService:
     def _jmd(self) -> Jamdict:
         """获取当前线程的 Jamdict 实例"""
         if not hasattr(_thread_local, 'jmd'):
-            # memory_mode=False: 不加载到内存，节省资源
-            # kd2=False: 不加载汉字字典，节省资源
-            _thread_local.jmd = Jamdict(memory_mode=False, kd2=False)
+            # 从配置读取是否使用内存模式
+            _thread_local.jmd = Jamdict(
+                memory_mode=DICTIONARY_MEMORY_MODE,
+                # kd2=DICTIONARY_LOAD_KANJI_DICT TODO: 研究其他参数
+            )
             logger.debug(f"Created new Jamdict instance for thread {threading.get_ident()}")
         return _thread_local.jmd
 
@@ -62,7 +65,7 @@ class DictionaryService:
         """
         return []
 
-    @lru_cache(maxsize=4096)
+    @lru_cache(maxsize=DICTIONARY_CACHE_SIZE)
     def search_word(self, query: str) -> DictResult:
         """
         查询单词释义

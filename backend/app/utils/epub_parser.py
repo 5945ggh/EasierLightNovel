@@ -9,17 +9,13 @@ from ebooklib import epub
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 from bs4.element import NavigableString, Tag, Comment
 
-from app.config import UPLOAD_DIR, STATIC_URL_PREFIX
+from app.config import UPLOAD_DIR, STATIC_URL_PREFIX, EPUB_MAX_TITLE_LENGTH, EPUB_MAX_CHUNK_SIZE
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
-# ==================== 章节标题提取配置 ====================
-# 正文首行最大截取长度（作为标题时）
-MAX_TITLE_LENGTH_FROM_CONTENT = 32
-
-# ================= 数据模型 =================
+# ==================== 数据模型 =================
 # 为了保证保证原顺序的图文交错排布, 我们在Chapter内划分出了Segment
-# 基本逻辑是: 解析Epub的一个Chapter时, 我们维护一个text cache. 
+# 基本逻辑是: 解析Epub的一个Chapter时, 我们维护一个text cache.
 # 每当解析到图片, 我们就将text cache中的内容结算为一个TextSegment,
 # 并将图片内容作为ImageSegment插在后面, 依次类推, 从而保证了顺序.
 class ContentSegment:
@@ -32,17 +28,17 @@ class TextSegment(ContentSegment):
         self.type = "text"
         self.text: str = text
         # 预留 tokens 字段，默认为空列表, 在后续的 Service 层被填充
-        self.tokens: List[Dict[str, Any]] = [] 
-    
+        self.tokens: List[Dict[str, Any]] = []
+
     def set_tokens(self, tokens: list) -> None:
         """设置切词结果tokens并清空text"""
         self.tokens = tokens
         # 分词完成后，内存里的 text 其实也可以清空了，省内存
-        self.text = "" 
+        self.text = ""
 
     def to_dict(self) -> Dict[str, Any]:
         output: Dict[str, Any] = {
-            "type": "text", 
+            "type": "text",
         }
         if self.text: output["text"] = self.text
         if self.tokens: output["tokens"] = self.tokens
@@ -72,16 +68,17 @@ class Chapter:
 
 # ================= 解析逻辑 =================
 class LightNovelParser:
-    def __init__(self, epub_path: str, book_id: str, output_dir: Optional[str] = None, max_chunk_size: int = 2048):
+    def __init__(self, epub_path: str, book_id: str, output_dir: Optional[str] = None, max_chunk_size: Optional[int] = None):
         """
         :param epub_path: EPUB 文件路径
         :param book_id: 书籍唯一 ID（由调用方生成的 UUID）
         :param output_dir: 静态资源输出目录 (用于存解压后的图片)，默认使用 config.UPLOAD_DIR
-        :param max_chunk_size: 一个Segment最大文本长度, 受 Sudachi 分词本身的限制不建议设置超过40k
+        :param max_chunk_size: 一个Segment最大文本长度, 从配置读取默认值, 受 Sudachi 分词本身的限制不建议设置超过40k
         """
         self.epub_path = epub_path
         self.book_id = book_id
-        self.max_chunk_size = max_chunk_size
+        # 从配置读取默认值
+        self.max_chunk_size = max_chunk_size or EPUB_MAX_CHUNK_SIZE
 
         # 如果未指定 output_dir，使用配置文件中的默认值
         if output_dir is None:
@@ -154,7 +151,7 @@ class LightNovelParser:
         优先级：
         1. TOC 标题（如果存在）
         2. 继承上一个 TOC 标题（用于同一章的后续部分，如 p-002, p-003）
-        3. 正文首行截取（不超过 MAX_TITLE_LENGTH_FROM_CONTENT）
+        3. 正文首行截取（不超过配置的 EPUB_MAX_TITLE_LENGTH）
         4. Fallback: "Chapter X"
 
         Args:
@@ -188,13 +185,13 @@ class LightNovelParser:
         if first_text_line:
             title = first_text_line.strip()
             # 截取到第一个换行符或最大长度
-            title = title.split('\n')[0][:MAX_TITLE_LENGTH_FROM_CONTENT] # TODO: 截取逻辑似乎仍有问题, 将换行符修改为全角空格无法解决, 待修复
+            title = title.split('\n')[0][:EPUB_MAX_TITLE_LENGTH] # TODO: 截取逻辑似乎仍有问题, 将换行符修改为全角空格无法解决, 待修复
             if title:
                 return title
 
         # 5. Fallback
-        return f"Chapter {chapter_index + 1}" 
-    
+        return f"Chapter {chapter_index + 1}"
+
     def _extract_all_images(self):
         """预先解压所有图片，建立映射关系"""
         for item in self.book.get_items():
@@ -266,19 +263,19 @@ class LightNovelParser:
         """针对日语长文本的安全切分"""
         if len(text) <= self.max_chunk_size:
             return [text]
-        
+
         chunks = []
         current_buf = ""
         # 优先按句号切分，其次是感叹号等
         sentences = re.split(r'([。！？?!\n])', text)
-        
+
         for part in sentences:
             current_buf += part
             # 只有当包含标点且长度足够时才切分
             if len(current_buf) > self.max_chunk_size:
                 chunks.append(current_buf)
                 current_buf = ""
-        
+
         if current_buf:
             chunks.append(current_buf)
         return chunks
@@ -290,7 +287,7 @@ class LightNovelParser:
         # 1. 忽略标签：注音(rt/rp)、脚本、样式、注释
         if isinstance(node, Tag) and node.name in ['rt', 'rp', 'script', 'style']:
             return
-        
+
         if isinstance(node, Comment): return
 
         # 2. 文本节点
@@ -341,10 +338,10 @@ class LightNovelParser:
     def _flush_buffer(self, buffer: List[str], segments: List[ContentSegment]):
         if not buffer:
             return
-        
+
         raw_text = "".join(buffer)
         cleaned_text = self._clean_text(raw_text)
-        
+
         if not cleaned_text.strip():
             buffer.clear()
             return
@@ -352,7 +349,7 @@ class LightNovelParser:
         chunks = self._safe_split_text(cleaned_text)
         for chunk in chunks:
             segments.append(TextSegment(chunk))
-        
+
         buffer.clear()
 
     def _extract_first_text_line(self, soup: BeautifulSoup) -> Optional[str]:
@@ -422,9 +419,9 @@ class LightNovelParser:
             root = soup.body if soup.body else soup
             for child in root.children:
                 self._process_node(child, text_buffer, current_chapter.segments)
-            
+
             self._flush_buffer(text_buffer, current_chapter.segments)
-            
+
             if current_chapter.segments:
                 chapters.append(current_chapter)
 

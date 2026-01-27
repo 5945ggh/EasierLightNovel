@@ -3,6 +3,8 @@ from typing import List, Optional, Literal, Dict, Any
 from sudachipy import tokenizer, dictionary
 import jaconv
 
+from app.config import TOKENIZER_DEFAULT_MODE
+
 # ================= 数据模型 =================
 class Token:
     def __init__(self, surface: str, reading: Optional[str] = None, base_form: str = "", pos: str = "", is_gap: bool = False):
@@ -27,7 +29,11 @@ class Token:
 
 # ================= 核心逻辑 =================
 class JapaneseTokenizer:
-    def __init__(self, mode: Literal["A", "B", "C"] = "B"):
+    def __init__(self, mode: Optional[str] = None):
+        # 从配置读取默认模式
+        if mode is None:
+            mode = TOKENIZER_DEFAULT_MODE
+
         mode_map = {
             "A": tokenizer.Tokenizer.SplitMode.A,
             "B": tokenizer.Tokenizer.SplitMode.B, # 推荐 B：语义平衡
@@ -37,12 +43,12 @@ class JapaneseTokenizer:
         self.mode = mode_map.get(mode, tokenizer.Tokenizer.SplitMode.B)
         # 预编译正则，提升字符处理性能
         self.kanji_pattern = re.compile(r'[\u4e00-\u9fff]')
-        self.kana_pattern = re.compile(r'[ぁ-んァ-ンー]') 
+        self.kana_pattern = re.compile(r'[ぁ-んァ-ンー]')
 
     def process_text(self, text: str) -> List[Token]:
         if not text:
             return []
-            
+
         sudachi_tokens = self.tokenizer.tokenize(text, self.mode)
         results = []
         cursor = 0 # 光标位置
@@ -55,7 +61,7 @@ class JapaneseTokenizer:
                 gap_text = text[cursor:start_idx]
                 if gap_text:
                     results.append(Token(gap_text, is_gap=True))
-            
+
             # 2. 处理当前 Token
             surface = t.surface()
             cursor = t.end() # 更新光标
@@ -82,7 +88,7 @@ class JapaneseTokenizer:
             if self._has_kanji(surface) and surface != reading_hiragana:
                  token_obj.parts = self._recursive_align(surface, reading_hiragana)
             else:
-                token_obj.reading = None 
+                token_obj.reading = None
 
             results.append(token_obj)
 
@@ -90,7 +96,7 @@ class JapaneseTokenizer:
         if cursor < len(text):
             gap_text = text[cursor:]
             results.append(Token(gap_text, is_gap=True))
-            
+
         return results
 
     def _has_kanji(self, text: str) -> bool:
@@ -107,7 +113,7 @@ class JapaneseTokenizer:
 
         # 寻找锚点 (假名)
         anchor_match = self.kana_pattern.search(surface)
-        
+
         # 如果全是汉字 (无锚点)，整体注音
         if not anchor_match:
             return [{"text": surface, "ruby": reading}]
@@ -127,9 +133,9 @@ class JapaneseTokenizer:
         # 递归切分
         s_head = surface[:anchor_idx]
         r_head = reading[:reading_anchor_idx]
-        
+
         anchor_part = {"text": anchor_char, "ruby": None}
-        
+
         s_tail = surface[anchor_idx+1:]
         r_tail = reading[reading_anchor_idx+1:]
 
@@ -137,5 +143,5 @@ class JapaneseTokenizer:
         if s_head: result.extend(self._recursive_align(s_head, r_head))
         result.append(anchor_part)
         if s_tail: result.extend(self._recursive_align(s_tail, r_tail))
-            
+
         return result

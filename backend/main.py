@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db, check_db_connection
-from app.config import DATA_DIR, UPLOAD_DIR, STATIC_URL_PREFIX, HOST, PORT
+from app.config import DATA_DIR, UPLOAD_DIR, STATIC_URL_PREFIX, HOST, PORT, CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR
 import os
 
 
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     # 确保必要的目录存在
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    os.makedirs("./temp_uploads", exist_ok=True)
+    os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
     # 预热词典服务（可选，首次请求会自动初始化）
     print("Warming up dictionary service...")
@@ -43,11 +43,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS 配置（允许前端访问）
+# CORS 配置（从配置读取）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Vite/React 默认端口
-    allow_credentials=True,
+    allow_origins=CORS_ALLOWED_ORIGINS,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

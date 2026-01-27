@@ -6,6 +6,11 @@ from fastapi import APIRouter, Depends, UploadFile, File, BackgroundTasks, HTTPE
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.config import (
+    UPLOAD_DIR, TEMP_UPLOAD_DIR,
+    UPLOAD_ALLOWED_BOOK_TYPES, UPLOAD_ALLOWED_COVER_TYPES,
+    QUERY_DEFAULT_LIMIT, QUERY_MAX_LIMIT
+)
 from app.schemas import (
     BookListItem, BookDetail, BookUpdate,
     ChapterListItem, ChapterResponse, ChapterHighlightData,
@@ -16,7 +21,6 @@ from app.schemas import (
 from app.services.book_service import BookService
 from app.services.progress_service import ProgressService
 from app.services.highlight_service import HighlightService
-from app.config import UPLOAD_DIR
 from app.models import Chapter
 
 router = APIRouter(prefix="/api/books", tags=["Books"])
@@ -42,20 +46,31 @@ def get_highlight_service(db: Session = Depends(get_db)) -> HighlightService:
     return HighlightService(db)
 
 
-@router.post("/upload", response_model=BookDetail) 
-async def upload_book( # TODO: 解析过程中前端页面显示加载在解析结束后不会自动结束，需手动刷新, 在前端需要写一个 Hooks 或者逻辑来处理这个“等待”的过程。
+@router.post("/upload", response_model=BookDetail)
+async def upload_book( 
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     book_service: BookService = Depends(get_book_service)
 ):
     """上传并开始解析书籍"""
-    if not file.filename or not file.filename.lower().endswith('.epub'):
-        raise HTTPException(status_code=400, detail="Only .epub files are supported")
-    
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in UPLOAD_ALLOWED_BOOK_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only {UPLOAD_ALLOWED_BOOK_TYPES} files are supported"
+        )
+
     return await book_service.create_book_from_file(file, background_tasks)
 
 @router.get("/", response_model=List[BookListItem])
-def list_books(skip: int = 0, limit: int = 100, book_service: BookService = Depends(get_book_service)):
+def list_books(
+    skip: int = 0,
+    limit: int = Query(default=QUERY_DEFAULT_LIMIT, le=QUERY_MAX_LIMIT),
+    book_service: BookService = Depends(get_book_service)
+):
     """获取书架列表"""
     return book_service.get_books(skip, limit)
 
@@ -104,12 +119,11 @@ async def upload_book_cover(
         raise HTTPException(status_code=400, detail="No filename provided")
 
     # 检查文件扩展名
-    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
     file_ext = os.path.splitext(file.filename)[1].lower()
-    if file_ext not in allowed_extensions:
+    if file_ext not in UPLOAD_ALLOWED_COVER_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+            detail=f"Invalid file type. Allowed: {', '.join(UPLOAD_ALLOWED_COVER_TYPES)}"
         )
 
     # 3. 构建保存路径
@@ -282,4 +296,3 @@ def get_book_highlights(
         raise HTTPException(status_code=404, detail="Book not found")
 
     return highlight_service.get_book_highlights(book_id, chapter_index)
-

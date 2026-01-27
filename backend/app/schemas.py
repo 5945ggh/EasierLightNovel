@@ -4,13 +4,14 @@ from typing import List, Optional, Union
 from datetime import datetime
 
 from app.enums import ProcessingStatus, JLPTLevel
+from app.config import LLMConfig
 
 # ==================== Book 相关 ====================
 class BookBase(BaseModel):
     """书籍基础信息"""
     title: str
     author: Optional[str] = None
-    
+
 class BookCreate(BookBase):
     """创建书籍请求"""
     pass  # 实际上传是通过文件，这里可能用于元数据补充
@@ -33,8 +34,8 @@ class BookUpdate(BaseModel): # 一般不通过此接口修改 status 或 content
     title: Optional[str] = None
     author: Optional[str] = None
     cover_url: Optional[str] = None
-    
-    
+
+
 # ==================== 分词组件 ====================
 class RubyPart(BaseModel):
     """注音部分"""
@@ -54,8 +55,8 @@ class TokenData(BaseModel):
     # is_vocabulary: Optional[bool] = None      # 是否在生词本中
     # highlight_id: Optional[int] = None        # 所属划线的 ID
     # highlight_style: Optional[str] = None     # 划线样式
-    
-    
+
+
 # ==================== 章节内容段 ====================
 class SegmentBase(BaseModel):
     """内容段基类"""
@@ -85,23 +86,23 @@ class ChapterHighlightData(BaseModel):
     end_segment_index: int
     end_token_idx: int
     style_category: str
-    
+
     class Config:
         from_attributes = True
-    
+
 class ChapterResponse(BaseModel):
     index: int
     title: str
     segments: List[ContentSegment]  # 包含 TokenData 的列表
 
     # === 动态数据（本章范围）===
-    highlights: List[ChapterHighlightData] = [] 
+    highlights: List[ChapterHighlightData] = []
 
 class ChapterListItem(BaseModel):
     """章节列表项"""
     index: int
     title: str
-    
+
 # ==================== Vocabulary 相关 ====================
 class VocabularyBaseFormsResponse(BaseModel):
     """生词原型集合响应（全书范围）"""
@@ -138,12 +139,12 @@ class HighlightBase(BaseModel):
     """划线基础属性"""
     style_category: str = "default"
     selected_text: str = Field(..., description="选中的纯文本内容，用于校验或回显")
-    
+
 class HighlightCreate(HighlightBase):
     """创建划线请求"""
     book_id: str
     chapter_index: int
-    
+
     # === 坐标系统 ===
     start_segment_index: int = Field(..., ge=0)
     start_token_idx: int = Field(..., ge=0)
@@ -162,10 +163,10 @@ class HighlightResponse(HighlightCreate):
     """划线响应"""
     id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
-        
+
 # ==================== Dictionary 相关 ====================
 class SenseEntry(BaseModel):
     """释义条目"""
@@ -200,10 +201,10 @@ class UserProgressBase(BaseModel):
     """阅读进度基础"""
     current_chapter_index: int = Field(default=0, ge=0)
     current_segment_index: int = Field(default=0, ge=0)
-    
+
     # 注意：models.py 里这个字段是 nullable=True，但为了前端处理方便，
     # 我们在 Schema 层将其收敛为 int (如果为 None 则由后端逻辑转为 0)
-    current_segment_offset: int = Field(default=0, ge=0) 
+    current_segment_offset: int = Field(default=0, ge=0)
 
 class UserProgressUpdate(UserProgressBase):
     """更新阅读进度请求"""
@@ -215,8 +216,8 @@ class UserProgressResponse(UserProgressBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        from_attributes = True 
-        
+        from_attributes = True
+
 # ==================== AI/Analysis 相关 ====================
 
 class AIAnalysisRequest(BaseModel):
@@ -229,9 +230,9 @@ class AIAnalysisRequest(BaseModel):
     chapter_index: int
     highlight_id: Optional[int] = Field(None, description="触发此分析的划线 ID（如果有）")
 
-    # 核心载荷（添加长度限制防止恶意攻击或前端 Bug）
-    target_text: str = Field(..., max_length=512, description="用户选中的文本")
-    context_text: str = Field(..., max_length=2048, description="包含上下文的完整文本片段")
+    # 核心载荷（长度限制从配置读取）
+    target_text: str = Field(..., max_length=LLMConfig.AI_MAX_TARGET_LENGTH, description="用户选中的文本")
+    context_text: str = Field(..., max_length=LLMConfig.AI_MAX_CONTEXT_LENGTH, description="包含上下文的完整文本片段")
 
     user_prompt: Optional[str] = None  # 预留用户自定义提示
     model_preference: Optional[str] = Field(None, description="模型偏好（留空使用默认配置）")
@@ -288,4 +289,3 @@ class ArchiveItemResponse(BaseModel):
 
     class Config:
         from_attributes = True
-    
