@@ -14,8 +14,8 @@ async def analyze_text(req: AIAnalysisRequest):
     """
     接收前端处理好的文本和上下文，调用 LLM 进行日语文本分析
 
-    - **target_text**: 用户选中的目标文本（最大 200 字符）
-    - **context_text**: 包含上下文的完整文本片段（最大 1000 字符）
+    - **target_text**: 用户选中的目标文本（最大 512 字符）
+    - **context_text**: 包含上下文的完整文本片段（最大 2048 字符）
     - **user_prompt**: 可选的用户自定义提示
     - **model_preference**: 可选的模型偏好（留空使用默认配置）
     """

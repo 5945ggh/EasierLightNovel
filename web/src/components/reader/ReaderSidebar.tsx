@@ -12,7 +12,29 @@ import { searchDictionary } from '@/services/dictionary.service';
 import { speak } from '@/utils/tts';
 import type { DictResult } from '@/types/dictionary';
 import type { AIAnalysisResult, ChapterHighlightData } from '@/types';
+import type { ContentSegment } from '@/types';
 import { clsx } from 'clsx';
+
+// ==========================================
+// 上下文提取常量
+// ==========================================
+const SEGMENT_SEPARATOR = '\n\n';      // 段落间分隔符（两个换行模拟空行）
+const MAX_CONTEXT_CHARS = 1500;         // 上下文最大字符数
+const CONTEXT_SEGMENT_DEPTH = 3;        // 向前/向后最多取 3 个完整段落
+
+// ==========================================
+// 辅助函数：将一个 Segment 还原为字符串
+// ==========================================
+const stringifySegment = (segment: ContentSegment): string => {
+  if (segment.type !== 'text' || !segment.tokens) return '';
+
+  return segment.tokens.map((t, i) => {
+    // 如果当前 token 有 gap 标记，前面加空格
+    // gap 表示分词时补全的空格，应该在该 token 前面添加
+    const prefix = (t.gap && i > 0) ? ' ' : '';
+    return prefix + t.s;
+  }).join('');
+};
 
 // Tab 图标和标签配置
 const TAB_CONFIG = {
@@ -243,71 +265,121 @@ const AITab: React.FC = () => {
     return currentHighlightId ?? displayHighlightId;
   }, [currentHighlightId, displayHighlightId]);
 
-  // 收集高亮句的文本
+  // ==========================================
+  // 收集高亮文本和上下文（段落级扩展策略）
+  // ==========================================
   const collectHighlightText = useCallback((highlightId: number): { targetText: string; contextText: string } => {
     const highlight = highlights.find((h) => h.id === highlightId);
-    if (!highlight || !chapter?.segments) return { targetText: '', contextText: '' };
+    if (!highlight || !chapter?.segments) {
+      return { targetText: '', contextText: '' };
+    }
 
-    const tokens: string[] = [];
+    // ------------------------------------------
+    // 1. 提取 Target Text（用户选中的文本）
+    // ------------------------------------------
+    const targetTokens: string[] = [];
 
-    // 收集高亮文本（目标文本）
     for (let s = highlight.start_segment_index; s <= highlight.end_segment_index; s++) {
-      const segment = chapter.segments[s];
-      if (segment?.type === 'text' && segment.tokens) {
-        const startT = s === highlight.start_segment_index ? highlight.start_token_idx : 0;
-        const endT = s === highlight.end_segment_index ? highlight.end_token_idx : (segment.tokens?.length || 0) - 1;
-
-        for (let t = startT; t <= endT; t++) {
-          const token = segment.tokens[t];
-          if (token?.s) {
-            tokens.push(token.s);
-          }
-        }
-      }
-    }
-
-    // 收集上下文：高亮前后各扩展一定数量的 token
-    const contextExtend = 50; // 前后各扩展 50 个 token
-    const allTokens: string[] = [];
-
-    // 首先收集所有文本 token
-    for (const segment of chapter.segments) {
-      if (segment?.type === 'text' && segment.tokens) {
-        for (const token of segment.tokens) {
-          if (token.s) allTokens.push(token.s);
-        }
-      }
-    }
-
-    // 计算高亮起始和结束位置的准确 token 索引
-    let highlightStartIdx = 0;
-    let highlightEndIdx = 0;
-    let currentIndex = 0;
-
-    for (let s = 0; s < chapter.segments.length; s++) {
       const segment = chapter.segments[s];
       if (segment?.type !== 'text' || !segment.tokens) continue;
 
-      if (s === highlight.start_segment_index) {
-        highlightStartIdx = currentIndex + highlight.start_token_idx;
-      }
-      if (s === highlight.end_segment_index) {
-        highlightEndIdx = currentIndex + highlight.end_token_idx;
-      }
+      const startT = (s === highlight.start_segment_index) ? highlight.start_token_idx : 0;
+      const endT = (s === highlight.end_segment_index) ? highlight.end_token_idx : segment.tokens.length - 1;
 
-      currentIndex += segment.tokens.length;
+      for (let t = startT; t <= endT; t++) {
+        const token = segment.tokens[t];
+        if (token?.s) {
+          // 处理 gap：当前 token 有 gap 且不是范围内第一个时加空格
+          const isFirstToken = (s === highlight.start_segment_index && t === startT);
+          const prefix = (token.gap && !isFirstToken) ? ' ' : '';
+          targetTokens.push(prefix + token.s);
+        }
+      }
     }
 
-    // 计算上下文范围
-    const contextStartIdx = Math.max(0, highlightStartIdx - contextExtend);
-    const contextEndIdx = Math.min(allTokens.length - 1, highlightEndIdx + contextExtend);
+    const targetText = targetTokens.join('');
 
-    // 收集上下文 token
-    const contextTokens = allTokens.slice(contextStartIdx, contextEndIdx + 1);
+    // ------------------------------------------
+    // 2. 提取上下文（段落级扩展）
+    // ------------------------------------------
+    const anchorSegments: string[] = [];
+    let currentLength = 0;
+
+    // 2.1 收集锚点段落（高亮覆盖的所有完整段落）
+    for (let s = highlight.start_segment_index; s <= highlight.end_segment_index; s++) {
+      const seg = chapter.segments[s];
+      if (seg?.type === 'text') {
+        const segText = stringifySegment(seg);
+        anchorSegments.push(segText);
+        currentLength += segText.length;
+      }
+    }
+
+    // 2.2 向前扩展（前文）
+    const preSegments: string[] = [];
+    let preSegIdx = highlight.start_segment_index - 1;
+    let preCount = 0;
+
+    while (preSegIdx >= 0 && preCount < CONTEXT_SEGMENT_DEPTH) {
+      const seg = chapter.segments[preSegIdx];
+      if (seg?.type === 'text') {
+        const segText = stringifySegment(seg);
+
+        // 检查是否会超过限制
+        if (currentLength + segText.length > MAX_CONTEXT_CHARS) {
+          // 尝试部分添加（取末尾部分以保持连贯性）
+          const remaining = MAX_CONTEXT_CHARS - currentLength;
+          if (remaining > 10) { // 至少留 10 个字符
+            preSegments.unshift(segText.slice(-remaining));
+            currentLength = MAX_CONTEXT_CHARS;
+          }
+          break;
+        }
+
+        preSegments.unshift(segText); // 倒序添加到数组开头
+        currentLength += segText.length;
+        preCount++;
+      }
+      preSegIdx--;
+    }
+
+    // 2.3 向后扩展（后文）
+    const postSegments: string[] = [];
+    let postSegIdx = highlight.end_segment_index + 1;
+    let postCount = 0;
+
+    while (postSegIdx < chapter.segments.length && postCount < CONTEXT_SEGMENT_DEPTH) {
+      const seg = chapter.segments[postSegIdx];
+      if (seg?.type === 'text') {
+        const segText = stringifySegment(seg);
+
+        if (currentLength + segText.length > MAX_CONTEXT_CHARS) {
+          // 尝试部分添加（取开头部分）
+          const remaining = MAX_CONTEXT_CHARS - currentLength;
+          if (remaining > 10) {
+            postSegments.push(segText.slice(0, remaining));
+            currentLength = MAX_CONTEXT_CHARS;
+          }
+          break;
+        }
+
+        postSegments.push(segText);
+        currentLength += segText.length;
+        postCount++;
+      }
+      postSegIdx++;
+    }
+
+    // 2.4 组装上下文：[前文段落] [锚点段落] [后文段落]
+    const contextText = [
+      ...preSegments,
+      ...anchorSegments,
+      ...postSegments,
+    ].join(SEGMENT_SEPARATOR).trim();
 
     return {
-      targetText: tokens.join(''),
-      contextText: contextTokens.join(''),
+      targetText,
+      contextText,
     };
   }, [chapter, highlights]);
 
@@ -342,7 +414,7 @@ const AITab: React.FC = () => {
           setAiResult(savedResult);
           markHighlightAnalyzed(highlightId);
         }
-      } catch (archiveErr) {
+      } catch {
         // 积累本没有记录或出错，继续调用 AI
         console.log('[AI] 积累本无记录，调用 AI 分析');
 
@@ -395,7 +467,7 @@ const AITab: React.FC = () => {
       // 标记分析完成（无论成功或失败）
       finishAnalyzing(highlightId);
     }
-  }, [bookId, chapterIndex, collectHighlightText, markHighlightAnalyzed, startAnalyzing, finishAnalyzing]);
+  }, [bookId, chapterIndex, collectHighlightText, markHighlightAnalyzed, startAnalyzing, finishAnalyzing, setDisplayHighlightId]);
 
   // 当 activeHighlightId 变化时，自动加载已有的 AI 解析（如果有）
   useEffect(() => {

@@ -230,8 +230,8 @@ class AIAnalysisRequest(BaseModel):
     highlight_id: Optional[int] = Field(None, description="触发此分析的划线 ID（如果有）")
 
     # 核心载荷（添加长度限制防止恶意攻击或前端 Bug）
-    target_text: str = Field(..., max_length=200, description="用户选中的文本")
-    context_text: str = Field(..., max_length=1000, description="包含上下文的完整文本片段")
+    target_text: str = Field(..., max_length=512, description="用户选中的文本")
+    context_text: str = Field(..., max_length=2048, description="包含上下文的完整文本片段")
 
     user_prompt: Optional[str] = None  # 预留用户自定义提示
     model_preference: Optional[str] = Field(None, description="模型偏好（留空使用默认配置）")
