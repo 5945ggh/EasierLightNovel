@@ -37,8 +37,11 @@ const HIGHLIGHT_STYLES: Record<string, string> = {
  */
 export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
   ({ token, segmentIndex, tokenIndex }) => {
-    // 1. 只订阅 selectedToken
-    const selectedToken = useReaderStore((s) => s.selectedToken);
+    // 1. 订阅选中状态 - 使用 selector 只在匹配时才触发重渲染
+    const isSelected = useReaderStore((s) =>
+      s.selectedToken?.segmentIndex === segmentIndex &&
+      s.selectedToken?.tokenIndex === tokenIndex
+    );
 
     // 2. 只订阅 actions（函数引用稳定，不会触发重渲染）
     const setSelectedToken = useReaderStore((s) => s.setSelectedToken);
@@ -54,21 +57,13 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
       s.highlightMap.get(getTokenKey(segmentIndex, tokenIndex))
     );
 
-    // 5. 判断是否被选中（计算属性）
-    const isSelected = useMemo(
-      () =>
-        selectedToken?.segmentIndex === segmentIndex &&
-        selectedToken?.tokenIndex === tokenIndex,
-      [selectedToken, segmentIndex, tokenIndex]
-    );
-
-    // 6. 判断是否是生词 (O(1) 查找)
+    // 5. 判断是否是生词 (O(1) 查找)
     const isVocab = useMemo(
       () => (token.b ? vocabularySet.has(token.b) : false),
       [token.b, vocabularySet]
     );
 
-    // 7. 点击处理（使用 useCallback 稳定引用）
+    // 6. 点击处理（使用 useCallback 稳定引用）
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
         // 如果用户正在划线（Selection 不为空），则阻止点击事件，优先处理划线
