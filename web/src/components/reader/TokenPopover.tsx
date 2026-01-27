@@ -20,6 +20,7 @@ import { X, Plus, BookOpen, Sparkles, Volume2, Loader2, Trash2 } from 'lucide-re
 import { useReaderStore, getTokenKey } from '@/stores/readerStore';
 import { addVocabulary as addVocabularyService, deleteVocabulary } from '@/services/vocabularies.service';
 import { searchDictionary } from '@/services/dictionary.service';
+import { speak } from '@/utils/tts';
 import type { DictResult } from '@/types/dictionary';
 import { clsx } from 'clsx';
 
@@ -274,12 +275,7 @@ export const TokenPopover: React.FC = () => {
    */
   const handleTTS = useCallback(() => {
     if (!selectedToken) return;
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(selectedToken.text);
-    utterance.lang = 'ja-JP';
-    utterance.rate = 0.9;
-    window.speechSynthesis.speak(utterance);
+    speak(selectedToken.text);
   }, [selectedToken]);
 
   // 点击外部关闭处理

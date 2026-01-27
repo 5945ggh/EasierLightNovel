@@ -19,6 +19,7 @@ import { Volume2, BookPlus, X, Trash2 } from 'lucide-react';
 import { useReaderStore, type PendingHighlight } from '@/stores/readerStore';
 import { createHighlight, deleteHighlight } from '@/services/highlights.service';
 import { addVocabulary as addVocabularyService } from '@/services/vocabularies.service';
+import { speak } from '@/utils/tts';
 import { clsx } from 'clsx';
 
 /**
@@ -270,11 +271,7 @@ export const SelectionMenu: React.FC = () => {
   const handleTTS = useCallback(() => {
     const text = window.getSelection()?.toString();
     if (text) {
-      window.speechSynthesis.cancel(); // 停止当前朗读
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ja-JP';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
+      speak(text);
     }
     setIsOpen(false);
   }, []);

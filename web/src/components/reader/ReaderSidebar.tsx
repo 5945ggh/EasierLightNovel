@@ -9,6 +9,7 @@ import { useReaderStore, type SidebarTab } from '@/stores/readerStore';
 import { analyzeAI } from '@/services/ai.service';
 import { saveAIAnalysis as saveAIAnalysisService, getArchiveItem } from '@/services/highlights.service';
 import { searchDictionary } from '@/services/dictionary.service';
+import { speak } from '@/utils/tts';
 import type { DictResult } from '@/types/dictionary';
 import type { AIAnalysisResult, ChapterHighlightData } from '@/types';
 import { clsx } from 'clsx';
@@ -57,11 +58,7 @@ const DictionaryTab: React.FC = () => {
 
   const handleTTS = useCallback(() => {
     if (!selectedToken) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(selectedToken.text);
-    utterance.lang = 'ja-JP';
-    utterance.rate = 0.9;
-    window.speechSynthesis.speak(utterance);
+    speak(selectedToken.text);
   }, [selectedToken]);
 
   if (!selectedToken) {
@@ -252,8 +249,8 @@ const AITab: React.FC = () => {
     if (!highlight || !chapter?.segments) return { targetText: '', contextText: '' };
 
     const tokens: string[] = [];
-    const contextTokens: string[] = [];
 
+    // 收集高亮文本（目标文本）
     for (let s = highlight.start_segment_index; s <= highlight.end_segment_index; s++) {
       const segment = chapter.segments[s];
       if (segment?.type === 'text' && segment.tokens) {
@@ -269,26 +266,44 @@ const AITab: React.FC = () => {
       }
     }
 
-    // 收集上下文
-    const contextExtend = 50;
-    const totalTokens = chapter.segments.reduce((sum, seg) => {
-      return sum + (seg.type === 'text' ? (seg.tokens?.length || 0) : 0);
-    }, 0);
-    const startIdx = Math.max(0, highlight.start_segment_index * 100 - contextExtend);
-    const endIdx = Math.min(totalTokens, highlight.end_segment_index * 100 + highlight.end_token_idx + contextExtend);
+    // 收集上下文：高亮前后各扩展一定数量的 token
+    const contextExtend = 50; // 前后各扩展 50 个 token
+    const allTokens: string[] = [];
 
-    let tokenCount = 0;
+    // 首先收集所有文本 token
     for (const segment of chapter.segments) {
-      if (segment.type !== 'text' || !segment.tokens) continue;
-      for (const token of segment.tokens) {
-        if (tokenCount >= startIdx && tokenCount <= endIdx && token.s) {
-          contextTokens.push(token.s);
+      if (segment?.type === 'text' && segment.tokens) {
+        for (const token of segment.tokens) {
+          if (token.s) allTokens.push(token.s);
         }
-        tokenCount++;
-        if (tokenCount > endIdx) break;
       }
-      if (tokenCount > endIdx) break;
     }
+
+    // 计算高亮起始和结束位置的准确 token 索引
+    let highlightStartIdx = 0;
+    let highlightEndIdx = 0;
+    let currentIndex = 0;
+
+    for (let s = 0; s < chapter.segments.length; s++) {
+      const segment = chapter.segments[s];
+      if (segment?.type !== 'text' || !segment.tokens) continue;
+
+      if (s === highlight.start_segment_index) {
+        highlightStartIdx = currentIndex + highlight.start_token_idx;
+      }
+      if (s === highlight.end_segment_index) {
+        highlightEndIdx = currentIndex + highlight.end_token_idx;
+      }
+
+      currentIndex += segment.tokens.length;
+    }
+
+    // 计算上下文范围
+    const contextStartIdx = Math.max(0, highlightStartIdx - contextExtend);
+    const contextEndIdx = Math.min(allTokens.length - 1, highlightEndIdx + contextExtend);
+
+    // 收集上下文 token
+    const contextTokens = allTokens.slice(contextStartIdx, contextEndIdx + 1);
 
     return {
       targetText: tokens.join(''),
@@ -338,6 +353,17 @@ const AITab: React.FC = () => {
           console.warn('[AI] 目标文本为空');
           return;
         }
+
+        // 打印请求详情用于调试
+        console.log('[AI] 发送分析请求:', {
+          book_id: bookId,
+          chapter_index: chapterIndex,
+          highlight_id: highlightId,
+          target_text_length: targetText.length,
+          target_text: targetText,
+          context_text_length: contextText.length,
+          context_text: contextText.slice(0, 100) + '...',
+        });
 
         const result = await analyzeAI({
           book_id: bookId,
