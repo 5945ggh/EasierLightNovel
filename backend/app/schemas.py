@@ -4,7 +4,7 @@ from typing import List, Optional, Union
 from datetime import datetime
 
 from app.enums import ProcessingStatus, JLPTLevel
-from app.config import LLMConfig
+from app.config import LLMConfig, HIGHLIGHT_STYLE_CATEGORIES
 
 # ==================== Book 相关 ====================
 class BookBase(BaseModel):
@@ -289,3 +289,33 @@ class ArchiveItemResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ==================== Config 相关 ====================
+class HighlightStyleInfo(BaseModel):
+    """划线样式信息"""
+    color: str
+    name: str
+
+
+class FeatureFlags(BaseModel):
+    """功能开关"""
+    ai_analysis: bool = True
+    dictionary: bool = True
+
+
+class ConfigLimits(BaseModel):
+    """前端需要的配置限制"""
+    max_target_length: int = Field(..., description="AI 分析选中文本最大长度")
+    max_context_length: int = Field(..., description="AI 分析上下文最大长度")
+    max_upload_size: int = Field(..., description="文件上传最大大小（字节）")
+    query_default_limit: int = Field(..., description="查询默认限制")
+    query_max_limit: int = Field(..., description="查询最大限制")
+
+
+class PublicConfigResponse(BaseModel):
+    """公共配置响应（供前端使用）"""
+    version: str = Field(..., description="API 版本")
+    limits: ConfigLimits
+    features: FeatureFlags
+    highlight_styles: dict[str, HighlightStyleInfo]
