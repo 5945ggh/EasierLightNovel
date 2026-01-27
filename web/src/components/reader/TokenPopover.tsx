@@ -39,17 +39,20 @@ export const TokenPopover: React.FC = () => {
   const highlights = useReaderStore((s) => s.highlights);
   const vocabularySet = useReaderStore((s) => s.vocabularySet);
   const bookId = useReaderStore((s) => s.bookId);
+  const isSidebarOpen = useReaderStore((s) => s.isSidebarOpen);
   const setIsSidebarOpen = useReaderStore((s) => s.setIsSidebarOpen);
   const setActiveTab = useReaderStore((s) => s.setActiveTab);
   const triggerAIAnalysis = useReaderStore((s) => s.triggerAIAnalysis);
   const isHighlightAnalyzed = useReaderStore((s) => s.isHighlightAnalyzed);
+  const isAnalyzing = useReaderStore((s) => s.isAnalyzing);
 
   // 词典查询结果状态
   const [dictResult, setDictResult] = useState<DictResult | null>(null);
   const [isDictLoading, setIsDictLoading] = useState(false);
   const [dictError, setDictError] = useState<string | null>(null);
 
-  const isOpen = !!selectedToken;
+  // Popover 只在侧边栏关闭时显示
+  const isOpen = !!selectedToken && !isSidebarOpen;
   const arrowRef = React.useRef<HTMLDivElement>(null);
 
   const {
@@ -150,6 +153,8 @@ export const TokenPopover: React.FC = () => {
 
   // 判断当前高亮是否已分析
   const hasAIAnalysis = currentHighlightId !== null && isHighlightAnalyzed(currentHighlightId);
+  // 判断当前高亮是否正在分析
+  const isThisHighlightAnalyzing = currentHighlightId !== null && isAnalyzing(currentHighlightId);
 
   // 判断是否已经是生词
   const isVocab = selectedToken?.token.b
@@ -211,8 +216,8 @@ export const TokenPopover: React.FC = () => {
 
     setActiveTab('dictionary');
     setIsSidebarOpen(true);
-    setSelectedToken(null);
-  }, [selectedToken, setActiveTab, setIsSidebarOpen, setSelectedToken]);
+    // 不清除 selectedToken，让 DictionaryTab 能够显示词汇信息
+  }, [selectedToken, setActiveTab, setIsSidebarOpen]);
 
   /**
    * 打开 AI 分析侧边栏
@@ -251,13 +256,18 @@ export const TokenPopover: React.FC = () => {
     });
 
     if (highlight) {
+      // 检查是否正在分析
+      if (isAnalyzing(highlight.id)) {
+        console.warn('[TokenPopover] 该高亮正在分析中，请稍候');
+        return;
+      }
       triggerAIAnalysis(highlight.id);
       setActiveTab('ai');
       setIsSidebarOpen(true);
     } else {
       console.warn('[TokenPopover] 找不到对应的高亮记录');
     }
-  }, [selectedToken, highlightMap, highlights, triggerAIAnalysis, setActiveTab, setIsSidebarOpen]);
+  }, [selectedToken, highlightMap, highlights, triggerAIAnalysis, setActiveTab, setIsSidebarOpen, isAnalyzing]);
 
   /**
    * 朗读该 Token
@@ -445,10 +455,20 @@ export const TokenPopover: React.FC = () => {
           {isInHighlight && (
             <button
               onClick={handleAIAnalyze}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-700 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 dark:text-indigo-300 rounded-lg transition-all"
+              disabled={isThisHighlightAnalyzing}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-700 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 dark:text-indigo-300 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Sparkles size={16} />
-              {hasAIAnalysis ? '查看AI解析' : 'AI解析'}
+              {isThisHighlightAnalyzing ? (
+                <>
+                  <Loader2 className="animate-spin" size={16} />
+                  分析中...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  {hasAIAnalysis ? '查看AI解析' : 'AI解析'}
+                </>
+              )}
             </button>
           )}
         </div>

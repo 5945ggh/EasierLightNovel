@@ -179,8 +179,6 @@ const AITab: React.FC = () => {
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 存储当前正在显示的高亮 ID（即使 selectedToken 被清除，内容也不消失）
-  const [displayHighlightId, setDisplayHighlightId] = useState<number | null>(null);
 
   // 使用 ref 来同步跟踪是否正在请求（避免 setState 异步导致的竞态条件）
   const isRequestingRef = React.useRef(false);
@@ -196,6 +194,10 @@ const AITab: React.FC = () => {
   const aiAnalysisTrigger = useReaderStore((s) => s.aiAnalysisTrigger);
   const clearAIAnalysisTrigger = useReaderStore((s) => s.clearAIAnalysisTrigger);
   const markHighlightAnalyzed = useReaderStore((s) => s.markHighlightAnalyzed);
+  const startAnalyzing = useReaderStore((s) => s.startAnalyzing);
+  const finishAnalyzing = useReaderStore((s) => s.finishAnalyzing);
+  const displayHighlightId = useReaderStore((s) => s.displayHighlightId);
+  const setDisplayHighlightId = useReaderStore((s) => s.setDisplayHighlightId);
 
   // 从 selectedToken 提取需要的值（使用 useMemo 避免重复计算）
   const selectedTokenInfo = useMemo(() => ({
@@ -309,6 +311,9 @@ const AITab: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    // 标记开始分析
+    startAnalyzing(highlightId);
+
     try {
       // 先检查积累本是否已有分析结果
       try {
@@ -321,40 +326,39 @@ const AITab: React.FC = () => {
           console.log('[AI] 从积累本加载:', savedResult.translation?.slice(0, 30) + '...');
           setAiResult(savedResult);
           markHighlightAnalyzed(highlightId);
-          return;  // 直接返回，不调用 AI API
         }
       } catch (archiveErr) {
         // 积累本没有记录或出错，继续调用 AI
         console.log('[AI] 积累本无记录，调用 AI 分析');
-      }
 
-      // 调用 AI 分析
-      const { targetText, contextText } = collectHighlightText(highlightId);
+        // 调用 AI 分析
+        const { targetText, contextText } = collectHighlightText(highlightId);
 
-      if (!targetText) {
-        console.warn('[AI] 目标文本为空');
-        return;
-      }
+        if (!targetText) {
+          console.warn('[AI] 目标文本为空');
+          return;
+        }
 
-      const result = await analyzeAI({
-        book_id: bookId,
-        chapter_index: chapterIndex,
-        highlight_id: highlightId,
-        target_text: targetText,
-        context_text: contextText,
-      });
+        const result = await analyzeAI({
+          book_id: bookId,
+          chapter_index: chapterIndex,
+          highlight_id: highlightId,
+          target_text: targetText,
+          context_text: contextText,
+        });
 
-      console.log('[AI] 分析完成:', result.translation?.slice(0, 30) + '...');
-      setAiResult(result);
-      markHighlightAnalyzed(highlightId);
+        console.log('[AI] 分析完成:', result.translation?.slice(0, 30) + '...');
+        setAiResult(result);
+        markHighlightAnalyzed(highlightId);
 
-      // 自动保存到积累本
-      try {
-        await saveAIAnalysisService(highlightId, result);
-        console.log('[AI] 已保存到积累本');
-      } catch (saveErr) {
-        console.error('[AI] 保存到积累本失败:', saveErr);
-        // 保存失败不影响显示，只是记录错误
+        // 自动保存到积累本
+        try {
+          await saveAIAnalysisService(highlightId, result);
+          console.log('[AI] 已保存到积累本');
+        } catch (saveErr) {
+          console.error('[AI] 保存到积累本失败:', saveErr);
+          // 保存失败不影响显示，只是记录错误
+        }
       }
     } catch (err) {
       console.error('[AI] 分析失败:', err);
@@ -362,8 +366,49 @@ const AITab: React.FC = () => {
     } finally {
       setIsLoading(false);
       isRequestingRef.current = false;  // 清除标志
+      // 标记分析完成（无论成功或失败）
+      finishAnalyzing(highlightId);
     }
-  }, [bookId, chapterIndex, collectHighlightText, markHighlightAnalyzed]);
+  }, [bookId, chapterIndex, collectHighlightText, markHighlightAnalyzed, startAnalyzing, finishAnalyzing]);
+
+  // 当 activeHighlightId 变化时，自动加载已有的 AI 解析（如果有）
+  useEffect(() => {
+    // 只有在 AI tab 激活时才响应
+    if (activeTab !== 'ai') return;
+    if (activeHighlightId === null) {
+      // 清空 AI 解析结果
+      setAiResult(null);
+      return;
+    }
+
+    // 如果有 AI 分析触发信号，说明是点击"AI解析"按钮触发的，跳过自动加载
+    if (aiAnalysisTrigger !== null) return;
+
+    // 防止重复请求
+    if (isRequestingRef.current) return;
+
+    // 静默检查并加载已有的 AI 解析
+    (async () => {
+      isRequestingRef.current = true;
+      try {
+        const archiveItem = await getArchiveItem(activeHighlightId);
+        if (archiveItem.ai_analysis) {
+          // 有已保存的分析，加载并显示
+          const savedResult = JSON.parse(archiveItem.ai_analysis) as AIAnalysisResult;
+          setAiResult(savedResult);
+          markHighlightAnalyzed(activeHighlightId);
+        } else {
+          // 没有已保存的分析，清空之前的 AI 解析结果
+          setAiResult(null);
+        }
+      } catch {
+        // 积累本没有记录，清空之前的 AI 解析结果
+        setAiResult(null);
+      } finally {
+        isRequestingRef.current = false;
+      }
+    })();
+  }, [activeHighlightId, activeTab, aiAnalysisTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 当收到 AI 分析触发信号时，执行分析（点击"AI解析"按钮时触发）
   useEffect(() => {
@@ -557,6 +602,7 @@ const HighlightsTab: React.FC = () => {
   const chapterIndex = useReaderStore((s) => s.chapterIndex);
   const setHighlightViewChapter = useReaderStore((s) => s.setHighlightViewChapter);
   const requestChapterChange = useReaderStore((s) => s.requestChapterChange);
+  const setDisplayHighlightId = useReaderStore((s) => s.setDisplayHighlightId);
 
   // 计算每个章节的高亮数量
   const highlightCountsByChapter = useMemo(() => {
@@ -617,6 +663,9 @@ const HighlightsTab: React.FC = () => {
   const scrollToHighlight = useCallback((highlight: ChapterHighlightData) => {
     const isCurrentChapter = highlight.chapter_index === chapterIndex;
 
+    // 设置 AI Tab 要显示的高亮 ID
+    setDisplayHighlightId(highlight.id);
+
     if (isCurrentChapter) {
       // 当前章节：直接滚动
       const selector = `[data-segment-index="${highlight.start_segment_index}"][data-token-index="${highlight.start_token_idx}"]`;
@@ -633,7 +682,7 @@ const HighlightsTab: React.FC = () => {
       // 其他章节：显示确认对话框
       setPendingHighlight(highlight);
     }
-  }, [chapterIndex]);
+  }, [chapterIndex, setDisplayHighlightId]);
 
   // 确认跳转到其他章节
   const handleJumpToChapter = useCallback(() => {
@@ -658,7 +707,7 @@ const HighlightsTab: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* 章节选择器 */}
       <div className="border-b border-gray-200 dark:border-gray-700 p-3">
         <select

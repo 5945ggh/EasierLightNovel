@@ -78,8 +78,12 @@ interface ReaderState {
 
   // 交互状态
   selectedToken: SelectedToken | null;
+  /** AI Tab 当前显示的高亮 ID（用于保持显示状态，即使 selectedToken 变化） */
+  displayHighlightId: number | null;
   /** AI 分析触发信号（点击"AI解析"按钮时设置，AITab 执行后清除） */
   aiAnalysisTrigger: number | null;  // 存储要分析的 highlightId
+  /** 正在进行 AI 分析的高亮 ID 集合（防止重复请求） */
+  analyzingHighlightIds: Set<number>;
   /** 已完成 AI 分析的高亮 ID 集合 */
   analyzedHighlightIds: Set<number>;
   /** 章节切换请求信号（HighlightsTab 设置，ReaderPage 执行后清除） */
@@ -130,8 +134,15 @@ interface ReaderActions {
 
   // 交互状态
   setSelectedToken: (token: SelectedToken | null) => void;
+  setDisplayHighlightId: (highlightId: number | null) => void;
   triggerAIAnalysis: (highlightId: number) => void;  // 触发 AI 分析
   clearAIAnalysisTrigger: () => void;  // 清除触发信号
+  /** 开始分析高亮 */
+  startAnalyzing: (highlightId: number) => void;
+  /** 完成分析高亮 */
+  finishAnalyzing: (highlightId: number) => void;
+  /** 检查高亮是否正在分析 */
+  isAnalyzing: (highlightId: number) => boolean;
   /** 标记高亮已分析 */
   markHighlightAnalyzed: (highlightId: number) => void;
   /** 检查高亮是否已分析 */
@@ -243,7 +254,9 @@ const createDefaultState = (): ReaderState => ({
   currentSegmentIndex: 0,
   segmentOffset: 0,
   selectedToken: null,
+  displayHighlightId: null,
   aiAnalysisTrigger: null,
+  analyzingHighlightIds: new Set<number>(),
   analyzedHighlightIds: new Set<number>(),
   pendingChapterIndex: null,
   pendingScrollTarget: null,
@@ -342,8 +355,20 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
   addHighlight: (highlight) =>
     set((state) => {
       const newHighlights = [...state.highlights, highlight];
+      // 同时更新 allHighlights（用于高亮列表显示）
+      // 先过滤掉同一章节的旧数据（如果有），再添加新的
+      const newAllHighlights = state.allHighlights.filter(
+        h => !(h.chapter_index === state.chapterIndex && h.id === highlight.id)
+      );
+      // 添加章节信息到 highlight
+      const highlightWithChapter = {
+        ...highlight,
+        chapter_index: state.chapterIndex ?? 0,
+      };
+      newAllHighlights.push(highlightWithChapter);
       return {
         highlights: newHighlights,
+        allHighlights: newAllHighlights,
         highlightMap: buildHighlightMap(newHighlights, state.pendingHighlights, state.chapter?.segments),
       };
     }),
@@ -360,8 +385,11 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
   removeHighlight: (id) =>
     set((state) => {
       const newHighlights = state.highlights.filter((h) => h.id !== id);
+      // 同时从 allHighlights 中移除
+      const newAllHighlights = state.allHighlights.filter((h) => h.id !== id);
       return {
         highlights: newHighlights,
+        allHighlights: newAllHighlights,
         highlightMap: buildHighlightMap(newHighlights, state.pendingHighlights, state.chapter?.segments),
       };
     }),
@@ -386,8 +414,28 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
 
   // 交互状态
   setSelectedToken: (selectedToken) => set({ selectedToken }),
+  setDisplayHighlightId: (displayHighlightId) => set({ displayHighlightId }),
   triggerAIAnalysis: (highlightId) => set({ aiAnalysisTrigger: highlightId }),
   clearAIAnalysisTrigger: () => set({ aiAnalysisTrigger: null }),
+  startAnalyzing: (highlightId) =>
+    set((state) => {
+      if (state.analyzingHighlightIds.has(highlightId)) {
+        return state;
+      }
+      const newSet = new Set(state.analyzingHighlightIds);
+      newSet.add(highlightId);
+      return { analyzingHighlightIds: newSet };
+    }),
+  finishAnalyzing: (highlightId) =>
+    set((state) => {
+      if (!state.analyzingHighlightIds.has(highlightId)) {
+        return state;
+      }
+      const newSet = new Set(state.analyzingHighlightIds);
+      newSet.delete(highlightId);
+      return { analyzingHighlightIds: newSet };
+    }),
+  isAnalyzing: (highlightId) => get().analyzingHighlightIds.has(highlightId),
   markHighlightAnalyzed: (highlightId) =>
     set((state) => {
       if (state.analyzedHighlightIds.has(highlightId)) {
