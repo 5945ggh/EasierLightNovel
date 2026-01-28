@@ -1,7 +1,4 @@
 # app/models.py
-from datetime import datetime
-from enum import Enum
-from typing import List, Optional
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship, declarative_base, deferred
@@ -27,7 +24,9 @@ class Book(Base):
     
     # 关联
     chapters = relationship("Chapter", back_populates="book", cascade="all, delete-orphan")
-    progress = relationship("UserProgress", back_populates="book", uselist=False)
+    progress = relationship("UserProgress", back_populates="book", uselist=False, cascade="all, delete-orphan")
+    vocabularies = relationship("Vocabulary", back_populates="book", cascade="all, delete-orphan")
+    highlights = relationship("UserHighlight", back_populates="book", cascade="all, delete-orphan")
 
 
 class Chapter(Base):
@@ -96,6 +95,8 @@ class Vocabulary(Base):
     __table_args__ = (
         UniqueConstraint('book_id', 'base_form', name='uq_vocab_book_word'),
     )
+
+    book = relationship("Book", back_populates="vocabularies")
     
 
 class UserHighlight(Base):
@@ -131,6 +132,8 @@ class UserHighlight(Base):
     # 关联：一个划线对应一个(或0个)积累条目
     # uselist=False 表示一对一关系
     archive = relationship("ArchiveItem", back_populates="highlight", uselist=False, cascade="all, delete-orphan")
+
+    book = relationship("Book", back_populates="highlights")
 
 
 class ArchiveItem(Base):

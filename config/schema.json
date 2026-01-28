@@ -10,7 +10,7 @@
       "properties": {
         "host": {
           "type": "string",
-          "description": "后端监听地址",
+          "description": "后端监听地址 (本地部署使用 127.0.0.1)",
           "default": "127.0.0.1"
         },
         "port": {
@@ -20,8 +20,7 @@
           "maximum": 65535,
           "default": 8010
         }
-      },
-      "required": ["host", "port"]
+      }
     },
     "frontend": {
       "type": "object",
@@ -34,8 +33,7 @@
           "maximum": 65535,
           "default": 5173
         }
-      },
-      "required": ["port"]
+      }
     },
     "cors": {
       "type": "object",
@@ -49,8 +47,148 @@
           },
           "default": ["http://localhost:5173", "http://127.0.0.1:5173"]
         }
-      },
-      "required": ["allowed_origins"]
+      }
+    },
+    "paths": {
+      "type": "object",
+      "description": "路径配置",
+      "properties": {
+        "data_dir": {
+          "type": "string",
+          "description": "数据存储目录（相对或绝对路径）",
+          "default": "static_data"
+        },
+        "temp_upload_dir": {
+          "type": "string",
+          "description": "临时上传目录（相对或绝对路径）",
+          "default": "backend/temp_uploads"
+        }
+      }
+    },
+    "upload": {
+      "type": "object",
+      "description": "文件上传配置",
+      "properties": {
+        "max_file_size": {
+          "type": "integer",
+          "description": "最大上传文件大小（字节）",
+          "default": 52428800
+        }
+      }
+    },
+    "epub": {
+      "type": "object",
+      "description": "EPUB 解析配置",
+      "properties": {
+        "max_title_length": {
+          "type": "integer",
+          "description": "从正文提取标题的最大长度",
+          "default": 32
+        },
+        "max_chunk_size": {
+          "type": "integer",
+          "description": "单个文本段最大长度",
+          "default": 2048
+        }
+      }
+    },
+    "tokenizer": {
+      "type": "object",
+      "description": "日语分词配置",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["A", "B", "C"],
+          "description": "分词模式: A=短粒度, B=中粒度(推荐), C=长粒度",
+          "default": "B"
+        }
+      }
+    },
+    "dictionary": {
+      "type": "object",
+      "description": "日语词典配置",
+      "properties": {
+        "cache_size": {
+          "type": "integer",
+          "description": "查询缓存大小",
+          "default": 4096
+        },
+        "memory_mode": {
+          "type": "boolean",
+          "description": "是否将词典加载到内存(不建议加载)",
+          "default": false
+        },
+        "load_kanji_dict": {
+          "type": "boolean",
+          "description": "是否加载汉字词典",
+          "default": false
+        }
+      }
+    },
+    "llm": {
+      "type": "object",
+      "description": "LLM / AI 分析配置",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "模型名称（LiteLLM 格式，provider/model-name）",
+          "default": "deepseek/deepseek-chat"
+        },
+        "api_key": {
+          "type": "string",
+          "description": "LLM API 密钥"
+        },
+        "base_url": {
+          "type": "string",
+          "description": "LLM API 基础 URL",
+          "default": "https://api.deepseek.com"
+        },
+        "temperature": {
+          "type": "number",
+          "description": "生成温度（0.0 - 1.0）",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.2
+        },
+        "max_target_length": {
+          "type": "integer",
+          "description": "AI 分析选中文本最大长度",
+          "default": 512
+        },
+        "max_context_length": {
+          "type": "integer",
+          "description": "AI 分析上下文最大长度",
+          "default": 2048
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "description": "数据库查询配置",
+      "properties": {
+        "default_limit": {
+          "type": "integer",
+          "description": "默认分页大小",
+          "default": 100
+        },
+        "max_limit": {
+          "type": "integer",
+          "description": "最大分页大小",
+          "default": 500
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "description": "日志配置",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR"],
+          "description": "日志级别",
+          "default": "INFO"
+        }
+      }
     }
   },
   "required": ["backend", "cors"]

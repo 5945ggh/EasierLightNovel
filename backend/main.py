@@ -1,5 +1,6 @@
 # main.py
 import uvicorn
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -8,16 +9,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db, check_db_connection
 from app.config import (
     DATA_DIR, UPLOAD_DIR, STATIC_URL_PREFIX, HOST, PORT,
-    CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR
+    CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR,
+    LOG_LEVEL, LLMConfig
 )
 import os
+
+
+def _setup_logging():
+    """配置日志级别"""
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时
-    print("Starting up...")
+    print("=" * 50)
+    print("EbookToTextbook API 启动中...")
+    print("=" * 50)
+
+    # 配置日志
+    _setup_logging()
     init_db()
     check_db_connection()
 
@@ -26,11 +41,20 @@ async def lifespan(app: FastAPI):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
+    # 打印配置信息
+    print(f"后端地址: http://{HOST}:{PORT}")
+    print(f"数据目录: {DATA_DIR}")
+    print(f"CORS 允许源: {', '.join(CORS_ALLOWED_ORIGINS)}")
+    print(f"LLM 模型: {LLMConfig.MODEL}")
+    print(f"LLM API: {'已配置' if LLMConfig.API_KEY else '未配置'}")
+    print("-" * 50)
+
     # 预热词典服务（可选，首次请求会自动初始化）
-    print("Warming up dictionary service...")
+    print("预热词典服务...")
     from app.services.dictionary_service import DictionaryService
     DictionaryService()._jmd  # 触发线程局部实例创建
-    print("Dictionary service ready")
+    print("词典服务就绪")
+    print("=" * 50)
 
     yield
 
@@ -84,7 +108,8 @@ async def root():
     return {
         "message": "EbookToTextbook API",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "config": "/api/config"
     }
 
 
@@ -95,6 +120,7 @@ def main():
         host=HOST,
         port=PORT,
         reload=True,  # 开发模式自动重载
+        log_level=LOG_LEVEL.lower(),
     )
 
 

@@ -2,15 +2,49 @@
   "$schema": "./schema.json",
   "backend": {
     "host": "127.0.0.1",
-    "port": 8011
+    "port": 8010
   },
   "frontend": {
-    "port": 5174
+    "port": 5173
   },
   "cors": {
     "allowed_origins": [
-      "http://localhost:5174",
-      "http://127.0.0.1:5174"
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
     ]
+  },
+  "paths": {
+    "data_dir": "static_data",
+    "temp_upload_dir": "backend/temp_uploads"
+  },
+  "upload": {
+    "max_file_size": 52428800
+  },
+  "epub": {
+    "max_title_length": 32,
+    "max_chunk_size": 1024
+  },
+  "tokenizer": {
+    "mode": "B"
+  },
+  "dictionary": {
+    "cache_size": 4096,
+    "memory_mode": false,
+    "load_kanji_dict": false
+  },
+  "llm": {
+    "model": "deepseek/deepseek-chat",
+    "api_key": "YOUR_API_KEY_HERE",
+    "base_url": "https://api.deepseek.com",
+    "temperature": 0.2,
+    "max_target_length": 512,
+    "max_context_length": 2048
+  },
+  "query": {
+    "default_limit": 100,
+    "max_limit": 500
+  },
+  "logging": {
+    "level": "INFO"
   }
 }
