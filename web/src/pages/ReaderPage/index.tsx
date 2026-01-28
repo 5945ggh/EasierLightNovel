@@ -3,7 +3,7 @@
  * 负责数据获取、状态编排和路由处理
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Home, RefreshCw } from 'lucide-react';
@@ -35,10 +35,15 @@ export const ReaderPage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
 
+  // 滚动容器的 ref（传递给 ContentCanvas 用于进度监听）
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   // 本地状态：当前章节索引（初始为 null，等待 TOC 或进度数据）
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number | null>(null);
   // TOC 模态框状态
   const [isTocOpen, setIsTocOpen] = useState(false);
+  // 记录首次加载的章节索引，用于判断是否为章节切换
+  const [firstLoadedChapter, setFirstLoadedChapter] = useState<number | null>(null);
 
   // 设置 Store
   const { theme, furiganaMode, fontSize, lineHeight, fontFamily } = useSettingsStore();
@@ -67,7 +72,6 @@ export const ReaderPage: React.FC = () => {
     setVocabularySet,
     setVocabularies,
     setCurrentSegmentIndex,
-    setSegmentOffset,
     setAllHighlights,
     setAllChapterList,
     pendingChapterIndex,
@@ -108,6 +112,11 @@ export const ReaderPage: React.FC = () => {
     enabled: !!bookId,
     retry: false,
   });
+
+  // 日志：进度数据变化
+  useEffect(() => {
+    console.log('[ReaderPage] Progress data changed:', progressData);
+  }, [progressData]);
 
   // 5. 确定初始章节索引（使用派生状态而非 effect + setState）
   const targetChapterIndex = useMemo(() => {
@@ -163,23 +172,55 @@ export const ReaderPage: React.FC = () => {
     enabled: !!bookId,
   });
 
+  // 计算初始滚动百分比（后端返回 progress_percentage 为 0-100，转换为 0-1）
+  // 基于 targetChapterIndex 而非 currentChapterIndex，避免异步 setState 导致的时序问题
+  const initialPercentage = useMemo(() => {
+    if (!progressData || targetChapterIndex === null) return 0;
+    // 只有目标章节与进度记录匹配时才使用百分比
+    if (progressData.current_chapter_index === targetChapterIndex) {
+      const pct = (progressData.progress_percentage ?? 0) / 100;
+      console.log('[ReaderPage] initialPercentage calculated:', {
+        progressChapter: progressData.current_chapter_index,
+        targetChapter: targetChapterIndex,
+        backendPercentage: progressData.progress_percentage,
+        calculatedPct: pct,
+      });
+      return pct;
+    }
+    console.log('[ReaderPage] initialPercentage = 0 (chapter mismatch)', {
+      progressChapter: progressData.current_chapter_index,
+      targetChapter: targetChapterIndex,
+    });
+    return 0;
+  }, [progressData, targetChapterIndex]);
+
+  // 判断是否为章节切换
+  const isChapterSwitch = useMemo(() => {
+    if (firstLoadedChapter === null) return false;
+    const result = currentChapterIndex !== null && currentChapterIndex !== firstLoadedChapter;
+    console.log('[ReaderPage] isChapterSwitch:', {
+      firstLoadedChapter,
+      currentChapterIndex,
+      result,
+    });
+    return result;
+  }, [firstLoadedChapter, currentChapterIndex]);
+
   // 8. 同步数据到 Store
   useEffect(() => {
     if (chapterData && currentChapterIndex !== null) {
       setChapter(chapterData);
       setChapterIndex(currentChapterIndex);
-      // 如果进度数据中的章节索引匹配，设置段落索引和偏移
+      // 记录首次加载的章节（用于判断章节切换）
+      setFirstLoadedChapter(prev => prev === null ? currentChapterIndex : prev);
+      // 如果进度数据中的章节索引匹配，设置段落索引
       if (progressData?.current_chapter_index === currentChapterIndex) {
         setCurrentSegmentIndex(progressData.current_segment_index ?? 0);
-        // current_segment_offset 从后端返回的是整数（0~10000），需要转换为百分比（0~1）
-        const offset = progressData.current_segment_offset ?? 0;
-        setSegmentOffset(offset / 10000);
       } else {
         setCurrentSegmentIndex(0);
-        setSegmentOffset(0);
       }
     }
-  }, [chapterData, progressData, currentChapterIndex, setChapter, setChapterIndex, setCurrentSegmentIndex, setSegmentOffset]);
+  }, [chapterData, progressData, currentChapterIndex, setChapter, setChapterIndex, setCurrentSegmentIndex]);
 
   useEffect(() => {
     if (vocabBaseFormsData) {
@@ -243,10 +284,9 @@ export const ReaderPage: React.FC = () => {
     if (currentIndex > 0) {
       // 切换章节时重置为从顶部开始阅读
       setCurrentSegmentIndex(0);
-      setSegmentOffset(0);
       setCurrentChapterIndex(chapterList[currentIndex - 1].index);
     }
-  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setSegmentOffset]);
+  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex]);
 
   const handleNextChapter = useCallback(() => {
     if (!chapterList || currentChapterIndex === null) return;
@@ -256,17 +296,15 @@ export const ReaderPage: React.FC = () => {
     if (currentIndex >= 0 && currentIndex < chapterList.length - 1) {
       // 切换章节时重置为从顶部开始阅读
       setCurrentSegmentIndex(0);
-      setSegmentOffset(0);
       setCurrentChapterIndex(chapterList[currentIndex + 1].index);
     }
-  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setSegmentOffset]);
+  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex]);
 
   // 章节选择处理 - 移到所有条件返回之前
   const handleChapterSelect = useCallback((index: number) => {
     setCurrentSegmentIndex(0);
-    setSegmentOffset(0);
     setCurrentChapterIndex(index);
-  }, [setCurrentSegmentIndex, setSegmentOffset]);
+  }, [setCurrentSegmentIndex]);
 
   // 判断是否有上一章/下一章
   const hasPrevChapter =
@@ -422,6 +460,7 @@ export const ReaderPage: React.FC = () => {
         isSidebarOpen && 'mr-80'
       )}>
         <div
+          ref={scrollContainerRef}
           className={clsx(
             'h-full w-full overflow-y-auto scroll-smooth',
             `furigana-mode-${furiganaMode}`,
@@ -429,10 +468,13 @@ export const ReaderPage: React.FC = () => {
           )}
         >
           <ContentCanvas
+            scrollContainerRef={scrollContainerRef}
             onPrevChapter={handlePrevChapter}
             onNextChapter={handleNextChapter}
             hasPrevChapter={hasPrevChapter}
             hasNextChapter={hasNextChapter}
+            initialPercentage={initialPercentage}
+            isChapterSwitch={isChapterSwitch}
           />
         </div>
 

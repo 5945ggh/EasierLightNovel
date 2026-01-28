@@ -3,7 +3,9 @@
  * 负责章节内容的渲染布局、滚动监听和进度保存
  *
  * 性能优化：使用 selector 订阅特定状态
- * 进度保存：章节切换前强制保存，避免进度丢失
+ * 进度保存：
+ *   - 百分比：用于精确恢复滚动位置
+ *   - 段落索引：用于快速定位和跨章节跳转
  * 样式：使用 CSS 变量实现动态字体设置
  */
 
@@ -13,112 +15,119 @@ import { updateReadingProgress } from '@/services/books.service';
 import { SegmentRenderer } from './SegmentRenderer';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
-
-// 进度恢复的默认偏移（段落顶部距离视口顶部的百分比）
-const DEFAULT_RESTORE_OFFSET = 0.15; // 15% 位置，既不遮挡标题也不太靠下
+import { useScrollProgress } from '@/hooks/useScrollProgress';
 
 // IntersectionObserver 配置：只有当段落进入视口中心区域时才触发
 const OBSERVER_ROOT_MARGIN = '-45% 0px -45% 0px'; // 只检测视口中间 10% 的区域
 
 interface ContentCanvasProps {
+  // 滚动容器的 ref（从 ReaderPage 传入）
+  scrollContainerRef: React.RefObject<HTMLDivElement>;
   // 章节切换回调
   onPrevChapter?: () => void;
   onNextChapter?: () => void;
   hasPrevChapter?: boolean;
   hasNextChapter?: boolean;
+  // 进度恢复参数
+  initialPercentage: number; // 初始滚动百分比 (0-1)
+  isChapterSwitch: boolean;  // 是否为章节切换（跳过百分比恢复）
 }
 
 export const ContentCanvas: React.FC<ContentCanvasProps> = ({
+  scrollContainerRef,
   onPrevChapter,
   onNextChapter,
   hasPrevChapter = false,
   hasNextChapter = false,
+  initialPercentage = 0,
+  isChapterSwitch = false,
 }) => {
   // 使用 selector 订阅特定状态，避免不必要的重渲染
   const chapter = useReaderStore((s) => s.chapter);
   const bookId = useReaderStore((s) => s.bookId);
   const currentSegmentIndex = useReaderStore((s) => s.currentSegmentIndex);
-  const segmentOffset = useReaderStore((s) => s.segmentOffset);
   const setCurrentSegmentIndex = useReaderStore((s) => s.setCurrentSegmentIndex);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const saveProgressTimeoutRef = useRef<number | null>(null);
-  const scrollRestoredRef = useRef(false);
-  const lastProcessedChapterRef = useRef<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // 立即保存进度（不经过 debounce）
-  const flushProgress = useCallback(() => {
-    if (saveProgressTimeoutRef.current) {
-      clearTimeout(saveProgressTimeoutRef.current);
-      saveProgressTimeoutRef.current = null;
+  // 当前缓存的滚动百分比（用于保存进度）
+  const cachedPercentageRef = useRef(initialPercentage);
+
+  // 当 initialPercentage 变化时更新 ref（避免不滚动就切章节把 0 存回去）
+  useEffect(() => {
+    console.log('[ContentCanvas] Updating cachedPercentageRef:', initialPercentage);
+    cachedPercentageRef.current = initialPercentage;
+  }, [initialPercentage]);
+
+  // 保存进度的核心函数
+  const saveProgress = useCallback((percentage: number): Promise<void> => {
+    console.log('[ContentCanvas] saveProgress called:', {
+      percentage,
+      hasBookId: !!bookId,
+      hasChapter: !!chapter,
+      currentSegmentIndex,
+    });
+
+    if (!bookId || !chapter || currentSegmentIndex < 0) {
+      console.log('[ContentCanvas] saveProgress ABORTED - missing required data');
+      return Promise.resolve();
     }
 
-    if (bookId && chapter && currentSegmentIndex >= 0) {
-      const segmentEl = containerRef.current?.querySelector(
-        `[data-segment-index="${currentSegmentIndex}"]`
-      );
-      // 计算段落相对于视口的位置偏移
-      // offsetRatio 表示：段落顶部在视口中的位置比例（0 = 在视口顶部，1 = 在视口底部）
-      let offsetRatio = DEFAULT_RESTORE_OFFSET;
-      if (segmentEl) {
-        const rect = segmentEl.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        // rect.top 是段落顶部相对于视口顶部的距离（可能为负，表示在视口上方）
-        // 我们保存的是段落顶部在视口中的相对位置（0-1）
-        const relativePosition = rect.top / viewportHeight;
-        // 限制在 0-1 范围内，避免极端值
-        offsetRatio = Math.min(Math.max(relativePosition, 0), 1);
-      }
+    setIsSaving(true);
+    // 前端 0-1，后端 0-100（保留一位小数）
+    const percentageForBackend = Math.round(percentage * 1000) / 10;
 
-      setIsSaving(true);
-      return updateReadingProgress(bookId, {
-        current_chapter_index: chapter.index,
-        current_segment_index: currentSegmentIndex,
-        current_segment_offset: Math.round(offsetRatio * 10000),
+    const payload = {
+      current_chapter_index: chapter.index,
+      current_segment_index: currentSegmentIndex,
+      progress_percentage: percentageForBackend,
+    };
+
+    console.log('[ContentCanvas] Calling updateReadingProgress:', payload);
+
+    return updateReadingProgress(bookId, payload)
+      .then(() => {
+        console.log('[ContentCanvas] Progress saved successfully');
+        setIsSaving(false);
       })
-        .then(() => {
-          setIsSaving(false);
-        })
-        .catch((err) => {
-          console.error('Failed to save progress:', err);
-          setIsSaving(false);
-        });
-    }
-    return Promise.resolve();
+      .catch((err) => {
+        console.error('[ContentCanvas] Failed to save progress:', err);
+        setIsSaving(false);
+      });
   }, [bookId, chapter, currentSegmentIndex]);
 
-  // Debounce 保存进度到后端
-  const updateCurrentSegment = useCallback(
-    (idx: number) => {
-      setCurrentSegmentIndex(idx);
-
-      if (saveProgressTimeoutRef.current) {
-        clearTimeout(saveProgressTimeoutRef.current);
-      }
-
-      saveProgressTimeoutRef.current = setTimeout(() => {
-        flushProgress();
-      }, 1000);
+  // 使用滚动进度 Hook（传入滚动容器 ref）
+  useScrollProgress(
+    scrollContainerRef,
+    (percentage) => {
+      cachedPercentageRef.current = percentage;
+      saveProgress(percentage);
     },
-    [setCurrentSegmentIndex, flushProgress]
+    {
+      initialPercentage,
+      isChapterSwitch,
+      restoreDelay: 150,
+      debounceDelay: 1000,
+    }
   );
 
   // 章节切换前先保存进度
   const handlePrevChapter = useCallback(() => {
-    flushProgress().then(() => {
+    saveProgress(cachedPercentageRef.current).then(() => {
       onPrevChapter?.();
     });
-  }, [flushProgress, onPrevChapter]);
+  }, [saveProgress, onPrevChapter]);
 
   const handleNextChapter = useCallback(() => {
-    flushProgress().then(() => {
+    saveProgress(cachedPercentageRef.current).then(() => {
       onNextChapter?.();
     });
-  }, [flushProgress, onNextChapter]);
+  }, [saveProgress, onNextChapter]);
 
-  // 1. 初始化 IntersectionObserver 监听滚动
+  // 1. 初始化 IntersectionObserver 监听段落切换
+  // 用于更新 currentSegmentIndex，辅助快速定位
   useEffect(() => {
     if (!chapter || !bookId) return;
 
@@ -134,116 +143,47 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
 
         // 只在段落索引变化时才更新，避免频繁触发
         if (!isNaN(idx) && idx !== currentSegmentIndex) {
-          updateCurrentSegment(idx);
+          setCurrentSegmentIndex(idx);
         }
       }
     };
 
     observerRef.current = new IntersectionObserver(callback, {
-      root: null,
-      rootMargin: OBSERVER_ROOT_MARGIN, // 只检测视口中心区域
+      root: scrollContainerRef.current, // 使用传入的滚动容器作为 root
+      rootMargin: OBSERVER_ROOT_MARGIN,
       threshold: 0,
     });
 
     const rafId = requestAnimationFrame(() => {
-      const elements = containerRef.current?.querySelectorAll('[data-segment-index]');
+      const elements = contentRef.current?.querySelectorAll('[data-segment-index]');
       elements?.forEach((el) => observerRef.current?.observe(el));
     });
 
     return () => {
       cancelAnimationFrame(rafId);
       observerRef.current?.disconnect();
-      if (saveProgressTimeoutRef.current) {
-        clearTimeout(saveProgressTimeoutRef.current);
-      }
     };
-  }, [chapter, bookId, updateCurrentSegment, currentSegmentIndex]);
+  }, [chapter, bookId, currentSegmentIndex, scrollContainerRef, setCurrentSegmentIndex]);
 
-  // 2. 章节变化时重置滚动状态
+  // 2. 组件卸载时保存进度
   useEffect(() => {
-    if (chapter?.index !== undefined) {
-      scrollRestoredRef.current = false;
-    }
-  }, [chapter?.index]);
-
-  // 3. 滚动到上次阅读位置或章节顶部
-  useEffect(() => {
-    if (!chapter || scrollRestoredRef.current) return;
-
-    const currentChapterIndex = chapter.index;
-    const isChapterSwitch =
-      lastProcessedChapterRef.current !== null &&
-      lastProcessedChapterRef.current !== currentChapterIndex;
-
-    const rafId = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        // 章节切换：滚动到页面最顶部
-        if (isChapterSwitch) {
-          window.scrollTo({ top: 0, behavior: 'instant' });
-          scrollRestoredRef.current = true;
-          lastProcessedChapterRef.current = currentChapterIndex;
-          return;
-        }
-
-        // 首次加载：恢复阅读位置
-        const el = containerRef.current?.querySelector(
-          `[data-segment-index="${currentSegmentIndex}"]`
-        );
-        if (!el) {
-          // 如果找不到目标段落，默认滚动到顶部
-          window.scrollTo({ top: 0, behavior: 'instant' });
-          scrollRestoredRef.current = true;
-          lastProcessedChapterRef.current = currentChapterIndex;
-          return;
-        }
-
-        // 获取段落顶部在视口中的目标位置（如果没有保存的偏移，使用默认值）
-        const targetOffset = segmentOffset > 0 ? segmentOffset : DEFAULT_RESTORE_OFFSET;
-        const viewportHeight = window.innerHeight;
-        const targetOffsetPixels = targetOffset * viewportHeight;
-
-        // 先滚动到段落顶部
-        el.scrollIntoView({ block: 'start', behavior: 'instant' });
-
-        // 然后向上滚动，使段落顶部位于目标位置
-        requestAnimationFrame(() => {
-          const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          const targetScrollTop = Math.max(0, currentScrollTop - targetOffsetPixels);
-          window.scrollTo({ top: targetScrollTop, behavior: 'instant' });
-          scrollRestoredRef.current = true;
-          lastProcessedChapterRef.current = currentChapterIndex;
-        });
-      });
-    });
-
-    return () => cancelAnimationFrame(rafId);
-  }, [chapter, currentSegmentIndex, segmentOffset]);
-
-  // 4. 组件卸载时保存进度
-  useEffect(() => {
-    const container = containerRef.current;
     return () => {
-      if (saveProgressTimeoutRef.current) {
-        clearTimeout(saveProgressTimeoutRef.current);
-      }
+      console.log('[ContentCanvas] Unmounting, saving progress:', {
+        hasBookId: !!bookId,
+        hasChapter: !!chapter,
+        currentSegmentIndex,
+        cachedPercentage: cachedPercentageRef.current,
+      });
       if (bookId && chapter && currentSegmentIndex >= 0) {
-        const segmentEl = container?.querySelector(
-          `[data-segment-index="${currentSegmentIndex}"]`
-        );
-        // 计算段落相对于视口的位置偏移
-        let offsetRatio = DEFAULT_RESTORE_OFFSET;
-        if (segmentEl) {
-          const rect = segmentEl.getBoundingClientRect();
-          const viewportHeight = window.innerHeight;
-          const relativePosition = rect.top / viewportHeight;
-          offsetRatio = Math.min(Math.max(relativePosition, 0), 1);
-        }
-
         updateReadingProgress(bookId, {
           current_chapter_index: chapter.index,
           current_segment_index: currentSegmentIndex,
-          current_segment_offset: Math.round(offsetRatio * 10000),
-        }).catch(console.error);
+          progress_percentage: Math.round(cachedPercentageRef.current * 1000) / 10,
+        })
+          .then(() => console.log('[ContentCanvas] Unmount save successful'))
+          .catch(err => console.error('[ContentCanvas] Unmount save failed:', err));
+      } else {
+        console.log('[ContentCanvas] Unmount save SKIPPED - missing data');
       }
     };
   }, [bookId, chapter, currentSegmentIndex]);
@@ -254,7 +194,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
 
   return (
     <div
-      ref={containerRef}
+      ref={contentRef}
       className="min-h-screen"
       // 使用 CSS 变量控制样式
       style={{

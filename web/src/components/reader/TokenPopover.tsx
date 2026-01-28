@@ -91,8 +91,8 @@ const extractSentenceFromSegment = (
     const halfLength = Math.floor(MAX_CONTEXT_SENTENCE_LENGTH / 2);
     const tokenCenterInSentence = tokenStartPos - sentenceStart + Math.floor((tokenEndPos - tokenStartPos) / 2);
 
-    let newStart = Math.max(0, tokenCenterInSentence - halfLength);
-    let newEnd = Math.min(sentence.length, tokenCenterInSentence + halfLength);
+    const newStart = Math.max(0, tokenCenterInSentence - halfLength);
+    const newEnd = Math.min(sentence.length, tokenCenterInSentence + halfLength);
 
     sentence = sentence.slice(newStart, newEnd).trim();
     // 添加省略号
@@ -158,6 +158,22 @@ export const TokenPopover: React.FC = () => {
   const dismiss = useDismiss(context);
   const { getFloatingProps } = useInteractions([dismiss]);
 
+  // 查询词典
+  const fetchDictionary = useCallback(async (word: string) => {
+    setIsDictLoading(true);
+    setDictError(null);
+
+    try {
+      const result = await searchDictionary(word);
+      setDictResult(result);
+    } catch (err) {
+      console.error('Dictionary query failed:', err);
+      setDictError('查询失败');
+    } finally {
+      setIsDictLoading(false);
+    }
+  }, []);
+
   // 当 selectedToken 变化时，重新定位到对应的 DOM 元素并查询词典
   useEffect(() => {
     if (selectedToken) {
@@ -175,23 +191,7 @@ export const TokenPopover: React.FC = () => {
       setDictResult(null);
       setDictError(null);
     }
-  }, [selectedToken, refs]);
-
-  // 查询词典
-  const fetchDictionary = useCallback(async (word: string) => {
-    setIsDictLoading(true);
-    setDictError(null);
-
-    try {
-      const result = await searchDictionary(word);
-      setDictResult(result);
-    } catch (err) {
-      console.error('Dictionary query failed:', err);
-      setDictError('查询失败');
-    } finally {
-      setIsDictLoading(false);
-    }
-  }, []);
+  }, [selectedToken, refs, fetchDictionary]);
 
   // 判断当前 Token 是否在高亮句中
   const isInHighlight = selectedToken
@@ -283,8 +283,8 @@ export const TokenPopover: React.FC = () => {
           book_id: bookId,
           word: selectedToken.text,
           base_form: baseForm,
-          reading: token.r || undefined,        // 从 Token 获取读音
-          part_of_speech: token.p || undefined,  // 从 Token 获取词性
+          reading: selectedToken.token.r || undefined,        // 从 Token 获取读音
+          part_of_speech: selectedToken.token.p || undefined,  // 从 Token 获取词性
           definition: definitionJson,            // 从词典查询结果获取定义
           context_sentences: contextSentence ? [contextSentence] : undefined,  // 例句
         });

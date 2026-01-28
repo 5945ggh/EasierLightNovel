@@ -18,7 +18,6 @@ import { clsx } from 'clsx';
 // ==========================================
 // 上下文提取常量
 // ==========================================
-const SEGMENT_SEPARATOR = '\n\n';      // 段落间分隔符（两个换行模拟空行）
 const MAX_CONTEXT_CHARS = 1200;         // 上下文最大字符数（硬性限制）
 const CONTEXT_SEGMENT_DEPTH = 2;        // 向前/向后最多取 2 个完整段落
 
@@ -409,14 +408,12 @@ const AITab: React.FC = () => {
     }
 
     // 锚点段落（高亮覆盖的段落）
-    const anchorStartIdx = contextSegments.length;
     for (let s = highlight.start_segment_index; s <= highlight.end_segment_index; s++) {
       const seg = chapter.segments[s];
       if (seg?.type === 'text') {
         contextSegments.push(stringifySegment(seg));
       }
     }
-    const anchorEndIdx = contextSegments.length - 1;
 
     // 向后收集
     for (let s = highlight.end_segment_index + 1;

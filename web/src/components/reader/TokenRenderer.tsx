@@ -5,7 +5,7 @@
  * 性能优化：使用 selector 订阅特定状态，避免 store 任何变化都触发重渲染
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import clsx from 'clsx';
 import { useReaderStore, getTokenKey } from '@/stores/readerStore';
 import type { TokenData } from '@/types/chapter';
