@@ -19,8 +19,8 @@ import { clsx } from 'clsx';
 // 上下文提取常量
 // ==========================================
 const SEGMENT_SEPARATOR = '\n\n';      // 段落间分隔符（两个换行模拟空行）
-const MAX_CONTEXT_CHARS = 1500;         // 上下文最大字符数
-const CONTEXT_SEGMENT_DEPTH = 3;        // 向前/向后最多取 3 个完整段落
+const MAX_CONTEXT_CHARS = 1200;         // 上下文最大字符数（硬性限制）
+const CONTEXT_SEGMENT_DEPTH = 2;        // 向前/向后最多取 2 个完整段落
 
 // ==========================================
 // 辅助函数：将一个 Segment 还原为字符串
@@ -34,6 +34,100 @@ const stringifySegment = (segment: ContentSegment): string => {
     const prefix = (t.gap && i > 0) ? ' ' : '';
     return prefix + t.s;
   }).join('');
+};
+
+// ==========================================
+// 辅助函数：按日语句子边界分割文本
+// ==========================================
+const splitIntoSentences = (text: string): string[] => {
+  if (!text) return [];
+
+  const sentences: string[] = [];
+  let current = '';
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    current += char;
+
+    // 日语句子结束标点：。！？ 以及后引号 」
+    if (char === '。' || char === '！' || char === '？' || char === '」') {
+      // 也检查后面是否跟引号
+      if (i + 1 < text.length && (text[i + 1] === '」' || text[i + 1] === '』')) {
+        current += text[i + 1];
+        i++;
+      }
+      sentences.push(current.trim());
+      current = '';
+    }
+  }
+
+  // 添加剩余内容（如果没有以句号结尾）
+  if (current.trim()) {
+    sentences.push(current.trim());
+  }
+
+  return sentences.filter(s => s.length > 0);
+};
+
+// ==========================================
+// 辅助函数：从句子数组构建上下文
+// targetSentenceIndex: 目标句子在数组中的索引
+// ==========================================
+const buildContextFromSentences = (
+  sentences: string[],
+  targetStartSentenceIndex: number,
+  targetEndSentenceIndex: number,
+  maxChars: number,
+  sentenceDepth: number
+): string => {
+  // 目标句子范围（确保不越界）
+  const startIdx = Math.max(0, targetStartSentenceIndex);
+  const endIdx = Math.min(sentences.length - 1, targetEndSentenceIndex);
+
+  // 目标句子
+  const targetSentences = sentences.slice(startIdx, endIdx + 1);
+  let combined = targetSentences.join('');
+
+  // 如果目标句子本身就超限，直接返回
+  if (combined.length >= maxChars) {
+    return combined.slice(0, maxChars);
+  }
+
+  // 向前扩展
+  let preIdx = startIdx - 1;
+  let preCount = 0;
+  const preSentences: string[] = [];
+
+  while (preIdx >= 0 && preCount < sentenceDepth) {
+    const sentence = sentences[preIdx];
+    const newLength = combined.length + sentence.length + preSentences.length; // +1 for space
+
+    if (newLength > maxChars) break;
+
+    preSentences.unshift(sentence);
+    combined = sentence + ' ' + combined;
+    preIdx--;
+    preCount++;
+  }
+
+  // 向后扩展
+  let postIdx = endIdx + 1;
+  let postCount = 0;
+  const postSentences: string[] = [];
+
+  while (postIdx < sentences.length && postCount < sentenceDepth) {
+    const sentence = sentences[postIdx];
+    const newLength = combined.length + sentence.length + 1;
+
+    if (newLength > maxChars) break;
+
+    combined += ' ' + sentence;
+    postSentences.push(sentence);
+    postIdx++;
+    postCount++;
+  }
+
+  return combined.trim();
 };
 
 // Tab 图标和标签配置
@@ -300,82 +394,97 @@ const AITab: React.FC = () => {
     const targetText = targetTokens.join('');
 
     // ------------------------------------------
-    // 2. 提取上下文（段落级扩展）
+    // 2. 提取上下文（句子级扩展策略）
     // ------------------------------------------
-    const anchorSegments: string[] = [];
-    let currentLength = 0;
+    // 2.1 收集前后各 N 个段落的完整文本
+    const contextSegments: string[] = [];
 
-    // 2.1 收集锚点段落（高亮覆盖的所有完整段落）
+    // 向前收集
+    for (let s = Math.max(0, highlight.start_segment_index - CONTEXT_SEGMENT_DEPTH);
+         s < highlight.start_segment_index; s++) {
+      const seg = chapter.segments[s];
+      if (seg?.type === 'text') {
+        contextSegments.push(stringifySegment(seg));
+      }
+    }
+
+    // 锚点段落（高亮覆盖的段落）
+    const anchorStartIdx = contextSegments.length;
     for (let s = highlight.start_segment_index; s <= highlight.end_segment_index; s++) {
       const seg = chapter.segments[s];
       if (seg?.type === 'text') {
-        const segText = stringifySegment(seg);
-        anchorSegments.push(segText);
-        currentLength += segText.length;
+        contextSegments.push(stringifySegment(seg));
+      }
+    }
+    const anchorEndIdx = contextSegments.length - 1;
+
+    // 向后收集
+    for (let s = highlight.end_segment_index + 1;
+         s < Math.min(chapter.segments.length, highlight.end_segment_index + 1 + CONTEXT_SEGMENT_DEPTH); s++) {
+      const seg = chapter.segments[s];
+      if (seg?.type === 'text') {
+        contextSegments.push(stringifySegment(seg));
       }
     }
 
-    // 2.2 向前扩展（前文）
-    const preSegments: string[] = [];
-    let preSegIdx = highlight.start_segment_index - 1;
-    let preCount = 0;
+    // 2.2 将所有段落拼接并按句子分割
+    const fullText = contextSegments.join('');
+    const sentences = splitIntoSentences(fullText);
 
-    while (preSegIdx >= 0 && preCount < CONTEXT_SEGMENT_DEPTH) {
-      const seg = chapter.segments[preSegIdx];
-      if (seg?.type === 'text') {
-        const segText = stringifySegment(seg);
+    if (sentences.length === 0) {
+      return { targetText, contextText: '' };
+    }
 
-        // 检查是否会超过限制
-        if (currentLength + segText.length > MAX_CONTEXT_CHARS) {
-          // 尝试部分添加（取末尾部分以保持连贯性）
-          const remaining = MAX_CONTEXT_CHARS - currentLength;
-          if (remaining > 10) { // 至少留 10 个字符
-            preSegments.unshift(segText.slice(-remaining));
-            currentLength = MAX_CONTEXT_CHARS;
-          }
+    // 2.3 找到 targetText 对应的句子索引范围
+    // 通过计算 targetText 在完整文本中的位置来定位
+    const targetTextStartPos = fullText.indexOf(targetText);
+    let targetSentenceStartIdx = 0;
+    let targetSentenceEndIdx = 0;
+
+    if (targetTextStartPos >= 0) {
+      // 找到 targetText 起始位置对应的句子
+      let pos = 0;
+      for (let i = 0; i < sentences.length; i++) {
+        const sentenceEnd = pos + sentences[i].length;
+        if (pos <= targetTextStartPos && targetTextStartPos < sentenceEnd) {
+          targetSentenceStartIdx = i;
           break;
         }
-
-        preSegments.unshift(segText); // 倒序添加到数组开头
-        currentLength += segText.length;
-        preCount++;
+        pos = sentenceEnd + 1; // +1 for space
       }
-      preSegIdx--;
-    }
 
-    // 2.3 向后扩展（后文）
-    const postSegments: string[] = [];
-    let postSegIdx = highlight.end_segment_index + 1;
-    let postCount = 0;
-
-    while (postSegIdx < chapter.segments.length && postCount < CONTEXT_SEGMENT_DEPTH) {
-      const seg = chapter.segments[postSegIdx];
-      if (seg?.type === 'text') {
-        const segText = stringifySegment(seg);
-
-        if (currentLength + segText.length > MAX_CONTEXT_CHARS) {
-          // 尝试部分添加（取开头部分）
-          const remaining = MAX_CONTEXT_CHARS - currentLength;
-          if (remaining > 10) {
-            postSegments.push(segText.slice(0, remaining));
-            currentLength = MAX_CONTEXT_CHARS;
-          }
+      // 找到 targetText 结束位置对应的句子
+      const targetTextEndPos = targetTextStartPos + targetText.length;
+      pos = 0;
+      for (let i = 0; i < sentences.length; i++) {
+        const sentenceEnd = pos + sentences[i].length;
+        if (pos <= targetTextEndPos && targetTextEndPos <= sentenceEnd) {
+          targetSentenceEndIdx = i;
           break;
         }
-
-        postSegments.push(segText);
-        currentLength += segText.length;
-        postCount++;
+        pos = sentenceEnd + 1;
       }
-      postSegIdx++;
     }
 
-    // 2.4 组装上下文：[前文段落] [锚点段落] [后文段落]
-    const contextText = [
-      ...preSegments,
-      ...anchorSegments,
-      ...postSegments,
-    ].join(SEGMENT_SEPARATOR).trim();
+    // 2.4 使用句子级扩展构建上下文
+    const contextText = buildContextFromSentences(
+      sentences,
+      targetSentenceStartIdx,
+      targetSentenceEndIdx,
+      MAX_CONTEXT_CHARS,
+      3 // 前后各 3 个句子
+    );
+
+    // 调试日志
+    console.log('[Context Debug] ', {
+      highlightRange: `${highlight.start_segment_index}-${highlight.end_segment_index}`,
+      totalSegments: contextSegments.length,
+      totalSentences: sentences.length,
+      targetSentenceRange: `${targetSentenceStartIdx}-${targetSentenceEndIdx}`,
+      targetTextLength: targetText.length,
+      contextTextLength: contextText.length,
+      limit: MAX_CONTEXT_CHARS,
+    });
 
     return {
       targetText,
