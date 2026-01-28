@@ -6,7 +6,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db, check_db_connection
-from app.config import DATA_DIR, UPLOAD_DIR, STATIC_URL_PREFIX, HOST, PORT, CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR
+from app.config import (
+    DATA_DIR, UPLOAD_DIR, STATIC_URL_PREFIX, HOST, PORT,
+    CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR
+)
 import os
 
 

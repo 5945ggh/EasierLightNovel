@@ -2,6 +2,15 @@
   "$schema": "./schema.json",
   "backend": {
     "host": "127.0.0.1",
-    "port": 8010
+    "port": 8011
+  },
+  "frontend": {
+    "port": 5174
+  },
+  "cors": {
+    "allowed_origins": [
+      "http://localhost:5174",
+      "http://127.0.0.1:5174"
+    ]
   }
 }

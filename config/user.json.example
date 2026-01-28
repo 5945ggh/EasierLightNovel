@@ -4,8 +4,19 @@
     "host": "127.0.0.1",
     "port": 8010
   },
+  "frontend": {
+    "port": 5173
+  },
+  "cors": {
+    "allowed_origins": [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ]
+  },
   "_comment": {
     "backend.host": "后端监听地址，0.0.0.0 表示所有网卡，127.0.0.1 表示本地",
-    "backend.port": "后端端口，如果 8010 被占用可修改为其他端口（如 8011、8000 等）"
+    "backend.port": "后端端口",
+    "frontend.port": "前端端口（Vite 开发服务器或构建后预览）",
+    "cors.allowed_origins": "修改端口时需同步更新此配置"
   }
 }

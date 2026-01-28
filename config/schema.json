@@ -22,7 +22,36 @@
         }
       },
       "required": ["host", "port"]
+    },
+    "frontend": {
+      "type": "object",
+      "description": "前端开发服务配置",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "description": "前端端口",
+          "minimum": 1024,
+          "maximum": 65535,
+          "default": 5173
+        }
+      },
+      "required": ["port"]
+    },
+    "cors": {
+      "type": "object",
+      "description": "CORS 跨域配置",
+      "properties": {
+        "allowed_origins": {
+          "type": "array",
+          "description": "允许的前端地址列表（修改端口时需同步更新）",
+          "items": {
+            "type": "string"
+          },
+          "default": ["http://localhost:5173", "http://127.0.0.1:5173"]
+        }
+      },
+      "required": ["allowed_origins"]
     }
   },
-  "required": ["backend"]
+  "required": ["backend", "cors"]
 }

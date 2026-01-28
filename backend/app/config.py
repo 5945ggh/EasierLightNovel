@@ -43,10 +43,11 @@ def _get_config(key: str, default: Any = None, env_var: str = "") -> Any:
     if env_var and env_var in os.environ:
         return os.environ[env_var]
 
-    # 2. 检查 user.json
-    if _USER_CONFIG:
+    # 2. 检查 user.json（每次重新读取，避免热重载时丢失）
+    user_config = _load_user_config()
+    if user_config:
         keys = key.split(".")
-        value = _USER_CONFIG
+        value = user_config
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
@@ -73,10 +74,24 @@ HOST = _get_config("backend.host", "0.0.0.0", "HOST")
 PORT = int(_get_config("backend.port", 8010, "PORT"))
 
 # ==================== CORS ====================
-CORS_ALLOWED_ORIGINS = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:3000"
-).split(",")
+# 从配置文件读取允许的 origins
+# 优先级: 环境变量 > user.json > 默认值
+def _get_cors_origins() -> list[str]:
+    """获取 CORS 允许的 origins 列表"""
+    # 1. 从环境变量获取（最高优先级）
+    env_origins = os.getenv("CORS_ORIGINS")
+    if env_origins:
+        return env_origins.split(",")
+
+    # 2. 从 user.json 读取 cors.allowed_origins
+    user_origins = _get_config("cors.allowed_origins", None)
+    if user_origins and isinstance(user_origins, list):
+        return user_origins
+
+    # 3. 默认值
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+CORS_ALLOWED_ORIGINS = _get_cors_origins()
 CORS_ALLOW_CREDENTIALS = True
 
 # ==================== 文件上传 ====================

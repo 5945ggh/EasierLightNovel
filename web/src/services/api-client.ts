@@ -25,15 +25,44 @@ export interface ApiError {
 }
 
 /**
+ * 获取初始 API 基础 URL
+ * 开发环境使用 Vite 代理 (/api)，生产环境使用当前 origin
+ */
+function getInitialBaseURL(): string {
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+  // 生产环境：使用当前页面的 origin + /api
+  return `${window.location.origin}/api`;
+}
+
+/**
  * 创建 axios 实例
  */
 const rawApiClient = axios.create({
-  baseURL: '/api',
+  baseURL: getInitialBaseURL(),
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+/**
+ * 动态更新 baseURL
+ * 用于运行时切换后端地址
+ *
+ * @param url 新的 baseURL
+ */
+export function setBaseURL(url: string): void {
+  rawApiClient.defaults.baseURL = url;
+}
+
+/**
+ * 获取当前 baseURL
+ */
+export function getBaseURL(): string {
+  return rawApiClient.defaults.baseURL as string;
+}
 
 /**
  * 响应拦截器 - 自动解包 data

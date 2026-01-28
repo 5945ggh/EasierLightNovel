@@ -3,8 +3,11 @@
  */
 
 // API 客户端
-export { default as apiClient } from './api-client';
+export { default as apiClient, setBaseURL, getBaseURL } from './api-client';
 export type { ApiError, ApiResponse } from './api-client';
+
+// 配置服务
+export * from './config.service';
 
 // 书籍服务
 export * from './books.service';
