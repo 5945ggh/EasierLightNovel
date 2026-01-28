@@ -102,14 +102,14 @@ class Vocabulary(Base):
 class UserHighlight(Base):
     """
     纯粹的划线实体。
-    代表了用户在书上留下的“痕迹”。
+    代表了用户在书上留下的"痕迹"。
     """
     __tablename__ = "user_highlights"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     book_id = Column(String(32), ForeignKey("books.id"), index=True)
     chapter_index = Column(Integer, nullable=False)
-    
+
     # === 起点坐标 (Start Anchor) ===
     start_segment_index = Column(Integer, nullable=False)
     start_token_idx = Column(Integer, nullable=False)
@@ -117,15 +117,15 @@ class UserHighlight(Base):
     # === 终点坐标 (End Anchor) ===
     end_segment_index = Column(Integer, nullable=False)
     end_token_idx = Column(Integer, nullable=False)
-    
+
     # === 视觉属性 ===
     # 允许用户自定义颜色类别，如: 'grammar'(红), 'vocab'(黄), 'favorite'(粉), ...
-    style_category = Column(String(32), default="default") 
-    
+    style_category = Column(String(32), default="default")
+
     # === 数据快照 ===
     # 存储选中的纯文本，既用于校验，也用于列表页展示
     selected_text = Column(Text, nullable=False)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -134,6 +134,13 @@ class UserHighlight(Base):
     archive = relationship("ArchiveItem", back_populates="highlight", uselist=False, cascade="all, delete-orphan")
 
     book = relationship("Book", back_populates="highlights")
+
+    @property
+    def has_archive(self) -> bool:
+        """是否有对应的积累本条目"""
+        # lazy='select' 时访问 self.archive 会触发额外查询
+        # 调用方应使用 joinedload/selectinload 预加载
+        return self.archive is not None
 
 
 class ArchiveItem(Base):

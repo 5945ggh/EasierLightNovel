@@ -119,6 +119,7 @@ class VocabularyBase(BaseModel):
 class VocabularyCreate(VocabularyBase):
     """添加生词请求"""
     book_id: str
+    context_sentences: Optional[List[str]] = Field(None, description="例句列表")
 
 class VocabularyResponse(VocabularyBase):
     """生词响应"""
@@ -163,6 +164,7 @@ class HighlightResponse(HighlightCreate):
     """划线响应"""
     id: int
     created_at: datetime
+    has_Archive: bool = Field(False, description="划线句是否有对应的Archive条目")
 
     class Config:
         from_attributes = True

@@ -89,11 +89,18 @@ class ProgressService:
             # 创建新记录
             progress = UserProgress(book_id=book_id)
             self.db.add(progress)
+            self.db.flush()  # flush 确保 progress 有 ID
+            logger.info(f"Created new progress record for book: {book_id}")
 
-        # 3. 批量更新字段
-        update_data = data.model_dump()
-        for field, value in update_data.items():
-            setattr(progress, field, value)
+        # 3. 手动更新每个字段（避免 model_dump 的潜在问题）
+        try:
+            progress.current_chapter_index = data.current_chapter_index
+            progress.current_segment_index = data.current_segment_index
+            progress.current_segment_offset = data.current_segment_offset
+        except Exception as e:
+            logger.error(f"Error setting progress fields: {e}")
+            logger.error(f"data = {data.model_dump()}")
+            raise
 
         self.db.commit()
         self.db.refresh(progress)

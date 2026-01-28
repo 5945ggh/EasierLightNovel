@@ -57,9 +57,9 @@ class VocabularyService:
             base_form=data.base_form,
             part_of_speech=data.part_of_speech,
             status=0,  # 新学
-            definition=None,
+            definition=data.definition,
             next_review_at=None,
-            context_sentences=None
+            context_sentences=data.context_sentences
         )
 
         self.db.add(new_vocabulary)

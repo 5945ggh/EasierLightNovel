@@ -1,8 +1,7 @@
 # app/services/highlight_service.py
 import logging
-import json
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from fastapi import HTTPException, status
 
 from app.models import UserHighlight, Book, Chapter, ArchiveItem
@@ -109,9 +108,10 @@ class HighlightService:
         Returns:
             UserHighlight | None
         """
-        return self.db.query(UserHighlight).filter(
-            UserHighlight.id == highlight_id
-        ).first()
+        return self.db.query(UserHighlight)\
+            .options(selectinload(UserHighlight.archive))\
+            .filter(UserHighlight.id == highlight_id)\
+            .first()
 
     def get_book_highlights(
         self,
@@ -131,9 +131,9 @@ class HighlightService:
         Returns:
             List[UserHighlight]: 划线列表 (ORM 对象)
         """
-        query = self.db.query(UserHighlight).filter(
-            UserHighlight.book_id == book_id
-        )
+        query = self.db.query(UserHighlight)\
+            .options(selectinload(UserHighlight.archive))\
+            .filter(UserHighlight.book_id == book_id)
 
         if chapter_index is not None:
             query = query.filter(UserHighlight.chapter_index == chapter_index)
@@ -156,6 +156,7 @@ class HighlightService:
             List[UserHighlight]: 本章节的高亮列表
         """
         return self.db.query(UserHighlight)\
+            .options(selectinload(UserHighlight.archive))\
             .filter(
                 UserHighlight.book_id == book_id,
                 UserHighlight.chapter_index == chapter_index
