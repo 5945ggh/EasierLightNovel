@@ -62,6 +62,8 @@ interface ReaderState {
   // 高亮数据
   highlights: ChapterHighlightData[];  // 当前章节的高亮
   highlightMap: HighlightMap;
+  /** highlightMap 版本号，每次更新 highlightMap 时递增，用于触发 Token 组件更新 */
+  highlightRevision: number;
   // 待同步的高亮（乐观更新但尚未收到服务器响应）
   pendingHighlights: PendingHighlight[];
   // 整本书的高亮数据（用于高亮列表跨章节显示）
@@ -247,6 +249,7 @@ const createDefaultState = (): ReaderState => ({
   vocabularies: [],
   highlights: [],
   highlightMap: new Map(),
+  highlightRevision: 0,
   pendingHighlights: [],
   allHighlights: [],
   allChapterList: [],
@@ -277,13 +280,14 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
 
   setChapter: (chapter) => {
     const highlights = chapter?.highlights ?? [];
-    set({
+    set((state) => ({
       // 清理上一章的临时高亮，避免跨章污染
       pendingHighlights: [],
       chapter,
       highlights,
       highlightMap: buildHighlightMap(highlights, [], chapter?.segments),
-    });
+      highlightRevision: state.highlightRevision + 1,
+    }));
     // 异步检查 AI 分析状态
     if (highlights.length > 0) {
       get().checkHighlightsAIStatus(highlights);
@@ -350,6 +354,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
     set((state) => ({
       highlights,
       highlightMap: buildHighlightMap(highlights, state.pendingHighlights, state.chapter?.segments),
+      highlightRevision: state.highlightRevision + 1,
     })),
 
   addHighlight: (highlight) =>
@@ -370,6 +375,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
         highlights: newHighlights,
         allHighlights: newAllHighlights,
         highlightMap: buildHighlightMap(newHighlights, state.pendingHighlights, state.chapter?.segments),
+        highlightRevision: state.highlightRevision + 1,
       };
     }),
 
@@ -379,6 +385,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
       return {
         pendingHighlights: newPending,
         highlightMap: buildHighlightMap(state.highlights, newPending, state.chapter?.segments),
+        highlightRevision: state.highlightRevision + 1,
       };
     }),
 
@@ -391,6 +398,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
         highlights: newHighlights,
         allHighlights: newAllHighlights,
         highlightMap: buildHighlightMap(newHighlights, state.pendingHighlights, state.chapter?.segments),
+        highlightRevision: state.highlightRevision + 1,
       };
     }),
 
@@ -400,6 +408,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
       return {
         pendingHighlights: newPending,
         highlightMap: buildHighlightMap(state.highlights, newPending, state.chapter?.segments),
+        highlightRevision: state.highlightRevision + 1,
       };
     }),
 

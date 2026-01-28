@@ -46,24 +46,21 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
     // 2. 只订阅 actions（函数引用稳定，不会触发重渲染）
     const setSelectedToken = useReaderStore((s) => s.setSelectedToken);
 
-    // 3. 只订阅 vocabularySet，用于判断生词
-    const vocabularySet = useReaderStore((s) => s.vocabularySet);
+    // 3. 订阅生词状态 - 使用 selector 只在匹配时才触发重渲染
+    // 这样添加/删除生词时，只有相关的 Token 会重新渲染
+    const isVocab = useReaderStore((s) =>
+      token.b ? s.vocabularySet.has(token.b) : false
+    );
 
     // 4. 订阅高亮相关状态
-    // 同时订阅 highlights 和 pendingHighlights 以触发重渲染
-    // 这是因为 highlightMap 是 Map 对象，直接读取 .get() 结果不会触发 Map 内容变化的更新
-    useReaderStore((s) => s.highlights.length + s.pendingHighlights.length);
+    // 订阅 highlightRevision 以在 highlightMap 更新时触发重渲染
+    // 使用 highlightRevision 而不是 highlights.length，这样只有版本号变化时才触发
+    useReaderStore((s) => s.highlightRevision);
     const highlightStyle = useReaderStore((s) =>
       s.highlightMap.get(getTokenKey(segmentIndex, tokenIndex))
     );
 
-    // 5. 判断是否是生词 (O(1) 查找)
-    const isVocab = useMemo(
-      () => (token.b ? vocabularySet.has(token.b) : false),
-      [token.b, vocabularySet]
-    );
-
-    // 6. 点击处理（使用 useCallback 稳定引用）
+    // 5. 点击处理（使用 useCallback 稳定引用）
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
         // 如果用户正在划线（Selection 不为空），则阻止点击事件，优先处理划线
