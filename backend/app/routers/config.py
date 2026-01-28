@@ -9,14 +9,17 @@ from app.schemas import (
     PublicConfigResponse,
     ConfigLimits,
     FeatureFlags,
-    HighlightStyleInfo
+    HighlightStyleInfo,
+    BackendInfo
 )
 from app.config import (
     LLMConfig,
     UPLOAD_MAX_FILE_SIZE,
     QUERY_DEFAULT_LIMIT,
     QUERY_MAX_LIMIT,
-    HIGHLIGHT_STYLE_CATEGORIES
+    HIGHLIGHT_STYLE_CATEGORIES,
+    HOST,
+    PORT
 )
 
 router = APIRouter(prefix="/api/config", tags=["Config"])
@@ -33,6 +36,7 @@ def get_public_config():
 
     **返回内容**：
     - `version`: API 版本号
+    - `backend`: 后端服务器信息（地址、端口、URL）
     - `limits`: 各种长度和大小限制
     - `features`: 功能开关
     - `highlight_styles`: 划线样式配置（颜色、名称）
@@ -45,6 +49,11 @@ def get_public_config():
     ```json
     {
       "version": "0.1.0",
+      "backend": {
+        "host": "127.0.0.1",
+        "port": 8010,
+        "url": "http://127.0.0.1:8010"
+      },
       "limits": {
         "max_target_length": 512,
         "max_context_length": 2048,
@@ -71,8 +80,18 @@ def get_public_config():
         for key, value in HIGHLIGHT_STYLE_CATEGORIES.items()
     }
 
+    # 构建后端 URL（用于前端 API 请求）
+    # 如果 host 是 0.0.0.0，前端需要用 localhost 或 127.0.0.1
+    backend_host = HOST if HOST != "0.0.0.0" else "127.0.0.1"
+    backend_url = f"http://{backend_host}:{PORT}"
+
     return PublicConfigResponse(
         version="0.1.0",
+        backend=BackendInfo(
+            host=HOST,
+            port=PORT,
+            url=backend_url,
+        ),
         limits=ConfigLimits(
             max_target_length=LLMConfig.AI_MAX_TARGET_LENGTH,
             max_context_length=LLMConfig.AI_MAX_CONTEXT_LENGTH,

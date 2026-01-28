@@ -313,9 +313,17 @@ class ConfigLimits(BaseModel):
     query_max_limit: int = Field(..., description="查询最大限制")
 
 
+class BackendInfo(BaseModel):
+    """后端服务器信息"""
+    host: str = Field(..., description="后端监听地址")
+    port: int = Field(..., description="后端端口")
+    url: str = Field(..., description="后端基础 URL（供前端使用）")
+
+
 class PublicConfigResponse(BaseModel):
     """公共配置响应（供前端使用）"""
     version: str = Field(..., description="API 版本")
+    backend: BackendInfo
     limits: ConfigLimits
     features: FeatureFlags
     highlight_styles: dict[str, HighlightStyleInfo]

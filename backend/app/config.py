@@ -1,9 +1,10 @@
 # app/config.py
 # 统一配置管理
-# 环境变量配置见项目根目录 .env 文件
+# 配置优先级: 环境变量 > config/user.json > 代码默认值
 import os
+import json
 from pathlib import Path
-from typing import Set, Dict
+from typing import Set, Dict, Any
 
 # ==================== 基础路径 ====================
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -11,6 +12,53 @@ DATA_DIR = os.getenv("DATA_DIR", str(BASE_DIR / "static_data"))
 UPLOAD_DIR = os.path.join(DATA_DIR, "books")
 TEMP_UPLOAD_DIR = os.getenv("TEMP_UPLOAD_DIR", str(BASE_DIR / "backend" / "temp_uploads"))
 STATIC_URL_PREFIX = "/static"
+
+
+# ==================== 用户配置文件 ====================
+def _load_user_config() -> Dict[str, Any]:
+    """加载用户配置文件 config/user.json（如果存在）"""
+    config_path = BASE_DIR / "config" / "user.json"
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Failed to load user config from {config_path}: {e}")
+    return {}
+
+
+_USER_CONFIG = _load_user_config()
+
+
+def _get_config(key: str, default: Any = None, env_var: str = "") -> Any:
+    """
+    获取配置值，优先级：环境变量 > user.json > 默认值
+
+    Args:
+        key: user.json 中的键路径（点分隔，如 "backend.port"）
+        default: 默认值
+        env_var: 环境变量名
+    """
+    # 1. 优先检查环境变量
+    if env_var and env_var in os.environ:
+        return os.environ[env_var]
+
+    # 2. 检查 user.json
+    if _USER_CONFIG:
+        keys = key.split(".")
+        value = _USER_CONFIG
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                value = None
+                break
+        if value is not None:
+            return value
+
+    # 3. 返回默认值
+    return default
+
 
 # ==================== 数据库 ====================
 DB_PATH = os.path.join(DATA_DIR, "library.db")
@@ -20,8 +68,9 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
 )
 
 # ==================== 服务器 ====================
-HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", 8010))
+# 优先级: 环境变量 > user.json > 默认值
+HOST = _get_config("backend.host", "0.0.0.0", "HOST")
+PORT = int(_get_config("backend.port", 8010, "PORT"))
 
 # ==================== CORS ====================
 CORS_ALLOWED_ORIGINS = os.getenv(

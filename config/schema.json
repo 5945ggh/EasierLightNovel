@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "User Configuration",
+  "description": "用户配置文件，用于自定义应用设置",
+  "type": "object",
+  "properties": {
+    "backend": {
+      "type": "object",
+      "description": "后端服务配置",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "后端监听地址",
+          "default": "127.0.0.1"
+        },
+        "port": {
+          "type": "integer",
+          "description": "后端端口",
+          "minimum": 1024,
+          "maximum": 65535,
+          "default": 8010
+        }
+      },
+      "required": ["host", "port"]
+    }
+  },
+  "required": ["backend"]
+}
