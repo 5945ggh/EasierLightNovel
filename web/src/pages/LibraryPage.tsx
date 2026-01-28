@@ -4,7 +4,8 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Plus, UploadCloud, Library as LibraryIcon, Loader2, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Plus, UploadCloud, Library as LibraryIcon, Loader2, FileText, CheckCircle, AlertCircle, BrainCircuit } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useLibrary } from '@/hooks/useLibrary';
 import { BookCard } from '@/components/library/BookCard';
 import { EditBookModal } from '@/components/library/EditBookModal';
@@ -249,32 +250,44 @@ export const LibraryPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 上传按钮 */}
-        <div>
-          <input
-            type='file'
-            ref={fileInputRef}
-            className='hidden'
-            accept='.epub'
-            onChange={handleFileChange}
-          />
-          <button
-            disabled={isUploading}
-            onClick={() => fileInputRef.current?.click()}
-            className='flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed font-medium text-sm'
+        {/* 右侧按钮组 */}
+        <div className='flex items-center gap-3'>
+          {/* 学习中心入口 */}
+          <Link
+            to='/study'
+            className='flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm'
           >
-            {isUploading ? (
-              <>
-                <Loader2 size={18} className='animate-spin' />
-                <span>上传中...</span>
-              </>
-            ) : (
-              <>
-                <Plus size={18} />
-                <span>导入 EPUB</span>
-              </>
-            )}
-          </button>
+            <BrainCircuit size={18} className='text-indigo-500' />
+            <span>学习中心</span>
+          </Link>
+
+          {/* 上传按钮 */}
+          <div>
+            <input
+              type='file'
+              ref={fileInputRef}
+              className='hidden'
+              accept='.epub'
+              onChange={handleFileChange}
+            />
+            <button
+              disabled={isUploading}
+              onClick={() => fileInputRef.current?.click()}
+              className='flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed font-medium text-sm'
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 size={18} className='animate-spin' />
+                  <span>上传中...</span>
+                </>
+              ) : (
+                <>
+                  <Plus size={18} />
+                  <span>导入 EPUB</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 

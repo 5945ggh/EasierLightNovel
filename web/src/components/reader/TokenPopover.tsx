@@ -29,6 +29,80 @@ import { clsx } from 'clsx';
  */
 const HIGHLIGHT_STYLE_COLORS = ['yellow', 'green', 'blue', 'pink', 'purple'];
 
+// 例句最大长度限制
+const MAX_CONTEXT_SENTENCE_LENGTH = 100;
+
+/**
+ * 从段落中截取包含指定 Token 的句子
+ * 按日语标点（。！？」）分割句子，限制最大长度
+ */
+const extractSentenceFromSegment = (
+  segmentIndex: number,
+  tokenIndex: number,
+  segments?: import('@/types').ContentSegment[]
+): string | null => {
+  if (!segments) return null;
+
+  const segment = segments[segmentIndex];
+  if (segment?.type !== 'text' || !segment.tokens) return null;
+
+  // 构建段落文本
+  let segmentText = '';
+  const tokenPositions: number[] = [];  // 记录每个 token 在段落文本中的起始位置
+  let currentPos = 0;
+
+  for (const t of segment.tokens) {
+    const prefix = (t.gap && currentPos > 0) ? ' ' : '';
+    if (prefix) currentPos += 1;
+    tokenPositions.push(currentPos);
+    segmentText += prefix + t.s;
+    currentPos += t.s.length;
+  }
+
+  // 找到当前 token 在段落文本中的位置
+  const tokenStartPos = tokenPositions[tokenIndex] ?? 0;
+  const tokenEndPos = tokenStartPos + (segment.tokens[tokenIndex]?.s?.length ?? 0);
+
+  // 按日语标点分割句子
+  const sentenceEndMarks = ['。', '！', '？', '」', '』', '）', '(', '「', '『'];
+  let sentenceStart = 0;
+  let sentenceEnd = segmentText.length;
+
+  // 向前找句子起点
+  for (let i = tokenStartPos - 1; i >= 0; i--) {
+    if (sentenceEndMarks.includes(segmentText[i])) {
+      sentenceStart = i + 1;
+      break;
+    }
+  }
+
+  // 向后找句子终点
+  for (let i = tokenEndPos; i < segmentText.length; i++) {
+    if (sentenceEndMarks.includes(segmentText[i])) {
+      sentenceEnd = i + 1;
+      break;
+    }
+  }
+
+  let sentence = segmentText.slice(sentenceStart, sentenceEnd).trim();
+
+  // 长度限制：如果超过限制，以 token 为中心截取
+  if (sentence.length > MAX_CONTEXT_SENTENCE_LENGTH) {
+    const halfLength = Math.floor(MAX_CONTEXT_SENTENCE_LENGTH / 2);
+    const tokenCenterInSentence = tokenStartPos - sentenceStart + Math.floor((tokenEndPos - tokenStartPos) / 2);
+
+    let newStart = Math.max(0, tokenCenterInSentence - halfLength);
+    let newEnd = Math.min(sentence.length, tokenCenterInSentence + halfLength);
+
+    sentence = sentence.slice(newStart, newEnd).trim();
+    // 添加省略号
+    if (newStart > 0) sentence = '...' + sentence;
+    if (newEnd < segmentText.length) sentence = sentence + '...';
+  }
+
+  return sentence.length > 0 ? sentence : null;
+};
+
 export const TokenPopover: React.FC = () => {
   const selectedToken = useReaderStore((s) => s.selectedToken);
   const setSelectedToken = useReaderStore((s) => s.setSelectedToken);
@@ -40,6 +114,7 @@ export const TokenPopover: React.FC = () => {
   const highlights = useReaderStore((s) => s.highlights);
   const vocabularySet = useReaderStore((s) => s.vocabularySet);
   const bookId = useReaderStore((s) => s.bookId);
+  const chapter = useReaderStore((s) => s.chapter);
   const isSidebarOpen = useReaderStore((s) => s.isSidebarOpen);
   const setIsSidebarOpen = useReaderStore((s) => s.setIsSidebarOpen);
   const setActiveTab = useReaderStore((s) => s.setActiveTab);
@@ -191,10 +266,27 @@ export const TokenPopover: React.FC = () => {
       addVocabularyOpt(baseForm);
       // 发送请求并保存完整记录
       try {
+        // 构建 definition JSON（如果有词典结果）
+        let definitionJson: string | undefined;
+        if (dictResult && dictResult.found && dictResult.entries.length > 0) {
+          definitionJson = JSON.stringify(dictResult.entries);
+        }
+
+        // 截取上下文句子（例句）
+        const contextSentence = extractSentenceFromSegment(
+          selectedToken.segmentIndex,
+          selectedToken.tokenIndex,
+          chapter?.segments
+        );
+
         const result = await addVocabularyService({
           book_id: bookId,
           word: selectedToken.text,
           base_form: baseForm,
+          reading: token.r || undefined,        // 从 Token 获取读音
+          part_of_speech: token.p || undefined,  // 从 Token 获取词性
+          definition: definitionJson,            // 从词典查询结果获取定义
+          context_sentences: contextSentence ? [contextSentence] : undefined,  // 例句
         });
         // 保存完整记录（包含 id），以便后续删除操作使用
         addVocabularyRecord(result);
@@ -207,7 +299,7 @@ export const TokenPopover: React.FC = () => {
 
     // 关闭弹窗
     setSelectedToken(null);
-  }, [selectedToken, bookId, isVocab, addVocabularyOpt, removeVocabularyOpt, addVocabularyRecord, getVocabularyId, setSelectedToken]);
+  }, [selectedToken, bookId, isVocab, addVocabularyOpt, removeVocabularyOpt, addVocabularyRecord, getVocabularyId, setSelectedToken, dictResult, chapter]);
 
   /**
    * 打开词典侧边栏查看详情

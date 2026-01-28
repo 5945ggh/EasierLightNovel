@@ -1,7 +1,7 @@
 /**
  * SelectionMenu - 划线工具栏
  * 当用户选中一段文本时，显示悬浮工具栏
- * 功能：高亮（多种颜色）、读音、添加到生词本
+ * 功能：高亮（多种颜色）、朗读、删除高亮
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -15,10 +15,9 @@ import {
   useInteractions,
   FloatingPortal,
 } from '@floating-ui/react';
-import { Volume2, BookPlus, X, Trash2 } from 'lucide-react';
+import { Volume2, X, Trash2 } from 'lucide-react';
 import { useReaderStore, type PendingHighlight } from '@/stores/readerStore';
 import { createHighlight, deleteHighlight } from '@/services/highlights.service';
-import { addVocabulary as addVocabularyService } from '@/services/vocabularies.service';
 import { speak } from '@/utils/tts';
 import { clsx } from 'clsx';
 
@@ -62,7 +61,6 @@ export const SelectionMenu: React.FC = () => {
     highlights,
     bookId,
     chapterIndex,
-    addVocabulary
   } = useReaderStore();
 
   // Floating UI 配置
@@ -277,24 +275,6 @@ export const SelectionMenu: React.FC = () => {
   }, []);
 
   /**
-   * 处理添加到生词本（将整个选区作为生词）
-   */
-  const handleAddToVocabulary = useCallback(() => {
-    if (!coords || !bookId) return;
-
-    const text = coords.text;
-
-    // 乐观更新
-    addVocabulary(text);
-
-    // 发送请求
-    addVocabularyService({ book_id: bookId, word: text, base_form: text }).catch(console.error);
-
-    setIsOpen(false);
-    window.getSelection()?.removeAllRanges();
-  }, [coords, bookId, addVocabulary]);
-
-  /**
    * 处理删除高亮
    */
   const handleDeleteHighlight = useCallback(async () => {
@@ -389,13 +369,6 @@ export const SelectionMenu: React.FC = () => {
                 title="朗读"
               >
                 <Volume2 size={16} />
-              </button>
-              <button
-                onClick={handleAddToVocabulary}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-200 transition-colors"
-                title="添加到生词本"
-              >
-                <BookPlus size={16} />
               </button>
               <button
                 onClick={() => {

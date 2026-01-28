@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { ReaderPage } from '@/pages/ReaderPage';
+import StudyPage from '@/pages/StudyPage';
 import { initConfig } from '@/services/config.service';
 
 // 创建 React Query 客户端
@@ -68,6 +69,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<LibraryPage />} />
+            <Route path="/study" element={<StudyPage />} />
             <Route path="/read/:bookId" element={<ReaderPage />} />
           </Routes>
         </BrowserRouter>

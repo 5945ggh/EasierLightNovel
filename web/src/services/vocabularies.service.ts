@@ -7,6 +7,7 @@ import type {
   VocabularyCreate,
   VocabularyResponse,
 } from '@/types';
+import { getBooks } from './books.service';
 
 /**
  * 添加生词到生词本
@@ -42,4 +43,22 @@ export const getVocabulary = async (vocabularyId: number): Promise<VocabularyRes
  */
 export const deleteVocabulary = async (vocabularyId: number): Promise<{ ok: boolean }> => {
   return apiClient.delete<{ ok: boolean }>(`/vocabularies/${vocabularyId}`);
+};
+
+/**
+ * 获取所有生词（前端聚合，跨书籍）
+ * @returns 所有生词列表（带书名）
+ */
+export const getAllVocabularies = async (): Promise<Array<VocabularyResponse & { book_title: string }>> => {
+  const books = await getBooks();
+  const bookMap = new Map(books.map(b => [b.id, b.title]));
+
+  const results = await Promise.allSettled(
+    books.map(book => getBookVocabularies(book.id))
+  );
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<VocabularyResponse[]> => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .map(v => ({ ...v, book_title: bookMap.get(v.book_id) || '未知书籍' }));
 };

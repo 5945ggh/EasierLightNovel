@@ -28,4 +28,6 @@ export interface HighlightCreate extends HighlightBase {
 export interface HighlightResponse extends HighlightCreate {
   id: number;
   created_at: string;
+  /** 是否有对应的积累本数据 */
+  has_Archive: boolean;
 }

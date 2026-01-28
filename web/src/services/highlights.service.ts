@@ -4,6 +4,7 @@
 
 import apiClient from './api-client';
 import type { HighlightCreate, HighlightResponse, AIAnalysisResult, ArchiveItemResponse } from '@/types';
+import { getBooks } from './books.service';
 
 /**
  * 创建划线
@@ -49,4 +50,22 @@ export const saveAIAnalysis = async (highlightId: number, data: AIAnalysisResult
  */
 export const getArchiveItem = async (highlightId: number): Promise<ArchiveItemResponse> => {
   return apiClient.get<ArchiveItemResponse>(`/highlights/${highlightId}/archive`);
+};
+
+/**
+ * 获取所有划线（前端聚合，跨书籍）
+ * @returns 所有划线列表（带书名）
+ */
+export const getAllHighlights = async (): Promise<Array<HighlightResponse & { book_title: string }>> => {
+  const books = await getBooks();
+  const bookMap = new Map(books.map(b => [b.id, b.title]));
+
+  const results = await Promise.allSettled(
+    books.map(book => apiClient.get<HighlightResponse[]>(`/books/${book.id}/highlights`))
+  );
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<HighlightResponse[]> => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .map(h => ({ ...h, book_title: bookMap.get(h.book_id) || '未知书籍' }));
 };

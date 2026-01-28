@@ -14,6 +14,12 @@ import { SegmentRenderer } from './SegmentRenderer';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
+// 进度恢复的默认偏移（段落顶部距离视口顶部的百分比）
+const DEFAULT_RESTORE_OFFSET = 0.15; // 15% 位置，既不遮挡标题也不太靠下
+
+// IntersectionObserver 配置：只有当段落进入视口中心区域时才触发
+const OBSERVER_ROOT_MARGIN = '-45% 0px -45% 0px'; // 只检测视口中间 10% 的区域
+
 interface ContentCanvasProps {
   // 章节切换回调
   onPrevChapter?: () => void;
@@ -38,8 +44,8 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   const observerRef = useRef<IntersectionObserver | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const saveProgressTimeoutRef = useRef<number | null>(null);
-  const initialScrollDoneRef = useRef(false);
-  const prevChapterIndexRef = useRef<number | null>(null);
+  const scrollRestoredRef = useRef(false);
+  const lastProcessedChapterRef = useRef<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // 立即保存进度（不经过 debounce）
@@ -53,13 +59,17 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       const segmentEl = containerRef.current?.querySelector(
         `[data-segment-index="${currentSegmentIndex}"]`
       );
-      let offsetRatio = 0;
+      // 计算段落相对于视口的位置偏移
+      // offsetRatio 表示：段落顶部在视口中的位置比例（0 = 在视口顶部，1 = 在视口底部）
+      let offsetRatio = DEFAULT_RESTORE_OFFSET;
       if (segmentEl) {
         const rect = segmentEl.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const segmentTop = rect.top + scrollTop;
-        const documentHeight = document.documentElement.scrollHeight;
-        offsetRatio = Math.min(Math.max(segmentTop / documentHeight, 0), 1);
+        const viewportHeight = window.innerHeight;
+        // rect.top 是段落顶部相对于视口顶部的距离（可能为负，表示在视口上方）
+        // 我们保存的是段落顶部在视口中的相对位置（0-1）
+        const relativePosition = rect.top / viewportHeight;
+        // 限制在 0-1 范围内，避免极端值
+        offsetRatio = Math.min(Math.max(relativePosition, 0), 1);
       }
 
       setIsSaving(true);
@@ -122,7 +132,8 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       if (visibleEntry) {
         const idx = Number(visibleEntry.target.getAttribute('data-segment-index'));
 
-        if (!isNaN(idx)) {
+        // 只在段落索引变化时才更新，避免频繁触发
+        if (!isNaN(idx) && idx !== currentSegmentIndex) {
           updateCurrentSegment(idx);
         }
       }
@@ -130,7 +141,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
 
     observerRef.current = new IntersectionObserver(callback, {
       root: null,
-      rootMargin: '-40% 0px -40% 0px',
+      rootMargin: OBSERVER_ROOT_MARGIN, // 只检测视口中心区域
       threshold: 0,
     });
 
@@ -146,33 +157,31 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
         clearTimeout(saveProgressTimeoutRef.current);
       }
     };
-  }, [chapter, bookId, updateCurrentSegment]);
+  }, [chapter, bookId, updateCurrentSegment, currentSegmentIndex]);
 
   // 2. 章节变化时重置滚动状态
   useEffect(() => {
-    if (chapter) {
-      initialScrollDoneRef.current = false;
+    if (chapter?.index !== undefined) {
+      scrollRestoredRef.current = false;
     }
   }, [chapter?.index]);
 
-  // 3. 滚动到上次阅读位置
+  // 3. 滚动到上次阅读位置或章节顶部
   useEffect(() => {
-    if (!chapter || initialScrollDoneRef.current) return;
+    if (!chapter || scrollRestoredRef.current) return;
 
+    const currentChapterIndex = chapter.index;
     const isChapterSwitch =
-      prevChapterIndexRef.current !== null &&
-      prevChapterIndexRef.current !== chapter.index;
+      lastProcessedChapterRef.current !== null &&
+      lastProcessedChapterRef.current !== currentChapterIndex;
 
     const rafId = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         // 章节切换：滚动到页面最顶部
         if (isChapterSwitch) {
           window.scrollTo({ top: 0, behavior: 'instant' });
-          requestAnimationFrame(() => {
-            window.scrollTo({ top: 0, behavior: 'instant' });
-          });
-          initialScrollDoneRef.current = true;
-          prevChapterIndexRef.current = chapter.index;
+          scrollRestoredRef.current = true;
+          lastProcessedChapterRef.current = currentChapterIndex;
           return;
         }
 
@@ -181,24 +190,29 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
           `[data-segment-index="${currentSegmentIndex}"]`
         );
         if (!el) {
-          prevChapterIndexRef.current = chapter.index;
+          // 如果找不到目标段落，默认滚动到顶部
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          scrollRestoredRef.current = true;
+          lastProcessedChapterRef.current = currentChapterIndex;
           return;
         }
 
-        el.scrollIntoView({ block: 'start' });
+        // 获取段落顶部在视口中的目标位置（如果没有保存的偏移，使用默认值）
+        const targetOffset = segmentOffset > 0 ? segmentOffset : DEFAULT_RESTORE_OFFSET;
+        const viewportHeight = window.innerHeight;
+        const targetOffsetPixels = targetOffset * viewportHeight;
 
-        if (segmentOffset > 0) {
-          requestAnimationFrame(() => {
-            const documentHeight = document.documentElement.scrollHeight;
-            const targetScrollTop = segmentOffset * documentHeight;
-            window.scrollTo({ top: targetScrollTop, behavior: 'instant' });
-            initialScrollDoneRef.current = true;
-            prevChapterIndexRef.current = chapter.index;
-          });
-        } else {
-          initialScrollDoneRef.current = true;
-          prevChapterIndexRef.current = chapter.index;
-        }
+        // 先滚动到段落顶部
+        el.scrollIntoView({ block: 'start', behavior: 'instant' });
+
+        // 然后向上滚动，使段落顶部位于目标位置
+        requestAnimationFrame(() => {
+          const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+          const targetScrollTop = Math.max(0, currentScrollTop - targetOffsetPixels);
+          window.scrollTo({ top: targetScrollTop, behavior: 'instant' });
+          scrollRestoredRef.current = true;
+          lastProcessedChapterRef.current = currentChapterIndex;
+        });
       });
     });
 
@@ -216,13 +230,13 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
         const segmentEl = container?.querySelector(
           `[data-segment-index="${currentSegmentIndex}"]`
         );
-        let offsetRatio = 0;
+        // 计算段落相对于视口的位置偏移
+        let offsetRatio = DEFAULT_RESTORE_OFFSET;
         if (segmentEl) {
           const rect = segmentEl.getBoundingClientRect();
-          const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          const segmentTop = rect.top + scrollTop;
-          const documentHeight = document.documentElement.scrollHeight;
-          offsetRatio = Math.min(Math.max(segmentTop / documentHeight, 0), 1);
+          const viewportHeight = window.innerHeight;
+          const relativePosition = rect.top / viewportHeight;
+          offsetRatio = Math.min(Math.max(relativePosition, 0), 1);
         }
 
         updateReadingProgress(bookId, {

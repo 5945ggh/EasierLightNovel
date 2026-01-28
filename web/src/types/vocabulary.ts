@@ -18,6 +18,7 @@ export interface VocabularyBase {
  */
 export interface VocabularyCreate extends VocabularyBase {
   book_id: string;
+  context_sentences?: string[];  // 例句列表
 }
 
 /**
