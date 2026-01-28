@@ -1,6 +1,6 @@
 # app/models.py
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean, UniqueConstraint, Float
 from sqlalchemy.orm import relationship, declarative_base, deferred
 from sqlalchemy.sql import func
 from app.enums import ProcessingStatus
@@ -53,10 +53,11 @@ class UserProgress(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     book_id = Column(String(32), ForeignKey("books.id"), unique=True)
-    
+
     current_chapter_index = Column(Integer, default=0)
     current_segment_index = Column(Integer, default=0)
-    current_segment_offset = Column(Integer, default=0, nullable=True) # segment 的偏移量, 记录当前视口顶部第一个可见的 Token 的 index(Target Token Index); 由于 ImageSegment 的存在, 该字段可以为空
+    # 进度百分比，存储 0-100 的浮点数（当前章节内的滚动位置）
+    progress_percentage = Column(Float, default=0.0)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     book = relationship("Book", back_populates="progress")

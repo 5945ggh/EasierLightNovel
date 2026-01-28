@@ -240,8 +240,8 @@ def get_reading_progress(
     **响应字段**:
     - book_id: 书籍 ID
     - current_chapter_index: 当前章节索引
-    - current_segment_index: 当前段落索引
-    - current_segment_offset: 当前 token 索引（滚动定位用）
+    - current_segment_index: 当前章节内的段落索引
+    - progress_percentage: 当前章节内的滚动百分比 (0-100)
     - updated_at: 更新时间
     """
     return progress_service.get_progress(book_id)
@@ -260,9 +260,19 @@ def update_reading_progress(
     {
       "current_chapter_index": 5,
       "current_segment_index": 12,
-      "current_segment_offset": 8
+      "progress_percentage": 45.67
     }
     ```
+
+    **字段说明**:
+    - `current_chapter_index`: 当前章节索引
+    - `current_segment_index`: 当前章节内的段落索引（用于快速定位）
+    - `progress_percentage`: 当前章节内的滚动百分比 (0-100)，用于精确恢复滚动位置
+
+    **位置恢复逻辑**:
+    1. 跳转到 `current_chapter_index` 指定的章节
+    2. 滚动到 `progress_percentage` 位置
+    3. `current_segment_index` 作为备用/验证
 
     如果没有进度记录，会自动创建新记录
     """

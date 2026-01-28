@@ -201,16 +201,13 @@ class DictResult(BaseModel):
 # ==================== UserProgress 相关 ====================
 class UserProgressBase(BaseModel):
     """阅读进度基础"""
-    current_chapter_index: int = Field(default=0, ge=0)
-    current_segment_index: int = Field(default=0, ge=0)
-
-    # 注意：models.py 里这个字段是 nullable=True，但为了前端处理方便，
-    # 我们在 Schema 层将其收敛为 int (如果为 None 则由后端逻辑转为 0)
-    current_segment_offset: int = Field(default=0, ge=0)
+    current_chapter_index: int = Field(default=0, ge=0, description="当前章节索引")
+    current_segment_index: int = Field(default=0, ge=0, description="当前章节内的段落索引")
+    progress_percentage: float = Field(default=0.0, ge=0.0, le=100.0, description="当前章节内的滚动百分比(0-100)，用于恢复滚动位置，由前端计算后传入")
 
 class UserProgressUpdate(UserProgressBase):
     """更新阅读进度请求"""
-    pass # 继承了 UserProgressBase
+    pass  # 继承了 UserProgressBase
 
 class UserProgressResponse(UserProgressBase):
     """阅读进度响应"""

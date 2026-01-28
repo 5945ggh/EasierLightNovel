@@ -47,7 +47,7 @@ class ProgressService:
                 book_id=book_id,
                 current_chapter_index=0,
                 current_segment_index=0,
-                current_segment_offset=0
+                progress_percentage=0.0
             )
             self.db.add(progress)
             self.db.commit()
@@ -94,9 +94,9 @@ class ProgressService:
 
         # 3. 手动更新每个字段（避免 model_dump 的潜在问题）
         try:
-            progress.current_chapter_index = data.current_chapter_index
-            progress.current_segment_index = data.current_segment_index
-            progress.current_segment_offset = data.current_segment_offset
+            progress.current_chapter_index = data.current_chapter_index  # type: ignore
+            progress.current_segment_index = data.current_segment_index  # type: ignore
+            progress.progress_percentage = data.progress_percentage  # type: ignore
         except Exception as e:
             logger.error(f"Error setting progress fields: {e}")
             logger.error(f"data = {data.model_dump()}")
@@ -109,7 +109,7 @@ class ProgressService:
             f"Updated progress for book {book_id}: "
             f"chapter={data.current_chapter_index}, "
             f"segment={data.current_segment_index}, "
-            f"offset={data.current_segment_offset}"
+            f"progress={data.progress_percentage}%"
         )
 
         return progress
