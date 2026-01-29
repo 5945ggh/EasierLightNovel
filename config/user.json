@@ -33,10 +33,10 @@
     "load_kanji_dict": false
   },
   "llm": {
-    "model": "deepseek/deepseek-chat",
+    "model": "openai/qwen-flash",
     "api_key": "YOUR_API_KEY_HERE",
-    "base_url": "https://api.deepseek.com",
-    "temperature": 0.2,
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "temperature": 0.3,
     "max_target_length": 512,
     "max_context_length": 2048
   },
