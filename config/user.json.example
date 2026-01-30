@@ -13,10 +13,41 @@
       "http://127.0.0.1:5173"
     ]
   },
-  "_comment": {
-    "backend.host": "后端监听地址，0.0.0.0 表示所有网卡，127.0.0.1 表示本地",
-    "backend.port": "后端端口",
-    "frontend.port": "前端端口（Vite 开发服务器或构建后预览）",
-    "cors.allowed_origins": "修改端口时需同步更新此配置"
+  "paths": {
+    "data_dir": "static_data",
+    "temp_upload_dir": "backend/temp_uploads"
+  },
+  "upload": {
+    "max_file_size": 52428800
+  },
+  "epub": {
+    "max_title_length": 32,
+    "max_chunk_size": 1024
+  },
+  "tokenizer": {
+    "mode": "B"
+  },
+  "dictionary": {
+    "cache_size": 4096,
+    "memory_mode": false,
+    "load_kanji_dict": false,
+    "db_path": null,
+    "preferred_languages": ["chn", "eng"],
+    "show_all_languages": false
+  },
+  "llm": {
+    "model": "openai/qwen-flash",
+    "api_key": "YOUR-API-KEY",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "temperature": 0.3,
+    "max_target_length": 512,
+    "max_context_length": 2048
+  },
+  "query": {
+    "default_limit": 100,
+    "max_limit": 500
+  },
+  "logging": {
+    "level": "INFO"
   }
 }
