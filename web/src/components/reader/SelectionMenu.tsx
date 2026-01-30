@@ -20,7 +20,7 @@ import { useReaderStore, type PendingHighlight } from '@/stores/readerStore';
 import { createHighlight, deleteHighlight } from '@/services/highlights.service';
 import { speak } from '@/utils/tts';
 import { clsx } from 'clsx';
-import { getHighlightOptions, type HighlightOption } from '@/utils/highlightStyles';
+import { getHighlightOptions } from '@/utils/highlightStyles';
 
 /**
  * 选区坐标信息
