@@ -24,11 +24,6 @@ import { speak } from '@/utils/tts';
 import type { DictResult } from '@/types/dictionary';
 import { clsx } from 'clsx';
 
-/**
- * 高亮样式颜色映射（用于判断是否在高亮区域）
- */
-const HIGHLIGHT_STYLE_COLORS = ['yellow', 'green', 'blue', 'pink', 'purple'];
-
 // 例句最大长度限制
 const MAX_CONTEXT_SENTENCE_LENGTH = 100;
 
@@ -193,13 +188,6 @@ export const TokenPopover: React.FC = () => {
     }
   }, [selectedToken, refs, fetchDictionary]);
 
-  // 判断当前 Token 是否在高亮句中
-  const isInHighlight = selectedToken
-    ? HIGHLIGHT_STYLE_COLORS.some((color) =>
-        highlightMap.get(getTokenKey(selectedToken.segmentIndex, selectedToken.tokenIndex)) === color
-      )
-    : false;
-
   // 获取当前 token 所在高亮的 ID
   const currentHighlightId = React.useMemo((): number | null => {
     if (!selectedToken) return null;
@@ -226,6 +214,9 @@ export const TokenPopover: React.FC = () => {
 
     return highlight?.id ?? null;
   }, [selectedToken, highlights]);
+
+  // 判断当前 Token 是否在高亮句中（基于是否找到对应的高亮记录）
+  const isInHighlight = currentHighlightId !== null;
 
   // 判断当前高亮是否已分析
   const hasAIAnalysis = currentHighlightId !== null && isHighlightAnalyzed(currentHighlightId);
