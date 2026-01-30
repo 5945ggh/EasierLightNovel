@@ -1,4 +1,4 @@
-# EbookToTextbook
+# EasierLightNovel
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
@@ -8,7 +8,7 @@
 
 ## 项目简介
 
-**EbookToTextbook** 是一个本地化部署的日语学习阅读器，专为日语基础较低但想阅读原版轻小说的用户设计。
+**EasierLightNovel** 是一个本地化部署的日语学习阅读器，专为日语基础较低但想阅读原版轻小说的用户设计。
 
 ### 核心特性
 
@@ -96,7 +96,7 @@ uv run python main.py
 ## 项目结构
 
 ```
-EbookToTextbook/
+EasierLightNovel/
 ├── backend/              # FastAPI 后端
 │   ├── app/
 │   │   ├── routers/      # API 路由
