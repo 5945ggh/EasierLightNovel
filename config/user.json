@@ -30,11 +30,14 @@
   "dictionary": {
     "cache_size": 4096,
     "memory_mode": false,
-    "load_kanji_dict": false
+    "load_kanji_dict": false,
+    "db_path": null,
+    "preferred_languages": ["chn", "eng"],
+    "show_all_languages": false
   },
   "llm": {
     "model": "openai/qwen-flash",
-    "api_key": "YOUR_API_KEY_HERE",
+    "api_key": "YOUR-API-KEY",
     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "temperature": 0.3,
     "max_target_length": 512,
