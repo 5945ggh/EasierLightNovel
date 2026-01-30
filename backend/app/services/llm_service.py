@@ -120,6 +120,8 @@ async def analyze_japanese_content(
         "messages": messages,
         "model": model_name,
         "temperature": LLMConfig.TEMPERATURE,
+        "api_key": LLMConfig.API_KEY,
+        "base_url": LLMConfig.BASE_URL,
     }
 
     # 5. 仅 OpenAI 系列支持 JSON Mode
