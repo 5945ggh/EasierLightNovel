@@ -1,4 +1,54 @@
+# Python
 __pycache__/
-static_data
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+static_data/
 frontend_handover/
 frontend_setup/
+__unused/
+backend/temp_uploads/
+
+# Configuration (contains sensitive data)
+config/user.json
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+logs/
+
+# Frontend
+web/node_modules/
+web/dist/
+web/dist-ssr/
+web/*.local
+
+# UV
+uv.lock
