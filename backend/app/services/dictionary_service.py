@@ -7,7 +7,14 @@ from typing import List, Optional
 from jamdict import Jamdict
 
 from app.schemas import DictResult, DictEntry, SenseEntry
-from app.config import DICTIONARY_CACHE_SIZE, DICTIONARY_MEMORY_MODE, DICTIONARY_LOAD_KANJI_DICT
+from app.config import (
+    DICTIONARY_CACHE_SIZE,
+    DICTIONARY_MEMORY_MODE,
+    DICTIONARY_LOAD_KANJI_DICT,
+    DICTIONARY_DB_PATH,
+    DICTIONARY_PREFERRED_LANGUAGES,
+    DICTIONARY_SHOW_ALL_LANGUAGES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +47,14 @@ class DictionaryService:
     def _jmd(self) -> Jamdict:
         """获取当前线程的 Jamdict 实例"""
         if not hasattr(_thread_local, 'jmd'):
-            # 从配置读取是否使用内存模式
+            # 从配置读取数据库路径和内存模式
+            db_path = DICTIONARY_DB_PATH if DICTIONARY_DB_PATH else None
             _thread_local.jmd = Jamdict(
+                db_file=db_path,
                 memory_mode=DICTIONARY_MEMORY_MODE,
                 # kd2=DICTIONARY_LOAD_KANJI_DICT TODO: 研究其他参数
             )
-            logger.debug(f"Created new Jamdict instance for thread {threading.get_ident()}")
+            logger.debug(f"Created new Jamdict instance for thread {threading.get_ident()}, db_path={db_path}")
         return _thread_local.jmd
 
     def _get_pitch_accent(self, word: str, reading: str) -> List[int]:
@@ -64,6 +73,48 @@ class DictionaryService:
             音调核位置列表，暂时返回空列表
         """
         return []
+
+    def _filter_glosses(self, glosses) -> List[str]:
+        """
+        根据语言配置过滤和排序释义
+
+        逻辑:
+        - show_all_languages=true: 显示所有语言，按 preferred_languages 顺序排序
+        - show_all_languages=false: 只显示 preferred_languages 中第一个有释义的语言
+
+        Args:
+            glosses: jamdict 返回的 gloss 对象列表
+
+        Returns:
+            过滤并排序后的释义文本列表
+        """
+        # 按语言分组
+        grouped: dict[str, List[str]] = {}
+        for g in glosses:
+            lang = getattr(g, 'lang', 'eng')
+            text = getattr(g, 'text', str(g))  # 使用 text 属性获取纯文本
+            if lang not in grouped:
+                grouped[lang] = []
+            grouped[lang].append(text)
+
+        if DICTIONARY_SHOW_ALL_LANGUAGES:
+            # 显示所有语言，按 preferred_languages 顺序排序
+            result = []
+            for lang in DICTIONARY_PREFERRED_LANGUAGES:
+                if lang in grouped:
+                    result.extend(grouped[lang])
+            # 添加其他不在优先级列表中的语言
+            for lang, texts in grouped.items():
+                if lang not in DICTIONARY_PREFERRED_LANGUAGES:
+                    result.extend(texts)
+            return result
+        else:
+            # 只显示第一个有释义的首选语言
+            for lang in DICTIONARY_PREFERRED_LANGUAGES:
+                if lang in grouped:
+                    return grouped[lang]
+            # 如果没有首选语言，返回空列表
+            return []
 
     @lru_cache(maxsize=DICTIONARY_CACHE_SIZE)
     def search_word(self, query: str) -> DictResult:
@@ -105,12 +156,12 @@ class DictionaryService:
                 if is_exact:
                     exact_match_found = True
 
-                # 构建释义列表
+                # 构建释义列表（根据语言配置过滤）
                 senses = []
                 for sense in entry.senses:
                     senses.append(SenseEntry(
                         pos=[str(p) for p in sense.pos],
-                        definitions=[str(g) for g in sense.gloss]
+                        definitions=self._filter_glosses(sense.gloss)
                     ))
 
                 # 获取音调（预留，暂时为空）

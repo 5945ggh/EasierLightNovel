@@ -132,6 +132,15 @@ DICTIONARY_CACHE_SIZE = int(_get_config("dictionary.cache_size", 4096, "DICT_CAC
 DICTIONARY_MEMORY_MODE = bool(_get_config("dictionary.memory_mode", False))
 DICTIONARY_LOAD_KANJI_DICT = bool(_get_config("dictionary.load_kanji_dict", False))
 
+# 词典数据库路径（可选，为空则使用 jamdict 默认路径）
+DICTIONARY_DB_PATH = _get_config("dictionary.db_path", None)
+
+# 首选语言列表（按优先级排序）: "eng"=英语, "chn"=中文, "fre"=法语, "ger"=德语, "rus"=俄语, "slv"=斯洛文尼亚语
+DICTIONARY_PREFERRED_LANGUAGES: list[str] = _get_config("dictionary.preferred_languages", ["chn", "eng"])
+
+# 是否显示所有语言（false 则只显示 preferred_languages 中的语言）
+DICTIONARY_SHOW_ALL_LANGUAGES = bool(_get_config("dictionary.show_all_languages", True))
+
 # ==================== AI 分析 ====================
 class LLMConfig:
     """LLM 相关配置统一管理"""
@@ -160,10 +169,11 @@ QUERY_MAX_LIMIT = int(_get_config("query.max_limit", 500, "QUERY_MAX_LIMIT"))
 
 # ==================== 划线样式 ====================
 HIGHLIGHT_STYLE_CATEGORIES: Dict[str, Dict[str, str]] = {
-    "bule": {"color": "#3b82f6", "name": "Adachi"},
-    "yelow":   {"color": "#eab308", "name": "Shimamura"},
-    "rad": {"color": "#ef4444", "name": "Kita"},
-    "pik":{"color": "#ec4899", "name": "Bocchi"},
+    "blue": {"color": "#3b82f6", "name": "Adachi"},
+    "yellow": {"color": "#efbe2b", "name": "Shimamura"},
+    "red": {"color": "#de5454", "name": "Kita"},
+    "pink": {"color": "#e8559f", "name": "Bocchi"},
+    "deep": {"color": "#9d2626", "name": "书签"},
 }
 
 # ==================== 日志 ====================
