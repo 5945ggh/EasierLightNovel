@@ -65,7 +65,7 @@ async def upload_book(
 
     return await book_service.create_book_from_file(file, background_tasks)
 
-@router.get("/", response_model=List[BookListItem])
+@router.get("", response_model=List[BookListItem])
 def list_books(
     skip: int = 0,
     limit: int = Query(default=QUERY_DEFAULT_LIMIT, le=QUERY_MAX_LIMIT),
