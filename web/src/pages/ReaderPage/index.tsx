@@ -17,6 +17,7 @@ import {
   getBookDetail,
   getChapterList,
   getBookHighlights,
+  updateReadingProgress,
 } from '@/services/books.service';
 import { getBookVocabularies } from '@/services/vocabularies.service';
 import { useReaderStore } from '@/stores/readerStore';
@@ -172,9 +173,26 @@ export const ReaderPage: React.FC = () => {
     enabled: !!bookId,
   });
 
+  // 判断是否为章节切换（必须在 initialPercentage 之前计算）
+  const isChapterSwitch = useMemo(() => {
+    if (firstLoadedChapter === null) return false;
+    const result = currentChapterIndex !== null && currentChapterIndex !== firstLoadedChapter;
+    console.log('[ReaderPage] isChapterSwitch:', {
+      firstLoadedChapter,
+      currentChapterIndex,
+      result,
+    });
+    return result;
+  }, [firstLoadedChapter, currentChapterIndex]);
+
   // 计算初始滚动百分比（后端返回 progress_percentage 为 0-100，转换为 0-1）
   // 基于 targetChapterIndex 而非 currentChapterIndex，避免异步 setState 导致的时序问题
   const initialPercentage = useMemo(() => {
+    // 章节切换时，强制从顶部开始（避免使用可能过时的进度数据）
+    if (isChapterSwitch) {
+      console.log('[ReaderPage] initialPercentage = 0 (chapter switch)');
+      return 0;
+    }
     if (!progressData || targetChapterIndex === null) return 0;
     // 只有目标章节与进度记录匹配时才使用百分比
     if (progressData.current_chapter_index === targetChapterIndex) {
@@ -192,25 +210,14 @@ export const ReaderPage: React.FC = () => {
       targetChapter: targetChapterIndex,
     });
     return 0;
-  }, [progressData, targetChapterIndex]);
-
-  // 判断是否为章节切换
-  const isChapterSwitch = useMemo(() => {
-    if (firstLoadedChapter === null) return false;
-    const result = currentChapterIndex !== null && currentChapterIndex !== firstLoadedChapter;
-    console.log('[ReaderPage] isChapterSwitch:', {
-      firstLoadedChapter,
-      currentChapterIndex,
-      result,
-    });
-    return result;
-  }, [firstLoadedChapter, currentChapterIndex]);
+  }, [progressData, targetChapterIndex, isChapterSwitch]);
 
   // 8. 同步数据到 Store
   useEffect(() => {
     if (chapterData && currentChapterIndex !== null) {
-      setChapter(chapterData);
+      // 先设置 chapterIndex，确保 setChapter 能正确过滤 allHighlights
       setChapterIndex(currentChapterIndex);
+      setChapter(chapterData);
       // 记录首次加载的章节（用于判断章节切换）
       setFirstLoadedChapter(prev => prev === null ? currentChapterIndex : prev);
       // 如果进度数据中的章节索引匹配，设置段落索引
@@ -274,6 +281,26 @@ export const ReaderPage: React.FC = () => {
       }, 300);
     }
   }, [pendingScrollTarget, chapterData]);
+
+  // 章节切换完成后，立即保存新章节的进度（0%）
+  // 这样即使不滚动就退出，再进入时也会回到新章节而不是旧章节
+  useEffect(() => {
+    // 只在章节真正切换（非首次加载）且章节内容已加载时触发
+    if (isChapterSwitch && chapterData && currentChapterIndex !== null && bookId) {
+      console.log('[ReaderPage] Chapter switched, saving new chapter progress:', {
+        chapterIndex: currentChapterIndex,
+        chapterTitle: chapterData.title,
+      });
+      // 立即保存新章节的进度（0% 位置）
+      updateReadingProgress(bookId, {
+        current_chapter_index: currentChapterIndex,
+        current_segment_index: 0,
+        progress_percentage: 0,
+      })
+        .then(() => console.log('[ReaderPage] New chapter progress saved'))
+        .catch((err) => console.error('[ReaderPage] Failed to save new chapter progress:', err));
+    }
+  }, [isChapterSwitch, chapterData, currentChapterIndex, bookId]);
 
   // 章节切换函数
   const handlePrevChapter = useCallback(() => {
@@ -468,6 +495,7 @@ export const ReaderPage: React.FC = () => {
           )}
         >
           <ContentCanvas
+            key={currentChapterIndex ?? 'default'}
             scrollContainerRef={scrollContainerRef}
             onPrevChapter={handlePrevChapter}
             onNextChapter={handleNextChapter}

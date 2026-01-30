@@ -279,16 +279,23 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
   setBookId: (bookId) => set({ bookId }),
 
   setChapter: (chapter) => {
-    const highlights = chapter?.highlights ?? [];
-    set((state) => ({
-      // 清理上一章的临时高亮，避免跨章污染
-      pendingHighlights: [],
-      chapter,
-      highlights,
-      highlightMap: buildHighlightMap(highlights, [], chapter?.segments),
-      highlightRevision: state.highlightRevision + 1,
-    }));
+    set((state) => {
+      // 优先从 allHighlights 中获取当前章节的高亮（保证数据一致性）
+      const chapterHighlights = state.chapterIndex !== null
+        ? state.allHighlights.filter(h => h.chapter_index === state.chapterIndex)
+        : (chapter?.highlights ?? []);
+      return {
+        // 清理上一章的临时高亮，避免跨章污染
+        pendingHighlights: [],
+        chapter,
+        highlights: chapterHighlights,
+        highlightMap: buildHighlightMap(chapterHighlights, [], chapter?.segments),
+        highlightRevision: state.highlightRevision + 1,
+      };
+    });
     // 异步检查 AI 分析状态
+    const currentState = get();
+    const highlights = currentState.highlights;
     if (highlights.length > 0) {
       get().checkHighlightsAIStatus(highlights);
     }
@@ -413,7 +420,18 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
     }),
 
   // 整本书高亮数据管理（用于高亮列表跨章节显示）
-  setAllHighlights: (allHighlights) => set({ allHighlights }),
+  setAllHighlights: (allHighlights) => set((state) => {
+    // 从 allHighlights 中筛选出当前章节的高亮，同步更新 highlights 和 highlightMap
+    const currentChapterHighlights = state.chapterIndex !== null
+      ? allHighlights.filter(h => h.chapter_index === state.chapterIndex)
+      : [];
+    return {
+      allHighlights,
+      highlights: currentChapterHighlights,
+      highlightMap: buildHighlightMap(currentChapterHighlights, state.pendingHighlights, state.chapter?.segments),
+      highlightRevision: state.highlightRevision + 1,
+    };
+  }),
   setAllChapterList: (allChapterList) => set({ allChapterList }),
   setHighlightViewChapter: (highlightViewChapter) => set({ highlightViewChapter }),
 
