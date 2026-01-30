@@ -201,8 +201,16 @@ const DictionaryTab: React.FC = () => {
 
   // 优先使用 selectedToken 的详细信息，否则使用查询词
   const displayForm = selectedToken?.token ? (selectedToken.token.b || selectedToken.token.s) : currentQueryWord;
-  const reading = selectedToken?.token?.r || dictResult?.reading || '';
-  const partOfSpeech = selectedToken?.token?.p || dictResult?.part_of_speech || '';
+
+  // 读音和词性：优先从 selectedToken 获取，否则从 dictResult 的第一个 entry 中提取
+  const reading = selectedToken?.token?.r
+    || (dictResult?.found && dictResult.entries[0]?.reading?.[0])
+    || '';
+
+  // 从第一个 entry 的第一个 sense 中提取词性
+  const partOfSpeech = selectedToken?.token?.p
+    || (dictResult?.found && dictResult.entries[0]?.senses[0]?.pos?.[0])
+    || '';
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
