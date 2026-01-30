@@ -39,7 +39,7 @@
     "model": "openai/qwen-flash",
     "api_key": "YOUR-API-KEY",
     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "temperature": 0.3,
+    "temperature": 0.4,
     "max_target_length": 512,
     "max_context_length": 2048
   },

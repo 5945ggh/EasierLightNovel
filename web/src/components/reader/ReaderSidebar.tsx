@@ -333,6 +333,8 @@ const AITab: React.FC = () => {
   const finishAnalyzing = useReaderStore((s) => s.finishAnalyzing);
   const displayHighlightId = useReaderStore((s) => s.displayHighlightId);
   const setDisplayHighlightId = useReaderStore((s) => s.setDisplayHighlightId);
+  const isHighlightAnalyzed = useReaderStore((s) => s.isHighlightAnalyzed);
+  const isAnalyzing = useReaderStore((s) => s.isAnalyzing);
 
   // 从 selectedToken 提取需要的值（使用 useMemo 避免重复计算）
   const selectedTokenInfo = useMemo(() => ({
@@ -634,6 +636,18 @@ const AITab: React.FC = () => {
   // 获取当前高亮文本用于显示
   const { targetText: displayText } = collectHighlightText(activeHighlightId);
 
+  // 检查当前高亮是否已分析或正在分析
+  const hasAnalysis = aiResult !== null;
+  const isAnalyzed = isHighlightAnalyzed(activeHighlightId);
+  const isThisAnalyzing = isAnalyzing(activeHighlightId);
+
+  // 处理 AI 分析按钮点击
+  const handleAnalyzeClick = useCallback(() => {
+    if (activeHighlightId !== null && !isThisAnalyzing) {
+      performAIAnalysis(activeHighlightId);
+    }
+  }, [activeHighlightId, isThisAnalyzing, performAIAnalysis]);
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       {/* 目标文本 */}
@@ -657,6 +671,35 @@ const AITab: React.FC = () => {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-red-600 dark:text-red-400 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* AI 分析按钮 - 当有高亮但没有分析结果时显示 */}
+      {!hasAnalysis && !isLoading && !error && (
+        <div className="flex flex-col items-center justify-center py-8 space-y-4">
+          <div className="text-center">
+            <Sparkles className="mx-auto mb-3 text-indigo-400" size={32} />
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+              {isAnalyzed ? '该高亮已有分析记录，但未能加载' : '暂无 AI 分析'}
+            </p>
+          </div>
+          <button
+            onClick={handleAnalyzeClick}
+            disabled={isThisAnalyzing}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
+          >
+            {isThisAnalyzing ? (
+              <>
+                <Loader2 className="animate-spin" size={16} />
+                <span>分析中...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                <span>开始 AI 分析</span>
+              </>
+            )}
+          </button>
         </div>
       )}
 

@@ -148,7 +148,7 @@
           "description": "生成温度（0.0 - 1.0）",
           "minimum": 0.0,
           "maximum": 1.0,
-          "default": 0.2
+          "default": 0.3
         },
         "max_target_length": {
           "type": "integer",
