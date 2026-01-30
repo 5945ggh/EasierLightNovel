@@ -344,10 +344,10 @@ export const SelectionMenu: React.FC = () => {
                   onClick={() => handleHighlight(option.key)}
                   disabled={isProcessing}
                   className={clsx(
-                    'w-5 h-5 rounded-full transition-all hover:ring-2 hover:ring-offset-1',
+                    'w-5 h-5 rounded-full transition-all',
                     isProcessing && 'opacity-50 cursor-not-allowed'
                   )}
-                  style={{ backgroundColor: option.color, ringColor: option.color }}
+                  style={{ backgroundColor: option.color }}
                   title={`高亮: ${option.name}`}
                 />
               ))}
