@@ -39,7 +39,7 @@ interface UseScrollProgressReturn {
  * @param options - 配置选项
  */
 export const useScrollProgress = (
-  containerRef: React.RefObject<HTMLElement>,
+  containerRef: React.RefObject<HTMLElement | null>,
   onProgressChange: (percentage: number) => void,
   options: UseScrollProgressOptions
 ): UseScrollProgressReturn => {
