@@ -166,7 +166,9 @@ const HighlightItem: React.FC<{
           </div>
           <div className="flex items-center gap-2">
             {highlight.has_Archive && (
-              <Sparkles size={16} className="text-amber-400" title="有 AI 分析" />
+              <span title="有 AI 分析">
+                <Sparkles size={16} className="text-amber-400" />
+              </span>
             )}
             <button
               onClick={(e) => {

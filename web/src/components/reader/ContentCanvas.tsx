@@ -22,7 +22,7 @@ const OBSERVER_ROOT_MARGIN = '-45% 0px -45% 0px'; // 只检测视口中间 10% �
 
 interface ContentCanvasProps {
   // 滚动容器的 ref（从 ReaderPage 传入）
-  scrollContainerRef: React.RefObject<HTMLDivElement>;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   // 章节切换回调
   onPrevChapter?: () => void;
   onNextChapter?: () => void;
