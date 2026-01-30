@@ -61,18 +61,6 @@ npm install
 cp config/user.json.example config/user.json
 ```
 
-主要配置项（可选，不使用 AI 功能可跳过）：
-
-```json
-{
-  "llm": {
-    "model": "deepseek/deepseek-chat",
-    "api_key": "your-api-key-here",
-    "base_url": "https://api.deepseek.com"
-  }
-}
-```
-
 ### 三、启动服务
 
 **方式一：开发模式（推荐新手）**
@@ -261,11 +249,9 @@ A: 所有数据存储在本地 `static_data/` 目录，包括数据库和书籍�
 
 ## 路线图
 
-- [ ] Docker 容器化部署
 - [ ] 支持更多电子书格式（TXT、PDF、MOBI）
 - [ ] 生词本导出（Anki 格式）
 - [ ] 阅读统计可视化
-- [ ] 多用户支持
 - [ ] 移动端适配优化
 
 ---
@@ -287,6 +273,6 @@ A: 所有数据存储在本地 `static_data/` 目录，包括数据库和书籍�
 
 ## 反馈与贡献
 
-欢迎提交 Issue 和 Pull Request！
+欢迎提交 Issue 和 Pull Request, 
 
-如有问题或建议，请通过 GitHub Issues 联系。
+如有问题或建议, 请通过 GitHub Issues 联系
