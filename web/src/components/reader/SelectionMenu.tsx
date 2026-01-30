@@ -20,6 +20,7 @@ import { useReaderStore, type PendingHighlight } from '@/stores/readerStore';
 import { createHighlight, deleteHighlight } from '@/services/highlights.service';
 import { speak } from '@/utils/tts';
 import { clsx } from 'clsx';
+import { getHighlightOptions, type HighlightOption } from '@/utils/highlightStyles';
 
 /**
  * 选区坐标信息
@@ -30,18 +31,7 @@ interface SelectionCoordinates {
   text: string;
 }
 
-/**
- * 高亮颜色配置
- */
-const HIGHLIGHT_COLORS = [
-  { name: 'yellow', bgClass: 'bg-yellow-300', hoverClass: 'hover:ring-2 ring-yellow-400' },
-  { name: 'green', bgClass: 'bg-green-300', hoverClass: 'hover:ring-2 ring-green-400' },
-  { name: 'blue', bgClass: 'bg-blue-300', hoverClass: 'hover:ring-2 ring-blue-400' },
-  { name: 'pink', bgClass: 'bg-pink-300', hoverClass: 'hover:ring-2 ring-pink-400' },
-  { name: 'purple', bgClass: 'bg-purple-300', hoverClass: 'hover:ring-2 ring-purple-400' },
-] as const;
-
-type HighlightColor = (typeof HIGHLIGHT_COLORS)[number]['name'];
+type HighlightColor = string;
 
 /**
  * SelectionMenu 组件
@@ -52,6 +42,9 @@ export const SelectionMenu: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [existingHighlightId, setExistingHighlightId] = useState<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
+
+  // 从后端配置获取划线样式选项
+  const highlightOptions = getHighlightOptions();
 
   const {
     addHighlightOptimistic,
@@ -345,18 +338,17 @@ export const SelectionMenu: React.FC = () => {
           <>
             {/* 颜色选择区 */}
             <div className="flex items-center px-1.5 py-1 space-x-1 border-r border-gray-200 dark:border-gray-700">
-              {HIGHLIGHT_COLORS.map((color) => (
+              {highlightOptions.map((option) => (
                 <button
-                  key={color.name}
-                  onClick={() => handleHighlight(color.name)}
+                  key={option.key}
+                  onClick={() => handleHighlight(option.key)}
                   disabled={isProcessing}
                   className={clsx(
-                    'w-5 h-5 rounded-full transition-all',
-                    color.bgClass,
-                    color.hoverClass,
+                    'w-5 h-5 rounded-full transition-all hover:ring-2 hover:ring-offset-1',
                     isProcessing && 'opacity-50 cursor-not-allowed'
                   )}
-                  title={`高亮: ${color.name}`}
+                  style={{ backgroundColor: option.color, ringColor: option.color }}
+                  title={`高亮: ${option.name}`}
                 />
               ))}
             </div>

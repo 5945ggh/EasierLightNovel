@@ -9,6 +9,7 @@ import React, { useCallback } from 'react';
 import clsx from 'clsx';
 import { useReaderStore, getTokenKey } from '@/stores/readerStore';
 import type { TokenData } from '@/types/chapter';
+import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
 
 interface TokenRendererProps {
   token: TokenData;
@@ -17,15 +18,28 @@ interface TokenRendererProps {
 }
 
 /**
- * 高亮颜色样式映射
+ * 获取划线内联样式（带缓存）
  */
-const HIGHLIGHT_STYLES: Record<string, string> = {
-  yellow: 'bg-yellow-200/60 dark:bg-yellow-500/30',
-  green: 'bg-green-200/60 dark:bg-green-500/30',
-  blue: 'bg-blue-200/60 dark:bg-blue-500/30',
-  pink: 'bg-pink-200/60 dark:bg-pink-500/30',
-  purple: 'bg-purple-200/60 dark:bg-purple-500/30',
-};
+let lastStyleCategory: string | null = null;
+let lastInlineStyle: { backgroundColor: string } | null = null;
+
+function getHighlightInlineStyle(styleCategory: string): { backgroundColor: string } | null {
+  // 缓存优化：如果 key 相同，直接返回缓存结果
+  if (lastStyleCategory === styleCategory && lastInlineStyle) {
+    return lastInlineStyle;
+  }
+
+  const style = getHighlightStyleWithFallback(styleCategory);
+  const hex = style.color.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+
+  lastInlineStyle = { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.25)` };
+  lastStyleCategory = styleCategory;
+
+  return lastInlineStyle;
+}
 
 /**
  * TokenRenderer 组件
@@ -84,10 +98,9 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
     );
 
     // 8. 样式组合
+    const highlightInlineStyle = highlightStyle ? getHighlightInlineStyle(highlightStyle) : null;
     const containerClasses = clsx(
       'relative cursor-pointer transition-colors duration-150 rounded-sm px-[0.5px]',
-      // Layer 1: 高亮背景色
-      highlightStyle && HIGHLIGHT_STYLES[highlightStyle],
       // Layer 2: 选中状态（最高优先级）
       {
         'bg-indigo-500 text-white': isSelected,
@@ -160,7 +173,12 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
     };
 
     return (
-      <span className={clsx(containerClasses, vocabClasses)} onClick={handleClick} {...dataProps}>
+      <span
+        className={clsx(containerClasses, vocabClasses)}
+        style={highlightInlineStyle ?? undefined}
+        onClick={handleClick}
+        {...dataProps}
+      >
         {renderContent()}
       </span>
     );

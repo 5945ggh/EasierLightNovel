@@ -2,25 +2,24 @@
  * 积累与高亮标签页（简化版）
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAllHighlights, getArchiveItem, deleteHighlight } from '@/services/highlights.service';
+import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
 import type { ArchiveItemResponse, AIAnalysisResult } from '@/types';
 import { Loader2, Sparkles, ChevronDown, ChevronUp, Quote, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
 /**
  * 获取样式分类的显示信息
+ * 使用统一的工具函数，包含完整的降级兼容逻辑
  */
 const getStyleInfo = (category: string) => {
-  const styleMap: Record<string, { name: string; bgClass: string }> = {
-    default: { name: '默认', bgClass: 'bg-blue-400' },
-    vocab: { name: '生词', bgClass: 'bg-yellow-400' },
-    vocabulary: { name: '生词', bgClass: 'bg-yellow-400' },
-    grammar: { name: '语法', bgClass: 'bg-red-400' },
-    favorite: { name: '收藏', bgClass: 'bg-pink-400' },
+  const style = getHighlightStyleWithFallback(category);
+  return {
+    name: style.name,
+    color: style.color,
   };
-  return styleMap[category] || { name: category, bgClass: 'bg-gray-400' };
 };
 
 /**
@@ -127,7 +126,10 @@ const HighlightItem: React.FC<{
               {highlight.selected_text}
             </p>
             <div className="flex items-center gap-3 mt-3 text-xs text-gray-400 flex-wrap">
-              <span className={`px-2 py-0.5 rounded-full text-white ${styleInfo.bgClass}`}>
+              <span
+                className="px-2 py-0.5 rounded-full text-white"
+                style={{ backgroundColor: styleInfo.color }}
+              >
                 {styleInfo.name}
               </span>
               <span>{highlight.book_title || '未知书籍'}</span>

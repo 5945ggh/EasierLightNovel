@@ -4,13 +4,16 @@
  */
 
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
-import { X, BookOpen, Sparkles, Bookmark, Highlighter, Loader2, ChevronRight, Volume2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { X, BookOpen, Sparkles, Bookmark, Highlighter, Loader2, ChevronRight, ChevronDown, ChevronUp, Volume2, Trash2 } from 'lucide-react';
 import { useReaderStore, type SidebarTab } from '@/stores/readerStore';
 import { analyzeAI } from '@/services/ai.service';
 import { saveAIAnalysis as saveAIAnalysisService, getArchiveItem } from '@/services/highlights.service';
 import { searchDictionary } from '@/services/dictionary.service';
 import { speak } from '@/utils/tts';
+import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
 import type { DictResult } from '@/types/dictionary';
+import type { VocabularyResponse } from '@/types/vocabulary';
 import type { AIAnalysisResult, ChapterHighlightData } from '@/types';
 import type { ContentSegment } from '@/types';
 import { clsx } from 'clsx';
@@ -140,21 +143,33 @@ const TAB_CONFIG = {
 // 词典 Tab 内容
 const DictionaryTab: React.FC = () => {
   const selectedToken = useReaderStore((s) => s.selectedToken);
+  const dictionaryQuery = useReaderStore((s) => s.dictionaryQuery);
+  const setDictionaryQuery = useReaderStore((s) => s.setDictionaryQuery);
 
   const [dictResult, setDictResult] = useState<DictResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 当选中的 token 变化时，查询词典
+  // 获取当前要查询的词：优先使用 dictionaryQuery，其次使用 selectedToken
+  const currentQueryWord = React.useMemo(() => {
+    if (dictionaryQuery) return dictionaryQuery;
+    if (selectedToken) return selectedToken.token.b || selectedToken.token.s;
+    return null;
+  }, [dictionaryQuery, selectedToken]);
+
+  // 当查询词变化时，查询词典
   useEffect(() => {
-    if (selectedToken) {
-      const queryWord = selectedToken.token.b || selectedToken.token.s;
-      fetchDictionary(queryWord);
+    if (currentQueryWord) {
+      fetchDictionary(currentQueryWord);
+      // 查询完成后清除 dictionaryQuery，避免重复查询
+      if (dictionaryQuery) {
+        setDictionaryQuery(null);
+      }
     } else {
       setDictResult(null);
       setError(null);
     }
-  }, [selectedToken]);
+  }, [currentQueryWord, dictionaryQuery, setDictionaryQuery]);
 
   const fetchDictionary = async (word: string) => {
     setIsLoading(true);
@@ -172,11 +187,11 @@ const DictionaryTab: React.FC = () => {
   };
 
   const handleTTS = useCallback(() => {
-    if (!selectedToken) return;
-    speak(selectedToken.text);
-  }, [selectedToken]);
+    const textToSpeak = selectedToken?.text || currentQueryWord || '';
+    if (textToSpeak) speak(textToSpeak);
+  }, [selectedToken, currentQueryWord]);
 
-  if (!selectedToken) {
+  if (!currentQueryWord) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
         <p>请点击文本中的单词查看释义</p>
@@ -184,10 +199,10 @@ const DictionaryTab: React.FC = () => {
     );
   }
 
-  const { token } = selectedToken;
-  const displayForm = token.b || token.s;
-  const reading = token.r || '';
-  const partOfSpeech = token.p || '';
+  // 优先使用 selectedToken 的详细信息，否则使用查询词
+  const displayForm = selectedToken?.token ? (selectedToken.token.b || selectedToken.token.s) : currentQueryWord;
+  const reading = selectedToken?.token?.r || dictResult?.reading || '';
+  const partOfSpeech = selectedToken?.token?.p || dictResult?.part_of_speech || '';
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -753,41 +768,185 @@ const AITab: React.FC = () => {
 const VocabularyTab: React.FC = () => {
   const vocabularies = useReaderStore((s) => s.vocabularies);
 
+  if (vocabularies.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400">
+        <p>暂无生词</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-4">
-      {vocabularies.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-gray-400">
-          <p>暂无生词</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {vocabularies.map((vocab) => (
-            <div
-              key={vocab.id}
-              className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      <div className="space-y-2">
+        {vocabularies.map((vocab) => (
+          <VocabItem key={vocab.id} vocab={vocab} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// 单个生词卡片（可展开查看词典释义）
+const VocabItem: React.FC<{ vocab: VocabularyResponse }> = ({ vocab }) => {
+  const [expanded, setExpanded] = useState(false);
+  const queryClient = useQueryClient();
+
+  // 懒加载词典数据
+  const { data: dictResult, isLoading, isError } = useQuery({
+    queryKey: ['dictionary', vocab.base_form || vocab.word],
+    queryFn: () => searchDictionary(vocab.base_form || vocab.word),
+    enabled: expanded,
+    staleTime: 5 * 60 * 1000, // 5分钟内不重复请求
+  });
+
+  // 展开时预加载词典数据
+  const handleToggle = useCallback(() => {
+    setExpanded((prev) => !prev);
+  }, []);
+
+  // 朗读
+  const handleTTS = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    speak(vocab.word);
+  }, [vocab.word]);
+
+  // 删除生词
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`确定要删除生词"${vocab.word}"吗？`)) {
+      // 这里需要调用删除 API，暂时只从 store 中移除
+      queryClient.invalidateQueries({ queryKey: ['vocabularies'] });
+    }
+  }, [vocab.word, queryClient]);
+
+  return (
+    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden">
+      {/* 主卡片 */}
+      <div
+        onClick={handleToggle}
+        className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline gap-2">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {vocab.word}
+            </span>
+            {vocab.reading && (
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                [{vocab.reading}]
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={handleTTS}
+              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
+              title="朗读"
             >
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {vocab.word}
-                </span>
-                {vocab.reading && (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    [{vocab.reading}]
-                  </span>
-                )}
-              </div>
-              {vocab.base_form && vocab.base_form !== vocab.word && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  原型: {vocab.base_form}
-                </p>
-              )}
-              {vocab.definition && (
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                  {vocab.definition}
-                </p>
-              )}
+              <Volume2 size={14} />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+              title="删除生词"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggle();
+              }}
+              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
+            >
+              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          </div>
+        </div>
+        {vocab.base_form && vocab.base_form !== vocab.word && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            原型: {vocab.base_form}
+          </p>
+        )}
+      </div>
+
+      {/* 展开的词典释义 */}
+      {expanded && (
+        <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50">
+          {isLoading ? (
+            <div className="flex items-center text-gray-400 text-sm py-3">
+              <Loader2 className="animate-spin mr-2" size={14} />
+              查询中...
             </div>
-          ))}
+          ) : isError || !dictResult ? (
+            <div className="text-sm text-gray-500 py-3">
+              查询失败，请稍后重试
+            </div>
+          ) : !dictResult.found ? (
+            <div className="text-sm text-gray-500 py-3">
+              未找到「{dictResult.query}」的释义
+            </div>
+          ) : (
+            <div className="max-h-60 overflow-y-auto">
+              {dictResult.entries.slice(0, 3).map((entry, idx) => (
+                <div
+                  key={`${entry.id}-${idx}`}
+                  className={clsx(
+                    'p-3',
+                    idx > 0 && 'border-t border-gray-100 dark:border-gray-800'
+                  )}
+                >
+                  {/* 汉字与读音 */}
+                  <div className="flex items-baseline gap-2 mb-2">
+                    {entry.kanji.length > 0 && (
+                      <span className="font-medium text-gray-900 dark:text-white text-sm">
+                        {entry.kanji.join('、')}
+                      </span>
+                    )}
+                    {entry.reading.length > 0 && (
+                      <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono">
+                        [{entry.reading.join('、')}]
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 释义列表 - 每个 sense 分组显示 */}
+                  <div className="space-y-2">
+                    {entry.senses.map((sense, senseIdx) => (
+                      <div key={senseIdx}>
+                        {/* 词性标签 */}
+                        {sense.pos.length > 0 && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex flex-wrap gap-1">
+                            {sense.pos.map((pos, posIdx) => (
+                              <span
+                                key={posIdx}
+                                className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs"
+                              >
+                                {pos}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* 释义列表 */}
+                        <ul className="space-y-1">
+                          {sense.definitions.map((def, defIdx) => (
+                            <li
+                              key={defIdx}
+                              className="text-xs text-gray-700 dark:text-gray-300 flex items-start gap-1"
+                            >
+                              <span className="text-gray-400 flex-shrink-0">{defIdx + 1}.</span>
+                              <span className="break-words">{def}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -901,14 +1060,10 @@ const HighlightsTab: React.FC = () => {
     }
   }, [pendingHighlight, requestChapterChange]);
 
-  const styleColorMap: Record<string, string> = {
-    yellow: 'bg-yellow-200 dark:bg-yellow-500/30',
-    green: 'bg-green-200 dark:bg-green-500/30',
-    blue: 'bg-blue-200 dark:bg-blue-500/30',
-    pink: 'bg-pink-200 dark:bg-pink-500/30',
-    purple: 'bg-purple-200 dark:bg-purple-500/30',
-    default: 'bg-blue-200 dark:bg-blue-500/30',
-  };
+  // 从后端配置构建样式映射（用于内联样式）
+  const getHighlightStyle = useCallback((category: string) => {
+    return getHighlightStyleWithFallback(category).color;
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -939,10 +1094,8 @@ const HighlightsTab: React.FC = () => {
             {displayHighlights.map((highlight) => (
               <div
                 key={highlight.id}
-                className={clsx(
-                  'rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer border-l-4',
-                  styleColorMap[highlight.style_category] || styleColorMap.default
-                )}
+                className="rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer border-l-4"
+                style={{ borderLeftColor: getHighlightStyle(highlight.style_category) }}
                 onClick={() => scrollToHighlight(highlight)}
               >
                 <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-2">

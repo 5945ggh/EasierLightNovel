@@ -80,6 +80,8 @@ interface ReaderState {
 
   // 交互状态
   selectedToken: SelectedToken | null;
+  /** 词典查询词（用于从生词本等外部触发词典查询） */
+  dictionaryQuery: string | null;
   /** AI Tab 当前显示的高亮 ID（用于保持显示状态，即使 selectedToken 变化） */
   displayHighlightId: number | null;
   /** AI 分析触发信号（点击"AI解析"按钮时设置，AITab 执行后清除） */
@@ -136,6 +138,8 @@ interface ReaderActions {
 
   // 交互状态
   setSelectedToken: (token: SelectedToken | null) => void;
+  /** 设置词典查询词（用于从生词本等外部触发词典查询） */
+  setDictionaryQuery: (query: string | null) => void;
   setDisplayHighlightId: (highlightId: number | null) => void;
   triggerAIAnalysis: (highlightId: number) => void;  // 触发 AI 分析
   clearAIAnalysisTrigger: () => void;  // 清除触发信号
@@ -257,6 +261,7 @@ const createDefaultState = (): ReaderState => ({
   currentSegmentIndex: 0,
   segmentOffset: 0,
   selectedToken: null,
+  dictionaryQuery: null,
   displayHighlightId: null,
   aiAnalysisTrigger: null,
   analyzingHighlightIds: new Set<number>(),
@@ -441,6 +446,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
 
   // 交互状态
   setSelectedToken: (selectedToken) => set({ selectedToken }),
+  setDictionaryQuery: (dictionaryQuery) => set({ dictionaryQuery }),
   setDisplayHighlightId: (displayHighlightId) => set({ displayHighlightId }),
   triggerAIAnalysis: (highlightId) => set({ aiAnalysisTrigger: highlightId }),
   clearAIAnalysisTrigger: () => set({ aiAnalysisTrigger: null }),
