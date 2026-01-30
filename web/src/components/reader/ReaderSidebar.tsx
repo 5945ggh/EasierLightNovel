@@ -487,17 +487,6 @@ const AITab: React.FC = () => {
       3 // 前后各 3 个句子
     );
 
-    // 调试日志
-    console.log('[Context Debug] ', {
-      highlightRange: `${highlight.start_segment_index}-${highlight.end_segment_index}`,
-      totalSegments: contextSegments.length,
-      totalSentences: sentences.length,
-      targetSentenceRange: `${targetSentenceStartIdx}-${targetSentenceEndIdx}`,
-      targetTextLength: targetText.length,
-      contextTextLength: contextText.length,
-      limit: MAX_CONTEXT_CHARS,
-    });
-
     return {
       targetText,
       contextText,
@@ -525,38 +514,22 @@ const AITab: React.FC = () => {
     try {
       // 先检查积累本是否已有分析结果
       try {
-        console.log('[AI] 检查积累本...', { highlightId });
         const archiveItem = await getArchiveItem(highlightId);
 
         if (archiveItem.ai_analysis) {
           // 积累本已有分析，解析并显示
           const savedResult = JSON.parse(archiveItem.ai_analysis) as AIAnalysisResult;
-          console.log('[AI] 从积累本加载:', savedResult.translation?.slice(0, 30) + '...');
           setAiResult(savedResult);
           markHighlightAnalyzed(highlightId);
         }
       } catch {
         // 积累本没有记录或出错，继续调用 AI
-        console.log('[AI] 积累本无记录，调用 AI 分析');
-
         // 调用 AI 分析
         const { targetText, contextText } = collectHighlightText(highlightId);
 
         if (!targetText) {
-          console.warn('[AI] 目标文本为空');
           return;
         }
-
-        // 打印请求详情用于调试
-        console.log('[AI] 发送分析请求:', {
-          book_id: bookId,
-          chapter_index: chapterIndex,
-          highlight_id: highlightId,
-          target_text_length: targetText.length,
-          target_text: targetText,
-          context_text_length: contextText.length,
-          context_text: contextText.slice(0, 100) + '...',
-        });
 
         const result = await analyzeAI({
           book_id: bookId,
@@ -566,17 +539,14 @@ const AITab: React.FC = () => {
           context_text: contextText,
         });
 
-        console.log('[AI] 分析完成:', result.translation?.slice(0, 30) + '...');
         setAiResult(result);
         markHighlightAnalyzed(highlightId);
 
         // 自动保存到积累本
         try {
           await saveAIAnalysisService(highlightId, result);
-          console.log('[AI] 已保存到积累本');
         } catch (saveErr) {
           console.error('[AI] 保存到积累本失败:', saveErr);
-          // 保存失败不影响显示，只是记录错误
         }
       }
     } catch (err) {

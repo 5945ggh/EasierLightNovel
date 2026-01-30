@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getAllHighlights, getArchiveItem, deleteHighlight } from '@/services/highlights.service';
 import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
 import type { ArchiveItemResponse, AIAnalysisResult } from '@/types';
-import { Loader2, Sparkles, ChevronDown, ChevronUp, Quote, Trash2 } from 'lucide-react';
+import { Loader2, Sparkles, ChevronDown, ChevronUp, Quote, Trash2, Search } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
 /**
@@ -51,10 +51,23 @@ const parseAnalysis = (analysisStr: string | undefined): AIAnalysisResult | null
 
 const HighlightTab: React.FC = () => {
   const queryClient = useQueryClient();
+  const [filter, setFilter] = useState('');
   const { data: highlights, isLoading } = useQuery({
     queryKey: ['highlights', 'all'],
     queryFn: getAllHighlights,
   });
+
+  // 搜索筛选
+  const filteredData = useMemo(() => {
+    if (!highlights) return [];
+    if (!filter) return highlights;
+
+    const lowerFilter = filter.toLowerCase();
+    return highlights.filter(h =>
+      (h.selected_text && h.selected_text.toLowerCase().includes(lowerFilter)) ||
+      (h.book_title && h.book_title.toLowerCase().includes(lowerFilter))
+    );
+  }, [highlights, filter]);
 
   const handleDelete = async (id: number) => {
     if (confirm('确定要删除这条划线吗？')) {
@@ -72,25 +85,39 @@ const HighlightTab: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-4">
-      {/* 统计 */}
-      {highlights && (
+    <div className="flex flex-col h-full">
+      {/* 工具栏 */}
+      <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <div className="relative w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <input
+            type="text"
+            placeholder="搜索划线内容或书名..."
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+          />
+        </div>
         <div className="text-sm text-gray-500">
-          共 {highlights.length} 条划线，{highlights.filter(h => h.has_Archive).length} 条有 AI 分析
+          共 {filteredData.length} 条划线
         </div>
-      )}
+      </div>
 
-      {/* 划线列表 */}
-      {highlights && highlights.length > 0 ? (
-        highlights.map(highlight => (
-          <HighlightItem key={highlight.id} highlight={highlight} onDelete={handleDelete} />
-        ))
-      ) : (
-        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-          <Quote size={48} className="mb-4 opacity-50" />
-          <p>{highlights?.length === 0 ? '暂无划线记录，去阅读器里划线吧！' : '加载中...'}</p>
-        </div>
-      )}
+      {/* 列表区域 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {filteredData.length > 0 ? (
+          <div className="space-y-4">
+            {filteredData.map(highlight => (
+              <HighlightItem key={highlight.id} highlight={highlight} onDelete={handleDelete} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <Quote size={48} className="mb-4 opacity-50" />
+            <p>{highlights?.length === 0 ? '暂无划线记录，去阅读器里划线吧！' : '没有找到匹配的划线'}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

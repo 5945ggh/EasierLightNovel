@@ -125,7 +125,6 @@ export async function initConfig(): Promise<PublicConfig> {
       });
 
       configState = response.data;
-      console.log('[Config] 配置加载成功:', configState);
       return configState;
     } catch (error) {
       console.warn('[Config] 配置加载失败，使用默认配置:', error);
@@ -156,7 +155,7 @@ export async function initConfig(): Promise<PublicConfig> {
  */
 export function getConfig(): PublicConfig {
   if (!configState) {
-    console.warn('[Config] 配置未初始化，返回默认配置');
+    // 配置未初始化，返回默认配置
     return DEFAULT_CONFIG;
   }
   return configState;

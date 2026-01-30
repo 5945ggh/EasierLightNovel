@@ -80,7 +80,6 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
         // 如果用户正在划线（Selection 不为空），则阻止点击事件，优先处理划线
         const selection = window.getSelection();
         if (selection && selection.toString().length > 0) {
-          console.log('[TokenRenderer] 点击被阻止：选区存在', selection.toString());
           return;
         }
 

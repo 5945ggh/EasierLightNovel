@@ -84,18 +84,11 @@ export const useScrollProgress = (
   // 1. 恢复阅读位置
   useEffect(() => {
     const container = containerRef.current;
-    console.log('[useScrollProgress] Restore effect triggered:', {
-      hasContainer: !!container,
-      isChapterSwitch,
-      initialPercentage,
-    });
-
     if (!container) return;
 
     // 章节切换时跳过恢复
     if (isChapterSwitch) {
       isRestoredRef.current = true;
-      console.log('[useScrollProgress] Skipping restore (chapter switch)');
       return;
     }
 
@@ -107,7 +100,6 @@ export const useScrollProgress = (
       isRestoredRef.current = true;
       container.scrollTop = 0;
       lastSavedPercentageRef.current = 0;
-      console.log('[useScrollProgress] Initial percentage is 0, set scrollTop to 0');
       return;
     }
 
@@ -119,18 +111,10 @@ export const useScrollProgress = (
       if (isRestoredRef.current) return;
 
       const maxScrollTop = container.scrollHeight - container.clientHeight;
-      console.log('[useScrollProgress] tryRestore:', {
-        scrollHeight: container.scrollHeight,
-        clientHeight: container.clientHeight,
-        maxScrollTop,
-        target: p * maxScrollTop,
-        attempt: restoreAttempts + 1,
-      });
 
       if (maxScrollTop <= 0) {
         // 内容高度不足，允许滚动保存
         if (restoreAttempts > 5) {
-          console.log('[useScrollProgress] Content too small, enabling scroll after attempts');
           isRestoredRef.current = true;
           lastSavedPercentageRef.current = 0;
         }
@@ -149,32 +133,20 @@ export const useScrollProgress = (
         // 放宽成功阈值：5px 或当前 maxScrollTop 的 1%
         const threshold = Math.max(5, maxScrollTop * 0.01);
         const diff = Math.abs(container.scrollTop - target);
-        console.log('[useScrollProgress] Checking restore success:', {
-          scrollTop: container.scrollTop,
-          target,
-          diff,
-          threshold,
-        });
 
         if (diff < threshold) {
+          // 恢复成功
           isRestoredRef.current = true;
           lastSavedPercentageRef.current = p; // 避免刚恢复就触发一次保存
-          console.log('[useScrollProgress] ✓ Restore successful, scroll save ENABLED');
           resizeObserverRef.current?.disconnect();
         } else if (restoreAttempts >= MAX_RESTORE_ATTEMPTS) {
           // 达到最大尝试次数，强制启用滚动保存（避免永久禁用）
-          console.log('[useScrollProgress] ⚠ Max attempts reached, force-enabling scroll save');
           isRestoredRef.current = true;
           lastSavedPercentageRef.current = container.scrollTop / maxScrollTop;
           resizeObserverRef.current?.disconnect();
         } else {
-          console.log('[useScrollProgress] ✗ Restore NOT successful, will retry', {
-            reason: `scrollTop difference ${diff} >= ${threshold}`,
-            attempt: restoreAttempts + 1,
-            maxAttempts: MAX_RESTORE_ATTEMPTS,
-          });
-          restoreAttempts++;
           // 继续尝试
+          restoreAttempts++;
           requestAnimationFrame(tryRestore);
         }
       });
@@ -185,13 +157,11 @@ export const useScrollProgress = (
     resizeObserverRef.current = new ResizeObserver(() => {
       // 内容每次变高都再尝试一次（重置尝试计数）
       restoreAttempts = 0;
-      console.log('[useScrollProgress] ResizeObserver triggered, reset attempts');
       setTimeout(tryRestore, restoreDelay);
     });
 
     // 观察第一个子元素（内容区），而不是滚动容器本身
     const observed = (container.firstElementChild ?? container) as Element;
-    console.log('[useScrollProgress] Observing element:', observed.tagName);
     resizeObserverRef.current.observe(observed);
 
     // 初次尝试恢复
@@ -208,19 +178,12 @@ export const useScrollProgress = (
     if (!container) return;
 
     const handleScroll = () => {
-      console.log('[useScrollProgress] Scroll event fired:', {
-        isRestored: isRestoredRef.current,
-        isProgrammatic: isProgrammaticScrollRef.current,
-      });
-
       // 未恢复时不监听，避免干扰恢复过程
       if (!isRestoredRef.current) {
-        console.log('[useScrollProgress] Scroll ignored - not restored yet');
         return;
       }
       // 程序触发的滚动不触发保存
       if (isProgrammaticScrollRef.current) {
-        console.log('[useScrollProgress] Scroll ignored - programmatic scroll');
         return;
       }
 
@@ -236,13 +199,11 @@ export const useScrollProgress = (
 
         if (Math.abs(safe - lastSavedPercentageRef.current) > 0.001) {
           lastSavedPercentageRef.current = safe;
-          console.log('[useScrollProgress] Saving progress:', safe);
           onProgressChange(safe);
         }
       }, debounceDelay);
     };
 
-    console.log('[useScrollProgress] Attaching scroll listener');
     container.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {

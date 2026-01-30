@@ -57,21 +57,12 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
 
   // 当 initialPercentage 变化时更新 ref（避免不滚动就切章节把 0 存回去）
   useEffect(() => {
-    console.log('[ContentCanvas] Updating cachedPercentageRef:', initialPercentage);
     cachedPercentageRef.current = initialPercentage;
   }, [initialPercentage]);
 
   // 保存进度的核心函数
   const saveProgress = useCallback((percentage: number): Promise<void> => {
-    console.log('[ContentCanvas] saveProgress called:', {
-      percentage,
-      hasBookId: !!bookId,
-      hasChapter: !!chapter,
-      currentSegmentIndex,
-    });
-
     if (!bookId || !chapter || currentSegmentIndex < 0) {
-      console.log('[ContentCanvas] saveProgress ABORTED - missing required data');
       return Promise.resolve();
     }
 
@@ -85,11 +76,8 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       progress_percentage: percentageForBackend,
     };
 
-    console.log('[ContentCanvas] Calling updateReadingProgress:', payload);
-
     return updateReadingProgress(bookId, payload)
       .then(() => {
-        console.log('[ContentCanvas] Progress saved successfully');
         setIsSaving(false);
       })
       .catch((err) => {
@@ -168,22 +156,14 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   // 2. 组件卸载时保存进度
   useEffect(() => {
     return () => {
-      console.log('[ContentCanvas] Unmounting, saving progress:', {
-        hasBookId: !!bookId,
-        hasChapter: !!chapter,
-        currentSegmentIndex,
-        cachedPercentage: cachedPercentageRef.current,
-      });
+      // 组件卸载时保存当前阅读进度
       if (bookId && chapter && currentSegmentIndex >= 0) {
         updateReadingProgress(bookId, {
           current_chapter_index: chapter.index,
           current_segment_index: currentSegmentIndex,
           progress_percentage: Math.round(cachedPercentageRef.current * 1000) / 10,
         })
-          .then(() => console.log('[ContentCanvas] Unmount save successful'))
-          .catch(err => console.error('[ContentCanvas] Unmount save failed:', err));
-      } else {
-        console.log('[ContentCanvas] Unmount save SKIPPED - missing data');
+          .catch(err => console.error('[ContentCanvas] Failed to save progress on unmount:', err));
       }
     };
   }, [bookId, chapter, currentSegmentIndex]);

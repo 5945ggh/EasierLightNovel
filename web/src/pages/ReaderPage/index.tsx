@@ -114,11 +114,7 @@ export const ReaderPage: React.FC = () => {
     retry: false,
   });
 
-  // 日志：进度数据变化
-  useEffect(() => {
-    console.log('[ReaderPage] Progress data changed:', progressData);
-  }, [progressData]);
-
+  // 进度数据变化时不需要额外处理，仅用于触发后续计算
   // 5. 确定初始章节索引（使用派生状态而非 effect + setState）
   const targetChapterIndex = useMemo(() => {
     if (!chapterList || chapterList.length === 0) return null;
@@ -176,13 +172,7 @@ export const ReaderPage: React.FC = () => {
   // 判断是否为章节切换（必须在 initialPercentage 之前计算）
   const isChapterSwitch = useMemo(() => {
     if (firstLoadedChapter === null) return false;
-    const result = currentChapterIndex !== null && currentChapterIndex !== firstLoadedChapter;
-    console.log('[ReaderPage] isChapterSwitch:', {
-      firstLoadedChapter,
-      currentChapterIndex,
-      result,
-    });
-    return result;
+    return currentChapterIndex !== null && currentChapterIndex !== firstLoadedChapter;
   }, [firstLoadedChapter, currentChapterIndex]);
 
   // 计算初始滚动百分比（后端返回 progress_percentage 为 0-100，转换为 0-1）
@@ -190,25 +180,14 @@ export const ReaderPage: React.FC = () => {
   const initialPercentage = useMemo(() => {
     // 章节切换时，强制从顶部开始（避免使用可能过时的进度数据）
     if (isChapterSwitch) {
-      console.log('[ReaderPage] initialPercentage = 0 (chapter switch)');
       return 0;
     }
     if (!progressData || targetChapterIndex === null) return 0;
     // 只有目标章节与进度记录匹配时才使用百分比
     if (progressData.current_chapter_index === targetChapterIndex) {
-      const pct = (progressData.progress_percentage ?? 0) / 100;
-      console.log('[ReaderPage] initialPercentage calculated:', {
-        progressChapter: progressData.current_chapter_index,
-        targetChapter: targetChapterIndex,
-        backendPercentage: progressData.progress_percentage,
-        calculatedPct: pct,
-      });
-      return pct;
+      return (progressData.progress_percentage ?? 0) / 100;
     }
-    console.log('[ReaderPage] initialPercentage = 0 (chapter mismatch)', {
-      progressChapter: progressData.current_chapter_index,
-      targetChapter: targetChapterIndex,
-    });
+    // 进度记录的章节与目标章节不匹配，从顶部开始
     return 0;
   }, [progressData, targetChapterIndex, isChapterSwitch]);
 
@@ -287,17 +266,13 @@ export const ReaderPage: React.FC = () => {
   useEffect(() => {
     // 只在章节真正切换（非首次加载）且章节内容已加载时触发
     if (isChapterSwitch && chapterData && currentChapterIndex !== null && bookId) {
-      console.log('[ReaderPage] Chapter switched, saving new chapter progress:', {
-        chapterIndex: currentChapterIndex,
-        chapterTitle: chapterData.title,
-      });
       // 立即保存新章节的进度（0% 位置）
       updateReadingProgress(bookId, {
         current_chapter_index: currentChapterIndex,
         current_segment_index: 0,
         progress_percentage: 0,
       })
-        .then(() => console.log('[ReaderPage] New chapter progress saved'))
+        .then(() => {/* 新章节进度已保存 */})
         .catch((err) => console.error('[ReaderPage] Failed to save new chapter progress:', err));
     }
   }, [isChapterSwitch, chapterData, currentChapterIndex, bookId]);

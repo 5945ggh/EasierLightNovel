@@ -23,12 +23,11 @@ export function initTTS(): void {
     // 监听语音加载完成事件
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = () => {
-        console.log('[TTS] 语音列表加载完成');
+        // 语音列表加载完成
       };
     }
 
     isInitialized = true;
-    console.log('[TTS] 语音引擎初始化完成');
   } catch (error) {
     console.warn('[TTS] 初始化失败:', error);
   }
@@ -58,17 +57,9 @@ export function speak(text: string, options: { lang?: string; rate?: number } = 
     utterance.lang = options.lang || 'ja-JP';
     utterance.rate = options.rate ?? 0.9;
 
-    // 添加事件监听（用于调试和错误处理）
-    utterance.onstart = () => {
-      console.log('[TTS] 开始朗读:', text.slice(0, 30));
-    };
-
-    utterance.onend = () => {
-      console.log('[TTS] 朗读完成');
-    };
-
+    // 添加错误处理
     utterance.onerror = (event) => {
-      console.error('[TTS] 朗读错误:', event.error, event);
+      console.error('[TTS] 朗读错误:', event.error);
     };
 
     window.speechSynthesis.speak(utterance);
