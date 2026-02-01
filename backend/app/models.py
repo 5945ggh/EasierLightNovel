@@ -13,15 +13,20 @@ class Book(Base):
     id = Column(String(32), primary_key=True) # uuid 32位
     title = Column(String(255), nullable=False)
     author = Column(String(255), nullable=True)
-    cover_url = Column(String(255)) # API Web 相对URL, 如: /static/books/{id}/images/cover.jpg 
-    
+    cover_url = Column(String(255)) # API Web 相对URL, 如: /static/books/{id}/images/cover.jpg
+
     status = Column(SQLEnum(ProcessingStatus), default=ProcessingStatus.PENDING)
     error_message = Column(String(255), nullable=True) # 如果失败，记录原因
-    
+
     # 统计信息
     total_chapters = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
+    # PDF 处理进度（可选，仅 PDF 解析时使用）
+    pdf_progress_stage = Column(String(50), default="")      # uploading/processing/downloading
+    pdf_progress_current = Column(Integer, default=0)         # 当前页数
+    pdf_progress_total = Column(Integer, default=0)           # 总页数
+
     # 关联
     chapters = relationship("Chapter", back_populates="book", cascade="all, delete-orphan")
     progress = relationship("UserProgress", back_populates="book", uselist=False, cascade="all, delete-orphan")

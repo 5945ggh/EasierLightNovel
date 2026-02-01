@@ -16,6 +16,10 @@ export interface BookDetail {
   error_message: string | null;
   total_chapters: number;
   created_at: string;
+  // PDF 处理进度（可选）
+  pdf_progress_stage?: string;
+  pdf_progress_current?: number;
+  pdf_progress_total?: number;
 }
 
 /**

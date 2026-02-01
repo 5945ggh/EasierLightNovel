@@ -118,7 +118,7 @@ CORS_ALLOW_CREDENTIALS = True
 # ==================== 文件上传 ====================
 UPLOAD_MAX_FILE_SIZE = int(_get_config("upload.max_file_size", 50 * 1024 * 1024, "MAX_UPLOAD_SIZE"))
 UPLOAD_ALLOWED_COVER_TYPES: Set[str] = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-UPLOAD_ALLOWED_BOOK_TYPES: Set[str] = {'.epub'}
+UPLOAD_ALLOWED_BOOK_TYPES: Set[str] = {'.epub', '.pdf'}
 
 # ==================== EPUB 解析 ====================
 EPUB_MAX_TITLE_LENGTH = int(_get_config("epub.max_title_length", 32, "EPUB_MAX_TITLE_LENGTH"))
@@ -180,3 +180,10 @@ HIGHLIGHT_STYLE_CATEGORIES: Dict[str, Dict[str, str]] = {
 
 # ==================== 日志 ====================
 LOG_LEVEL = _get_config("logging.level", "INFO", "LOG_LEVEL")
+
+# ==================== PDF 解析 ====================
+MINERU_API_TOKEN = _get_config("pdf.mineru_api_token", None, "MINERU_API_TOKEN")
+MINERU_MODEL_VERSION = _get_config("pdf.mineru_model_version", "vlm")
+MINERU_LANGUAGE = _get_config("pdf.mineru_language", "japan")
+MINERU_POLL_INTERVAL = int(_get_config("pdf.poll_interval_seconds", 5))
+MINERU_MAX_RETRIES = int(_get_config("pdf.max_poll_retries", 720))

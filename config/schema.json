@@ -199,6 +199,38 @@
           "default": "INFO"
         }
       }
+    },
+    "pdf": {
+      "type": "object",
+      "description": "PDF 解析配置 (MinerU API)",
+      "properties": {
+        "mineru_api_token": {
+          "type": "string",
+          "description": "MinerU API Token"
+        },
+        "mineru_model_version": {
+          "type": "string",
+          "description": "MinerU 模型版本 (vlm/pipeline)",
+          "default": "vlm"
+        },
+        "mineru_language": {
+          "type": "string",
+          "description": "文档语言 (ch=中英, japan=日语)",
+          "default": "japan"
+        },
+        "poll_interval_seconds": {
+          "type": "integer",
+          "description": "轮询间隔（秒）",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 60
+        },
+        "max_poll_retries": {
+          "type": "integer",
+          "description": "最大轮询次数",
+          "default": 720
+        }
+      }
     }
   },
   "required": ["backend", "cors"]

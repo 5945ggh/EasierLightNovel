@@ -9,10 +9,11 @@ from fastapi import UploadFile, BackgroundTasks
 from app.models import Book, Chapter, ProcessingStatus, Vocabulary
 from app.schemas import BookUpdate
 from sqlalchemy.orm import defer
-from app.utils.epub_parser import LightNovelParser
+from app.utils.parsers.epub_parser import LightNovelParser
+from app.utils.parsers.pdf_parser import PDFParser
 from app.utils.domain import TextSegment, ImageSegment, Chapter as ParserChapter
 from app.utils.tokenizer import JapaneseTokenizer
-from app.config import UPLOAD_DIR, EPUB_MERGE_SAME_NAME_CHAPTERS, EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS
+from app.config import UPLOAD_DIR, EPUB_MERGE_SAME_NAME_CHAPTERS, EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS, UPLOAD_ALLOWED_BOOK_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,25 @@ class BookService:
 
     def get_book(self, book_id: str) -> Optional[Book]:
         return self.db.query(Book).filter(Book.id == book_id).first()
+
+    def _create_parser(self, file_path: str, file_ext: str, book_id: str):
+        """
+        工厂方法：创建对应的解析器
+
+        Args:
+            file_path: 文件路径
+            file_ext: 文件扩展名 (如 ".epub", ".pdf")
+            book_id: 书籍 ID
+
+        Returns:
+            解析器实例 (LightNovelParser 或 PDFParser)
+        """
+        if file_ext == '.epub':
+            return LightNovelParser(file_path, book_id, UPLOAD_DIR)
+        elif file_ext == '.pdf':
+            return PDFParser(file_path, book_id, UPLOAD_DIR)
+        else:
+            raise ValueError(f"不支持的文件类型: {file_ext}")
 
     def update_book(self, book_id: str, update_data: BookUpdate) -> Optional[Book]:
         """
@@ -273,15 +293,20 @@ class BookService:
         """
         接收上传文件，创建 Book 记录 (Pending 状态)，并触发后台解析任务
 
-        注意：使用 UUID 生成书籍 ID，不再基于文件内容哈希（避免 EPUB 文件头相似导致的冲突）
+        支持 EPUB 和 PDF 格式
         """
         if file.filename is None:
             raise ValueError("Upload File Error: No filename")
 
-        # 1. 生成唯一书籍 ID（UUID）
+        # 1. 检查文件类型
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in UPLOAD_ALLOWED_BOOK_TYPES:
+            raise ValueError(f"不支持的文件类型: {file_ext}，仅支持 {UPLOAD_ALLOWED_BOOK_TYPES}")
+
+        # 2. 生成唯一书籍 ID（UUID）
         book_id = LightNovelParser.generate_book_id()
 
-        # 2. 读取文件内容并保存到临时目录
+        # 3. 读取文件内容并保存到临时目录
         content = await file.read()
         temp_dir = "./temp_uploads"
         os.makedirs(temp_dir, exist_ok=True)
@@ -290,11 +315,15 @@ class BookService:
         with open(temp_file_path, "wb") as f:
             f.write(content)
 
-        # 3. 提取 EPUB 元数据
-        fallback_title = file.filename.replace(".epub", "")
-        title, author = self._extract_epub_metadata(temp_file_path, fallback_title)
+        # 4. 提取元数据
+        fallback_title = file.filename.replace(file_ext, "")
+        if file_ext == '.epub':
+            title, author = self._extract_epub_metadata(temp_file_path, fallback_title)
+        else:  # PDF
+            # PDF 使用文件名作为标题
+            title, author = fallback_title, None
 
-        # 4. 创建数据库记录 (PENDING)
+        # 5. 创建数据库记录 (PENDING)
         new_book = Book(
             id=book_id,
             title=title,
@@ -308,24 +337,25 @@ class BookService:
         self.db.commit()
         self.db.refresh(new_book)
 
-        # 5. 添加后台任务
-        # 注意：这里需要传递文件路径，后台任务跑完后负责删除临时文件
+        # 6. 添加后台任务（传递文件扩展名）
         background_tasks.add_task(
             self.process_book_task,
             book_id,
-            temp_file_path
+            temp_file_path,
+            file_ext
         )
 
         return new_book
 
-    def process_book_task(self, book_id: str, file_path: str, mode: str = "B"):
+    def process_book_task(self, book_id: str, file_path: str, file_ext: str = ".epub", mode: str = "B"):
         """
-        后台任务：解析 EPUB -> 分词 -> 存入数据库
+        后台任务：解析 EPUB/PDF -> 分词 -> 存入数据库
         需要创建新的 DB Session，因为原来的请求 Session 可能已关闭
 
         Args:
             book_id: 书籍 ID
-            file_path: EPUB 文件路径
+            file_path: 文件路径
+            file_ext: 文件扩展名 (".epub" 或 ".pdf")
             mode: 分词模式 ("A", "B", "C")
         """
         # 这里的 SessionLocal 是 database.py 里定义的
@@ -333,6 +363,7 @@ class BookService:
         db = SessionLocal()
 
         book: Optional[Book] = None  # 提前声明，避免 except 块中 UnboundLocalError
+        parser = None  # 用于 cleanup
 
         try:
             book = db.query(Book).filter(Book.id == book_id).first()
@@ -343,14 +374,26 @@ class BookService:
             book.status = ProcessingStatus.PROCESSING  # type: ignore
             db.commit()
 
-            logger.info(f"Start processing book: {book.title} ({book_id})")
+            logger.info(f"Start processing book: {book.title} ({book_id}), file_ext={file_ext}")
 
-            # A. 解析 EPUB 结构
-            parser = LightNovelParser(file_path, book_id, UPLOAD_DIR)
-            raw_chapters = parser.parse()  # 返回 List[Chapter] (这里的 Chapter 是 parser 类，非 ORM)
+            # A. 创建解析器并解析
+            parser = self._create_parser(file_path, file_ext, book_id)
 
-            # B. 应用章节合并逻辑（合并同名章节、合并纯图片章节）
-            raw_chapters = self._merge_chapters(raw_chapters)
+            # 进度回调 (用于 PDF)
+            def progress_callback(progress):
+                if hasattr(progress, 'stage'):
+                    book.pdf_progress_stage = progress.stage  # type: ignore
+                book.pdf_progress_current = progress.current  # type: ignore
+                book.pdf_progress_total = progress.total  # type: ignore
+                db.commit()
+
+            raw_chapters = parser.parse(
+                progress_callback if file_ext == '.pdf' else None
+            )
+
+            # B. 应用章节合并逻辑（仅 EPUB 需要，PDF 已通过 MarkdownParser 分割）
+            if file_ext == '.epub':
+                raw_chapters = self._merge_chapters(raw_chapters)
 
             # C. 初始化分词器
             assert mode in ["A", "B", "C"]
@@ -422,3 +465,4 @@ class BookService:
             # 清理上传的临时文件
             if os.path.exists(file_path):
                 os.remove(file_path)
+            # PDF 解析器已在 parse() 的 finally 块中自动清理临时目录
