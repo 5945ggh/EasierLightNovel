@@ -92,7 +92,7 @@ class LightNovelParser:
         spine_id: str,
         soup: BeautifulSoup,
         chapter_index: int,
-        first_text_line: Optional[str] = None
+        first_text_line_info: tuple[Optional[str], bool] = (None, False)
     ) -> str:
         """
         提取章节标题（组合策略）
@@ -100,18 +100,21 @@ class LightNovelParser:
         优先级：
         1. TOC 标题（如果存在）
         2. 继承上一个 TOC 标题（用于同一章的后续部分，如 p-002, p-003）
-        3. 正文首行截取（不超过配置的 EPUB_MAX_TITLE_LENGTH）
-        4. Fallback: "Chapter X"
+        3. 从文档的 h1-h6 标签获取
+        4. 正文首行提取（引号标题/标点符号策略）
+        5. Fallback: "Chapter X"
 
         Args:
             spine_id: spine 中的 item_id (如 "p-001")
             soup: BeautifulSoup 解析后的文档对象
             chapter_index: 章节索引（用于 fallback）
-            first_text_line: 正文第一行文本（如果已提取）
+            first_text_line_info: (标题文本, 是否需要从正文中删除)
 
         Returns:
             章节标题字符串
         """
+        first_text_line, should_remove = first_text_line_info
+
         # 1. 优先使用 TOC 标题
         if spine_id in self.toc_map:
             title = self.toc_map[spine_id].strip()
@@ -127,16 +130,16 @@ class LightNovelParser:
         header_tag = soup.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
         if header_tag:
             title = header_tag.get_text().strip()
+            title = re.sub(r'\s+', ' ', title)  # 换行符替换为空格
             if title:
                 return title
 
-        # 4. 使用正文首行截取
+        # 4. 使用正文首行提取结果
         if first_text_line:
-            title = first_text_line.strip()
-            # 截取到第一个换行符或最大长度
-            title = title.split('\n')[0][:EPUB_MAX_TITLE_LENGTH] # TODO: 截取逻辑似乎仍有问题, 将换行符修改为全角空格无法解决, 待修复
-            if title:
-                return title
+            # 引号标题（should_remove=True）不截断，其他策略才截断
+            if should_remove:
+                return first_text_line
+            return first_text_line[:EPUB_MAX_TITLE_LENGTH]
 
         # 5. Fallback
         return f"Chapter {chapter_index + 1}"
@@ -301,24 +304,103 @@ class LightNovelParser:
 
         buffer.clear()
 
-    def _extract_first_text_line(self, soup: BeautifulSoup) -> Optional[str]:
+    def _extract_first_text_line(self, soup: BeautifulSoup) -> tuple[Optional[str], bool]:
         """
         提取正文第一行文本（用于作为章节标题的 fallback）
 
-        遍历 body 的所有文本节点，找到第一个非空行。
+        返回: (标题文本, 是否需要从正文中删除)
+
+        策略优先级：
+        1. 检测引号标题 『...』 或 「...」
+        2. 第一个标点符号后向前找换行符
+        3. 传统的首行截取（降级）
         """
         if not soup.body:
-            return None
+            return None, False
 
-        for text in soup.body.stripped_strings:
-            line = text.strip()
-            if line:
-                # 过滤掉一些明显不是标题的内容
-                # 如纯数字、单个标点等
-                if len(line) > 1 and not line.isdigit():
-                    return line
+        # 获取正文所有文本（保留换行结构）
+        body_text = soup.body.get_text(separator='\n', strip=False)
 
-        return None
+        # ========== 策略1: 检测引号标题 ==========
+        # 匹配 『...』 或 「...」
+        for quote_start, quote_end in [('『', '』'), ('「', '」')]:
+            start_idx = body_text.find(quote_start)
+            if start_idx != -1:
+                end_idx = body_text.find(quote_end, start_idx + 1)
+                if end_idx != -1:
+                    title = body_text[start_idx:end_idx + 1]
+                    title = re.sub(r'\s+', ' ', title).strip()  # 换行符替换为空格
+                    if title:  # 只需要防止为空
+                        return title, True  # 返回标题，标记需要删除
+
+        # ========== 策略2: 第一个标点符号 + 向前找换行符 ==========
+        # 常见日文/中文标点
+        punctuation = ['。', '！', '？', '！', '？', '.', '!', '?', '．', '｡', '…']
+
+        for i, char in enumerate(body_text):
+            if char in punctuation:
+                # 从标点符号位置向前找第一个换行符
+                newline_before = body_text.rfind('\n', 0, i)
+                if newline_before == -1:
+                    newline_before = 0
+                else:
+                    newline_before += 1  # 跳过换行符本身
+
+                # 提取标题
+                title = body_text[newline_before:i + 1].strip()
+                title = re.sub(r'\s+', ' ', title)  # 换行符替换为空格
+
+                # 边界检查：不为空且不是纯数字
+                if title and not title.isdigit():
+                    return title, False
+
+        # ========== 策略3: 降级 - 传统的首行截取 ==========
+        lines = body_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and not line.isdigit():
+                line = re.sub(r'\s+', ' ', line)
+                return line[:EPUB_MAX_TITLE_LENGTH], False
+
+        return None, False
+
+    def _remove_title_from_soup(self, soup: BeautifulSoup, title: str) -> None:
+        """
+        从 soup 中删除引号标题，避免在正文中重复出现
+
+        策略：找到包含标题文本的文本节点，将其父节点删除
+        """
+        # 标准化标题用于匹配（去除空格）
+        title_normalized = re.sub(r'\s+', '', title)
+
+        # 遍历所有文本节点
+        for text_node in list(soup.find_all(string=True)):
+            if not text_node.strip():
+                continue
+
+            # 标准化节点文本
+            node_normalized = re.sub(r'\s+', '', text_node)
+
+            # 检查是否包含标题
+            if title_normalized in node_normalized:
+                # 找到包含该文本的父元素
+                parent = text_node.parent
+                if parent:
+                    # 如果是纯标题节点（只有标题文本），直接删除
+                    # 如果标题是段落的一部分，只删除标题部分
+                    parent_text = parent.get_text()
+                    parent_text_normalized = re.sub(r'\s+', '', parent_text)
+
+                    # 如果整个元素就是标题，删除整个元素
+                    if parent_text_normalized == title_normalized:
+                        parent.decompose()
+                        break
+                    # 如果标题只是元素的一部分，替换文本
+                    elif title_normalized in parent_text_normalized:
+                        # 用空字符串替换标题文本
+                        new_text = re.sub(re.escape(title), '', parent_text, flags=re.IGNORECASE)
+                        parent.string = new_text
+                        break
 
     def parse(self) -> List[Chapter]:
         """
@@ -351,14 +433,18 @@ class LightNovelParser:
             soup = BeautifulSoup(item.get_content(), 'lxml')
 
             # 提取正文第一行（用于标题 fallback）
-            first_text_line = self._extract_first_text_line(soup)
+            first_text_line, should_remove_title = self._extract_first_text_line(soup)
+
+            # 如果检测到引号标题，从正文中删除它
+            if should_remove_title and first_text_line:
+                self._remove_title_from_soup(soup, first_text_line)
 
             # 使用组合策略提取章节标题
             title_str = self._extract_chapter_title(
                 spine_id=item_id,
                 soup=soup,
                 chapter_index=i,
-                first_text_line=first_text_line
+                first_text_line_info=(first_text_line, should_remove_title)
             )
 
             current_chapter = Chapter(title_str, i)
