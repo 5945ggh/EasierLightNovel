@@ -51,5 +51,12 @@
   },
   "logging": {
     "level": "INFO"
+  },
+  "pdf": {
+    "mineru_api_token": "YOUR-MINERU-API-TOKEN",
+    "mineru_model_version": "vlm",
+    "mineru_language": "japan",
+    "poll_interval_seconds": 5,
+    "max_poll_retries": 720
   }
 }
