@@ -1,57 +1,95 @@
-# 用户配置说明
+# 配置指南
 
-## 配置文件
+**EasierLightNovel** 所有的个性化设置均通过 `config/user.json` 文件进行管理。
 
-项目根目录下的 `config/user.json` 文件用于自定义应用配置。
+## 快速设置
+
+首次使用时，请复制示例文件：
+
+```bash
+# Windows
+copy config\user.json.example config\user.json
+
+# macOS / Linux / Git Bash
+cp config/user.json.example config/user.json
+```
+
+修改 `config/user.json` 后，**必须重启** 后端服务才能生效。
+
+---
+
+## 1. LLM 与 AI 配置 (核心功能)
+
+为了使用“AI 深度解析”功能，你需要配置大语言模型。项目底层使用 `LiteLLM`，支持 OpenAI、DeepSeek、Claude、Ollama 等多种后端。
+
+**配置位置**: `"llm": { ... }`
+
+| 字段              | 说明                                   | 默认值 / 示例                                           |
+| :--------------- | :----------------------------------- | :----------------------------------------------------- |
+| `model`          | **模型名称**<br>格式必须为 `供应商/模型名`        | `deepseek/deepseek-chat`<br>`openai/gpt-4o`<br>`ollama/llama3` |
+| `api_key`        | API 密钥                               | `"sk-..."`                                             |
+| `base_url`       | API 基础地址 (可选)                        | `"https://api.deepseek.com"`                             |
+| `max_text_length` | 允许用户选中的最大文本长度 (AI 解析时使用)           | `512` (字符)                                            |
+
+**常见配置示例：**
 
 ```json
-{
-  "$schema": "./schema.json",
-  "backend": {
-    "host": "127.0.0.1",
-    "port": 8010
-  },
-  "frontend": {
-    "port": 5173
-  },
-  "cors": {
-    "allowed_origins": [
-      "http://localhost:5173",
-      "http://127.0.0.1:5173"
-    ]
-  }
+// 使用 DeepSeek
+"llm": {
+  "model": "deepseek/deepseek-chat",
+  "api_key": "sk-your-key",
+  "base_url": "https://api.deepseek.com"
+}
+
+// 使用本地 Ollama
+"llm": {
+  "model": "ollama/llama3",
+  "api_key": "ollama", 
+  "base_url": "http://localhost:11434"
 }
 ```
 
-## 配置项
+---
 
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `backend.host` | 后端监听地址 | `127.0.0.1` |
-| `backend.port` | 后端端口 | `8010` |
-| `frontend.port` | 前端端口 | `5173` |
-| `cors.allowed_origins` | CORS 允许的前端地址 | `["http://localhost:5173", "http://127.0.0.1:5173"]` |
+## 2. 阅读与词典设置
 
-## 端口冲突解决
+调整日语分词精度和字典行为，优化阅读体验。
 
-### 修改后端端口
+**配置位置**: `"tokenizer"` / `"dictionary"` / `"epub"`
 
-如果 8010 端口被占用，修改 `backend.port` 为其他可用端口（如 8011、8000 等）。
+| 模块       | 字段                | 说明                                                           | 推荐值        |
+| :------- | :---------------- | :----------------------------------------------------------- | :--------- |
+| **分词**   | `mode`            | **分词粒度**<br>`A`: 短单位 (最细)<br>`B`: 中单位 (标准)<br>`C`: 长单位 (复合词) | `"B"` (推荐) |
+| **词典**   | `memory_mode`     | **内存模式**<br>`true`: 加载全字典进内存 (非常不建议, 可能加载很多份词典进入内存)<br>`false`: 磁盘查询 (省内存) | `false`    |
+| **词典**   | `load_kanji_dict` | 是否加载汉字详情字典                                                   | `false`    |
+| **词典**   | `db_path` | 词典文件路径, 不填则为jamdict默认路径             | `null`    |
+| **EPUB** | `max_chunk_size`  | 单个文本切片长度，一般不需要修改   | `1024`     |
 
-### 修改前端端口
+---
 
-如果 5173 端口被占用，修改 `frontend.port` 为其他可用端口（如 5174、3000 等）。
+## 3. 网络与端口配置
 
-### 同步更新 CORS
+用于解决端口冲突或进行局域网/公网部署。
 
-**修改端口时必须同步更新** `cors.allowed_origins`，否则会出现跨域错误。
+**配置位置**: `"backend"` / `"frontend"` / `"cors"`
 
-例如，将前端端口改为 5174：
+| 字段                     | 说明                                 | 默认值                         |
+| :--------------------- | :--------------------------------- | :-------------------------- |
+| `backend.host`         | 后端监听地址 (`0.0.0.0` 可用于局域网访问)        | `"127.0.0.1"`               |
+| `backend.port`         | 后端服务端口                             | `8010`                      |
+| `frontend.port`        | 前端开发服务器端口                          | `5173`                      |
+| `cors.allowed_origins` | **CORS 跨域白名单**<br>⚠️ 修改端口后必须同步更新此处 | `["http://localhost:5173"]` |
+
+> **注意**：如果使用**生产模式**（`npm run build` 后启动后端）或**打包后的可执行文件**，前端已集成在后端中，无需配置前端端口与跨域设置。
+
+**端口冲突解决示例：**
+
+如果你想将前端改为 `5174`，后端改为 `8011`，请修改：
 
 ```json
 {
-  "backend": {"host": "127.0.0.1", "port": 8010},
-  "frontend": {"port": 5174},
+  "backend": { "host": "127.0.0.1", "port": 8011 },
+  "frontend": { "port": 5174 },
   "cors": {
     "allowed_origins": [
       "http://localhost:5174",
@@ -61,23 +99,29 @@
 }
 ```
 
-**注意**：修改配置后需要重启后端和前端服务。
+---
 
-## 配置优先级
+## 4. 存储与路径
 
-```
-环境变量 > config/user.json > 代码默认值
-```
+自定义数据存储位置，适合需要将数据存放在外接硬盘或特定目录的用户。
 
-如需通过环境变量覆盖配置，可以使用：
+**配置位置**: `"paths"`
 
-```bash
-# Linux/Mac
-export PORT=8011
+| 字段                | 说明                              | 默认值                      |
+| :---------------- | :------------------------------ | :----------------------- |
+| `data_dir`        | **核心数据目录**<br>存放数据库、解压后的图片、书籍文件 | `"static_data"`          |
+| `temp_upload_dir` | 上传文件临时缓存目录                      | `"backend/temp_uploads"` |
 
-# Windows CMD
-set PORT=8011
+---
 
-# Windows PowerShell
-$env:PORT=8011
-```
+## 5. 高级设置
+
+通常情况下无需修改。
+
+| 模块          | 字段              | 说明                              | 默认值               |
+| :---------- | :-------------- | :------------------------------ | :---------------- |
+| **Upload**  | `max_file_size` | 最大上传文件大小 (Bytes)                | `52428800` (50MB) |
+| **Query**   | `default_limit` | API 默认分页数量                      | `100`             |
+| **Logging** | `level`         | 日志级别 (`DEBUG`, `INFO`, `ERROR`) | `"INFO"`          |
+
+---

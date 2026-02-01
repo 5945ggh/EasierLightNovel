@@ -32,7 +32,7 @@
 
 ## 快速开始
 
- ### PS: **windows 用户**可以下载 `release` 中的打包文件直接使用, 更快更轻量
+> **提示**：Windows 用户可下载 `release` 中的打包文件直接使用，更快捷轻量。
 
 ### 环境要求
 
@@ -58,6 +58,10 @@ npm install
 复制配置模板并修改：
 
 ```bash
+# Windows
+copy config\user.json.example config\user.json
+
+# macOS / Linux / Git Bash
 cp config/user.json.example config/user.json
 ```
 
@@ -185,9 +189,9 @@ AI 分析功能需要配置 LLM，支持通过 litellm 接入多种模型：
 ```json
 {
   "llm": {
-    "model": "openai/gpt-4o-mini",           // OpenAI
-    "model": "deepseek/deepseek-chat",       // DeepSeek
-    "model": "ollama/llama3",                 // 本地 Ollama
+    "model": "openai/gpt-4o-mini",    // OpenAI
+    // "model": "deepseek/deepseek-chat",  // DeepSeek
+    // "model": "ollama/llama3",            // 本地 Ollama
     "api_key": "your-api-key",
     "base_url": "https://api.example.com"
   }
@@ -210,8 +214,7 @@ AI 分析功能需要配置 LLM，支持通过 litellm 接入多种模型：
 
 **Q: AI 解析报错怎么办？**
 
-A: 检查 API 配置是否正确，确保 `api_key` 和 `base_url` 匹配; 模型名称请按照
-A: 检查 API 配置是否正确，确保 `api_key` 和 `base_url` 匹配; 模型名称请参考 [litellm](https://docs.litellm.ai/docs/providers) 格式, 确保按照 provider/model_name 的格式填入。
+A: 检查 API 配置是否正确，确保 `api_key` 和 `base_url` 匹配；模型名称请参考 [litellm 文档](https://docs.litellm.ai/docs/providers)，确保按照 `provider/model_name` 的格式填入。
 
 **Q: 支持其他格式的电子书吗？**
 
