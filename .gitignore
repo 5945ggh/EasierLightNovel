@@ -53,3 +53,7 @@ web/*.local
 
 # UV
 uv.lock
+
+# claude
+.claude
+CLAUDE.md
