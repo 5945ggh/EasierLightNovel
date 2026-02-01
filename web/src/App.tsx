@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { ReaderPage } from '@/pages/ReaderPage';
 import StudyPage from '@/pages/StudyPage';
+import SettingsPage from '@/pages/SettingsPage';
 import { initConfig } from '@/services/config.service';
 
 // 创建 React Query 客户端
@@ -70,6 +71,7 @@ function App() {
           <Routes>
             <Route path="/" element={<LibraryPage />} />
             <Route path="/study" element={<StudyPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/read/:bookId" element={<ReaderPage />} />
           </Routes>
         </BrowserRouter>

@@ -133,7 +133,7 @@ if frontend_built:
             print(f"[Frontend] 已注册 /{file_name} -> {file_path}")
 
 # 注册 API 路由（必须在 SPA fallback 之前）
-from app.routers import books, vocabularies, highlights, dictionary, ai, config
+from app.routers import books, vocabularies, highlights, dictionary, ai, config, user_config
 from fastapi.responses import FileResponse
 from fastapi import APIRouter
 app.include_router(books.router)
@@ -142,6 +142,7 @@ app.include_router(highlights.router)
 app.include_router(dictionary.router)
 app.include_router(ai.router)
 app.include_router(config.router)
+app.include_router(user_config.router)
 
 # 健康检查
 @app.get("/health")

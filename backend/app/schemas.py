@@ -1,6 +1,6 @@
 # app/schemas.py
 from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 from datetime import datetime
 
 from app.enums import ProcessingStatus, JLPTLevel
@@ -330,3 +330,43 @@ class PublicConfigResponse(BaseModel):
     limits: ConfigLimits
     features: FeatureFlags
     highlight_styles: dict[str, HighlightStyleInfo]
+
+
+# ==================== User Config 相关 ====================
+class ConfigFieldInfo(BaseModel):
+    """单个配置字段的元信息"""
+    key: str = Field(..., description="字段键名（如 'backend.host'）")
+    type: str = Field(..., description="字段类型: string/integer/number/boolean/array")
+    default: Any = Field(None, description="默认值")
+    description: str = Field("", description="字段描述")
+    enum: Optional[List[str]] = Field(None, description="枚举值（如有）")
+    minimum: Optional[Union[int, float]] = Field(None, description="最小值")
+    maximum: Optional[Union[int, float]] = Field(None, description="最大值")
+
+
+class ConfigGroupInfo(BaseModel):
+    """配置分组信息"""
+    group: str = Field(..., description="分组名称（如 'backend'）")
+    label: str = Field(..., description="分组显示标签")
+    description: str = Field("", description="分组描述")
+    fields: List[ConfigFieldInfo] = Field(default_factory=list, description="该分组的字段列表")
+
+
+class UserConfigResponse(BaseModel):
+    """用户配置响应（用于设置页面）"""
+    config: Dict[str, Any] = Field(..., description="当前配置值（敏感字段已掩码）")
+    schema_info: List[ConfigGroupInfo] = Field(..., description="配置 schema 信息")
+    restart_required: bool = Field(False, description="修改配置后是否需要重启后端")
+
+
+class UserConfigUpdate(BaseModel):
+    """更新用户配置请求"""
+    config: Dict[str, Any] = Field(..., description="要更新的配置（支持部分更新）")
+
+
+class ConfigUpdateResponse(BaseModel):
+    """配置更新响应"""
+    success: bool
+    message: str
+    restart_required: bool = Field(False, description="是否需要重启后端")
+    updated_fields: List[str] = Field(default_factory=list, description="已更新的字段列表")

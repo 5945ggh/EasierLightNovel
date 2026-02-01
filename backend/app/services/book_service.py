@@ -13,7 +13,7 @@ from app.utils.parsers.epub_parser import LightNovelParser
 from app.utils.parsers.pdf_parser import PDFParser
 from app.utils.domain import TextSegment, ImageSegment, Chapter as ParserChapter
 from app.utils.tokenizer import JapaneseTokenizer
-from app.config import UPLOAD_DIR, EPUB_MERGE_SAME_NAME_CHAPTERS, EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS, UPLOAD_ALLOWED_BOOK_TYPES
+from app.config import UPLOAD_DIR, EPUB_MERGE_SAME_NAME_CHAPTERS, EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS, UPLOAD_ALLOWED_BOOK_TYPES, TOKENIZER_DEFAULT_MODE
 
 logger = logging.getLogger(__name__)
 
@@ -337,12 +337,13 @@ class BookService:
         self.db.commit()
         self.db.refresh(new_book)
 
-        # 6. 添加后台任务（传递文件扩展名）
+        # 6. 添加后台任务（传递文件扩展名和分词模式）
         background_tasks.add_task(
             self.process_book_task,
             book_id,
             temp_file_path,
-            file_ext
+            file_ext,
+            TOKENIZER_DEFAULT_MODE
         )
 
         return new_book

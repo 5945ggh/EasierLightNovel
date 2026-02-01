@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Plus, UploadCloud, Library as LibraryIcon, Loader2, FileText, CheckCircle, AlertCircle, BrainCircuit } from 'lucide-react';
+import { Plus, UploadCloud, Library as LibraryIcon, Loader2, FileText, CheckCircle, AlertCircle, BrainCircuit, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useLibrary } from '@/hooks/useLibrary';
 import { BookCard } from '@/components/library/BookCard';
@@ -253,6 +253,15 @@ export const LibraryPage: React.FC = () => {
 
         {/* 右侧按钮组 */}
         <div className='flex items-center gap-3'>
+          {/* 系统设置入口 */}
+          <Link
+            to='/settings'
+            className='flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm'
+          >
+            <Settings size={18} className='text-slate-600' />
+            <span>系统设置</span>
+          </Link>
+
           {/* 学习中心入口 */}
           <Link
             to='/study'
