@@ -7,10 +7,12 @@ MinerU API 客户端
 文档: https://mineru.net/
 """
 import os
+import random
 import logging
 import time
 import requests
 from typing import Optional, Callable
+from requests.exceptions import SSLError, ConnectionError, ChunkedEncodingError, ReadTimeout
 
 from app.config import (
     MINERU_API_TOKEN,
@@ -314,7 +316,7 @@ class MinerUClient:
 
     def download_result(self, batch_id: str, output_dir: str) -> str:
         """
-        下载已完成任务的结果
+        下载已完成任务的结果（带重试 + 可断点续传）
 
         Args:
             batch_id: 批次 ID
@@ -326,35 +328,95 @@ class MinerUClient:
         Raises:
             MinerUProcessingError: 下载失败
         """
-        zip_url = self.get_result_url(batch_id)
-        zip_path = os.path.join(output_dir, f"{batch_id}.zip")
+        # 下载重试次数（独立于轮询重试）
+        MAX_DOWNLOAD_RETRIES = 5
 
-        # 确保输出目录存在且可写
-        if os.path.exists(output_dir) and not os.path.isdir(output_dir):
-            raise MinerUProcessingError(f"输出路径不是目录: {output_dir}")
         os.makedirs(output_dir, exist_ok=True)
 
-        # 检查是否可写
-        if not os.access(output_dir, os.W_OK):
-            raise MinerUProcessingError(f"输出目录不可写: {output_dir}")
+        zip_path = os.path.join(output_dir, f"{batch_id}.zip")
+        part_path = zip_path + ".part"
 
-        logger.info(f"开始下载结果: batch_id={batch_id}")
+        for attempt in range(1, MAX_DOWNLOAD_RETRIES + 1):
+            # 每次尝试都刷新一次下载链接（避免 presigned URL 临近过期）
+            zip_url = self.get_result_url(batch_id)
 
-        try:
-            # 使用裸 requests（不带 Authorization 头访问 presigned URL）
-            resp = requests.get(zip_url, timeout=300, stream=True)
-            resp.raise_for_status()
+            try:
+                # 检查是否有未完成的下载，支持断点续传
+                resume_from = 0
+                if os.path.exists(part_path):
+                    resume_from = os.path.getsize(part_path)
+                    logger.info(f"发现未完成的下载，将从 {resume_from} 字节处续传")
 
-            with open(zip_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:  # 过滤 keep-alive 空包
-                        f.write(chunk)
+                headers = {
+                    "User-Agent": "Lightnovel2Textbook/1.0",
+                    "Accept-Encoding": "identity",  # 有时能减少中间层对传输的干扰
+                    "Connection": "close",  # 避免某些环境 keep-alive 问题
+                }
+                if resume_from > 0:
+                    headers["Range"] = f"bytes={resume_from}-"
 
-            logger.info(f"结果下载完成: {zip_path}")
-            return zip_path
+                logger.info(
+                    f"下载结果: batch_id={batch_id} attempt={attempt}/{MAX_DOWNLOAD_RETRIES} resume_from={resume_from}"
+                )
 
-        except (requests.RequestException, IOError) as e:
-            raise MinerUProcessingError(f"下载失败: {e}")
+                # 使用独立 session 下载 CDN 内容，禁用代理（trust_env=False）
+                # presigned URL 不需要代理，代理可能导致 SSL 握手失败
+                download_session = requests.Session()
+                download_session.trust_env = False  # 忽略系统/环境变量代理
+
+                # timeout=(15, 300): 连接超时15秒，读取超时300秒
+                with download_session.get(
+                    zip_url,
+                    stream=True,
+                    timeout=(15, 300),
+                    headers=headers,
+                ) as resp:
+                    # 206 = Range 生效续传；200 = 全量重新下载
+                    if resp.status_code == 200 and resume_from > 0:
+                        # 服务端忽略 Range 请求，需要重新下载
+                        logger.info("服务端不支持 Range，重新开始下载")
+                        resume_from = 0
+
+                    resp.raise_for_status()
+
+                    # 续传用追加模式，新下载用覆盖模式
+                    mode = "ab" if resume_from > 0 and resp.status_code == 206 else "wb"
+                    with open(part_path, mode) as f:
+                        for chunk in resp.iter_content(chunk_size=1024 * 128):
+                            if chunk:  # 过滤 keep-alive 空包
+                                f.write(chunk)
+
+                # 下载完成，重命名为正式文件
+                os.replace(part_path, zip_path)
+                logger.info(f"结果下载完成: {zip_path}")
+                return zip_path
+
+            except (SSLError, ConnectionError, ChunkedEncodingError, ReadTimeout) as e:
+                # 这类错误通常是瞬态网络/CDN问题：可重试
+                if attempt >= MAX_DOWNLOAD_RETRIES:
+                    raise MinerUProcessingError(
+                        f"下载失败(重试{MAX_DOWNLOAD_RETRIES}次仍失败): {type(e).__name__}: {e}"
+                    ) from e
+
+                # 指数退避 + 随机抖动，避免雪崩
+                backoff = min(30.0, (1.7 ** (attempt - 1)) + random.random())
+                logger.warning(f"下载网络异常，{backoff:.1f}s 后重试: {type(e).__name__}: {e}")
+                time.sleep(backoff)
+
+            except requests.RequestException as e:
+                # HTTP 错误等：一般不需要无限重试；最后一次抛出
+                if attempt >= MAX_DOWNLOAD_RETRIES:
+                    raise MinerUProcessingError(f"下载失败: {e}") from e
+                backoff = min(10.0, 1.5 ** (attempt - 1))
+                logger.warning(f"下载请求失败，{backoff:.1f}s 后重试: {e}")
+                time.sleep(backoff)
+
+            except (IOError, OSError) as e:
+                # 文件系统错误：通常重试无意义，直接抛出
+                raise MinerUProcessingError(f"文件写入失败: {e}") from e
+
+        # 理论上不会到达这里（循环内要么 return 要么 raise）
+        raise MinerUProcessingError("下载失败：未知错误")
 
     def get_batch_status(self, batch_id: str) -> dict:
         """

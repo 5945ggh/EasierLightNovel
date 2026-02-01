@@ -51,7 +51,37 @@ cp config/user.json.example config/user.json
 
 ---
 
-## 2. 阅读与词典设置
+## 2. PDF 解析配置 (使用 PDF 功能时必需)
+
+PDF 文件通过 MinerU 云端 API 解析，需要配置 API Token。
+
+**配置位置**: `"pdf"`
+
+| 字段                      | 说明                                          | 默认值     |
+| :---------------------- | :------------------------------------------- | :------- |
+| `mineru_api_token`     | **MinerU API Token**（必需）<br>从 [mineru.net](https://mineru.net/) 获取 | `null`    |
+| `mineru_model_version` | MinerU 模型版本<br>`vlm` 或 `pipeline`                 | `"vlm"`  |
+| `mineru_language`      | 文档语言<br>`ch`=中英, `japan`=日语                      | `"japan"` |
+| `poll_interval_seconds` | 轮询间隔（秒）                                    | `5`       |
+| `max_poll_retries`      | 最大轮询次数                                      | `720`     |
+
+**配置示例**：
+
+```json
+{
+  "pdf": {
+    "mineru_api_token": "your-mineru-api-token",
+    "mineru_model_version": "vlm",
+    "mineru_language": "japan"
+  }
+}
+```
+
+> **注意**：CDN 下载会自动绕过系统代理（`trust_env=False`），避免 SSL 握手问题。
+
+---
+
+## 3. 阅读与词典设置
 
 调整日语分词精度和字典行为，优化阅读体验。
 
@@ -67,7 +97,7 @@ cp config/user.json.example config/user.json
 
 ---
 
-## 3. 网络与端口配置
+## 4. 网络与端口配置
 
 用于解决端口冲突或进行局域网/公网部署。
 
@@ -101,7 +131,7 @@ cp config/user.json.example config/user.json
 
 ---
 
-## 4. 存储与路径
+## 5. 存储与路径
 
 自定义数据存储位置，适合需要将数据存放在外接硬盘或特定目录的用户。
 
@@ -114,7 +144,7 @@ cp config/user.json.example config/user.json
 
 ---
 
-## 5. 高级设置
+## 6. 高级设置
 
 通常情况下无需修改。
 

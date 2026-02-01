@@ -1,6 +1,6 @@
 /**
  * 书架页面
- * 展示所有书籍，支持上传 EPUB、删除书籍、编辑元数据
+ * 展示所有书籍，支持上传 EPUB/PDF、删除书籍、编辑元数据
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -83,8 +83,9 @@ export const LibraryPage: React.FC = () => {
     if (!file) return;
 
     // 验证文件类型
-    if (!file.name.toLowerCase().endsWith('.epub')) {
-      showToast('请选择 EPUB 格式的文件', 'error');
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.epub') && !fileName.endsWith('.pdf')) {
+      showToast('请选择 EPUB 或 PDF 格式的文件', 'error');
       return;
     }
 
@@ -219,7 +220,7 @@ export const LibraryPage: React.FC = () => {
         <div className='fixed inset-0 bg-blue-600/10 backdrop-blur-sm z-40 flex items-center justify-center border-4 border-dashed border-blue-500 rounded-2xl m-4'>
           <div className='text-center'>
             <UploadCloud size={64} className='text-blue-600 mx-auto mb-4 animate-bounce' />
-            <p className='text-xl font-semibold text-blue-600'>拖放 EPUB 文件到这里</p>
+            <p className='text-xl font-semibold text-blue-600'>拖放 EPUB/PDF 文件到这里</p>
           </div>
         </div>
       )}
@@ -267,7 +268,7 @@ export const LibraryPage: React.FC = () => {
               type='file'
               ref={fileInputRef}
               className='hidden'
-              accept='.epub'
+              accept='.epub,.pdf'
               onChange={handleFileChange}
             />
             <button
@@ -283,7 +284,7 @@ export const LibraryPage: React.FC = () => {
               ) : (
                 <>
                   <Plus size={18} />
-                  <span>导入 EPUB</span>
+                  <span>导入书籍</span>
                 </>
               )}
             </button>
@@ -305,8 +306,8 @@ export const LibraryPage: React.FC = () => {
               <UploadCloud size={48} className='text-gray-400' />
             </div>
             <p className='text-gray-700 font-semibold text-lg mb-1'>还没有书籍</p>
-            <p className='text-sm text-gray-500'>点击右上角按钮或拖放 EPUB 文件</p>
-            <p className='text-xs text-gray-400 mt-4'>支持导入日文 EPUB 格式的轻小说</p>
+            <p className='text-sm text-gray-500'>点击右上角按钮或拖放 EPUB/PDF 文件</p>
+            <p className='text-xs text-gray-400 mt-4'>支持导入日文 EPUB/PDF 格式的轻小说</p>
           </div>
         ) : (
           /* 书籍网格 */
@@ -329,7 +330,7 @@ export const LibraryPage: React.FC = () => {
             <AlertCircle size={20} className='text-red-500 flex-shrink-0 mt-0.5' />
             <div className='text-sm'>
               <p className='font-medium text-red-700'>有 {failedCount} 本书解析失败</p>
-              <p className='text-red-600 mt-1'>请检查 EPUB 文件是否损坏，或尝试重新上传。</p>
+              <p className='text-red-600 mt-1'>请检查 EPUB/PDF 文件是否损坏，或尝试重新上传。</p>
             </div>
           </div>
         )}

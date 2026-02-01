@@ -14,7 +14,7 @@
 
 | 功能 | 描述 |
 |------|------|
-| **EPUB 解析** | 支持上传 EPUB 文件，自动提取插图并保持原书排版 |
+| **EPUB/PDF 解析** | 支持上传 EPUB/PDF 文件，自动提取插图并保持原书排版. 目前对PDF的处理效果不佳, 正在优化中 |
 | **智能分词** + **离线即时词典** | 基于 SudachiPy 的日语分词，自动生成注音; 集成 Jamdict 日语词典，点击单词即可查看释义 |
 | **生词本** + **划线高亮** | 收集生词，支持按书分类和间隔重复复习; 多种样式划线，标记重要句子和语法点 |
 | **AI 深度解析** | 可选调用 LLM 进行语法、翻译、语感分析 |
@@ -129,7 +129,9 @@ EasierLightNovel/
 
 ### 1. 上传书籍
 
-点击首页的「上传书籍」按钮，选择 EPUB 文件。系统会自动解析并分词。
+点击首页的「导入书籍」按钮，选择 EPUB 或 PDF 文件。系统会自动解析并分词。
+
+> **注意**：PDF 解析需要配置 MinerU API Token（见下方配置说明）。
 
 ### 2. 阅读与学习
 
@@ -163,6 +165,7 @@ EasierLightNovel/
 | 框架 | FastAPI |
 | 数据库 | SQLite + SQLAlchemy |
 | EPUB 解析 | ebooklib + BeautifulSoup4 |
+| PDF 解析 | MinerU API + MarkdownParser |
 | 分词 | SudachiPy |
 | 词典 | Jamdict |
 | LLM 集成 | litellm |
@@ -181,6 +184,22 @@ EasierLightNovel/
 ---
 
 ## 配置说明
+
+### PDF 解析配置（使用 PDF 功能时必需）
+
+PDF 解析使用 MinerU 云端 API，需要配置 API Token：
+
+```json
+{
+  "pdf": {
+    "mineru_api_token": "your-mineru-token",
+    "mineru_model_version": "vlm",
+    "mineru_language": "japan"
+  }
+}
+```
+
+获取 Token 请访问 [MinerU 官网](https://mineru.net/) 注册账号。
 
 ### LLM 配置（可选）
 
@@ -207,6 +226,7 @@ AI 分析功能需要配置 LLM，支持通过 litellm 接入多种模型：
 - 词典语言偏好
 - 端口和路径配置
 - 上传文件大小限制
+- EPUB 章节合并策略
 
 ---
 
@@ -218,7 +238,11 @@ A: 检查 API 配置是否正确，确保 `api_key` 和 `base_url` 匹配；模�
 
 **Q: 支持其他格式的电子书吗？**
 
-A: 目前仅支持 EPUB，未来计划支持 TXT、PDF 等格式。
+A: 目前支持 EPUB 和 PDF 格式。EPUB 本地解析，PDF 通过 MinerU API 解析。
+
+**Q: PDF 解析失败怎么办？**
+
+A: 确保已配置 MinerU API Token。如果遇到网络错误，尝试关闭代理或检查网络连接。
 
 **Q: 数据存储在哪里？**
 
@@ -228,7 +252,7 @@ A: 所有数据**完全本地化**存储在 `static_data/` 目录，包括书籍
 
 ## 路线图
 
-- [ ] 支持更多电子书格式（TXT、PDF、MOBI）
+- [ ] 支持更多电子书格式（TXT、MOBI）
 - [ ] 生词本导出（Anki 格式）
 - [ ] 阅读统计可视化
 - [ ] 移动端适配优化 

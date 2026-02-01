@@ -387,9 +387,11 @@ class BookService:
                 book.pdf_progress_total = progress.total  # type: ignore
                 db.commit()
 
-            raw_chapters = parser.parse(
-                progress_callback if file_ext == '.pdf' else None
-            )
+            # 解析文档（仅 PDF 需要 progress_callback）
+            if file_ext == '.pdf':
+                raw_chapters = parser.parse(progress_callback)
+            else:
+                raw_chapters = parser.parse()
 
             # B. 应用章节合并逻辑（仅 EPUB 需要，PDF 已通过 MarkdownParser 分割）
             if file_ext == '.epub':

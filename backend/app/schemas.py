@@ -26,6 +26,10 @@ class BookDetail(BaseModel):
     error_message: Optional[str] = None
     total_chapters: int
     created_at: datetime
+    # PDF 处理进度（可选）
+    pdf_progress_stage: Optional[str] = None
+    pdf_progress_current: Optional[int] = None
+    pdf_progress_total: Optional[int] = None
 
 BookListItem = BookDetail # 书籍列表项
 

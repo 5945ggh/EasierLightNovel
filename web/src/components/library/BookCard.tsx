@@ -57,6 +57,27 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
   const isProcessing = book.status === ProcessingStatus.PROCESSING || book.status === ProcessingStatus.PENDING;
   const isFailed = book.status === ProcessingStatus.FAILED;
 
+  // PDF 进度信息
+  const getPdfProgressMessage = () => {
+    const stage = book.pdf_progress_stage;
+
+    if (!stage) return null;
+
+    const { pdf_progress_current: current, pdf_progress_total: total } = book;
+
+    const stageMessages: Record<string, string> = {
+      uploading: '上传 PDF 到解析服务...',
+      processing: (total ?? 0) > 0 ? `解析页面 ${current}/${total}...` : '解析中...',
+      downloading: '下载解析结果...',
+      parsing: '解析内容...',
+    };
+
+    return stageMessages[stage] || '处理中...';
+  };
+
+  const pdfProgressMessage = getPdfProgressMessage();
+  const isPdf = !!book.pdf_progress_stage; // 是否为 PDF（通过进度字段判断）
+
   return (
     <div
       className={clsx(
@@ -101,7 +122,9 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
           <div className='absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white'>
             <Loader2 className='animate-spin mb-3' size={28} />
             <span className='text-sm font-medium tracking-wide'>处理中...</span>
-            <span className='text-[10px] mt-1 opacity-70'>正在解析 EPUB</span>
+            <span className='text-[10px] mt-1 opacity-70'>
+              {pdfProgressMessage || '正在解析'}
+            </span>
           </div>
         )}
 
@@ -115,15 +138,6 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
                 {book.error_message}
               </span>
             )}
-          </div>
-        )}
-
-        {/* 完成状态的 hover 提示 */}
-        {book.status === ProcessingStatus.COMPLETED && !isDeleting && (
-          <div className='absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors duration-300 flex items-center justify-center'>
-            <span className='text-blue-600 font-medium text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 translate-y-2 group-hover:translate-y-0'>
-              点击阅读
-            </span>
           </div>
         )}
       </div>
@@ -143,7 +157,11 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
         {/* 底部元数据 */}
         <div className='mt-auto pt-3 flex items-center justify-between text-[10px] text-gray-400'>
           <span className={clsx(isProcessing && 'text-amber-500')}>
-            {isProcessing ? '处理中' : book.total_chapters > 0 ? `${book.total_chapters} 章节` : 'EPUB'}
+            {isProcessing
+              ? '处理中'
+              : book.total_chapters > 0
+                ? `${book.total_chapters} 章节`
+                : isPdf ? 'PDF' : 'EPUB'}
           </span>
 
           {/* 更多操作按钮 */}
