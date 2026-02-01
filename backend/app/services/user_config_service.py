@@ -141,6 +141,21 @@ class UserConfigService:
         Returns:
             (is_valid, error_message)
         """
+        # 预处理：去除字符串首尾空白
+        if isinstance(value, str):
+            value = value.strip()
+            # 空字符串处理
+            if value == "":
+                # 检查是否允许空值
+                keys = path.split(".")
+                schema_node = schema.get("properties", {})
+                for key in keys[:-1]:
+                    schema_node = schema_node.get(key, {}).get("properties", {})
+                field_schema = schema_node.get(keys[-1], {})
+                # 如果字符串为空且有默认值，使用默认值
+                if field_schema.get("default") is not None:
+                    value = field_schema.get("default")
+
         keys = path.split(".")
         schema_node = schema.get("properties", {})
         for key in keys[:-1]:
@@ -153,18 +168,21 @@ class UserConfigService:
         if expected_type == "integer":
             if not isinstance(value, int):
                 try:
-                    value = int(value)
+                    value = int(str(value).strip()) if isinstance(value, str) else int(value)
                 except (ValueError, TypeError):
                     return False, "必须是整数"
         elif expected_type == "number":
             if not isinstance(value, (int, float)):
                 try:
-                    value = float(value)
+                    value = float(str(value).strip()) if isinstance(value, str) else float(value)
                 except (ValueError, TypeError):
                     return False, "必须是数字"
         elif expected_type == "boolean":
             if not isinstance(value, bool):
-                return False, "必须是布尔值"
+                if isinstance(value, str):
+                    value = value.strip().lower() in ("true", "1", "yes", "on")
+                else:
+                    return False, "必须是布尔值"
         elif expected_type == "array":
             if not isinstance(value, list):
                 return False, "必须是数组"
@@ -202,6 +220,13 @@ class UserConfigService:
         restart_required = False
 
         for field_path, new_value in updates.items():
+            # 预处理：去除字符串首尾空白
+            if isinstance(new_value, str):
+                new_value = new_value.strip()
+            elif isinstance(new_value, list):
+                # 去除数组中每个字符串元素的空白
+                new_value = [v.strip() if isinstance(v, str) else v for v in new_value]
+
             # 验证值
             is_valid, error_msg = self.validate_value(field_path, new_value, schema)
             if not is_valid:
