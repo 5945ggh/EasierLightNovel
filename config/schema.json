@@ -89,6 +89,16 @@
           "type": "integer",
           "description": "单个文本段最大长度",
           "default": 2048
+        },
+        "merge_same_name_chapters": {
+          "type": "boolean",
+          "description": "是否合并同名的连续章节（如 EPUB 将同一章拆分为多个文件）",
+          "default": true
+        },
+        "merge_consecutive_image_chapters": {
+          "type": "boolean",
+          "description": "是否合并连续的纯图片章节（如多张插图页）",
+          "default": true
         }
       }
     },

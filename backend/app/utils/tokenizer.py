@@ -4,28 +4,8 @@ from sudachipy import tokenizer, dictionary
 import jaconv
 
 from app.config import TOKENIZER_DEFAULT_MODE
+from app.utils.domain import Token
 
-# ================= 数据模型 =================
-class Token:
-    def __init__(self, surface: str, reading: Optional[str] = None, base_form: str = "", pos: str = "", is_gap: bool = False):
-        self.surface = surface      # 显示文本
-        self.reading = reading      # 读音
-        self.base_form = base_form  # 原型
-        self.pos = pos              # 词性
-        self.is_gap = is_gap        # 标记是否为补全的空白/符号
-        self.parts: List[Dict[str, Any]] = []
-
-    def to_dict(self):
-        # 极简模式，减少 JSON 体积
-        d: Dict[str, Any] = {"s": self.surface}
-        if self.is_gap:
-            d["gap"] = True
-        else:
-            if self.reading: d["r"] = self.reading
-            if self.base_form: d["b"] = self.base_form
-            if self.pos: d["p"] = self.pos
-            if self.parts: d["RUBY"] = self.parts
-        return d
 
 # ================= 核心逻辑 =================
 class JapaneseTokenizer:

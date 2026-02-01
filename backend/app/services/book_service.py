@@ -9,9 +9,10 @@ from fastapi import UploadFile, BackgroundTasks
 from app.models import Book, Chapter, ProcessingStatus, Vocabulary
 from app.schemas import BookUpdate
 from sqlalchemy.orm import defer
-from app.utils.epub_parser import LightNovelParser, TextSegment, ImageSegment
+from app.utils.epub_parser import LightNovelParser
+from app.utils.domain import TextSegment, ImageSegment, Chapter as ParserChapter
 from app.utils.tokenizer import JapaneseTokenizer
-from app.config import UPLOAD_DIR
+from app.config import UPLOAD_DIR, EPUB_MERGE_SAME_NAME_CHAPTERS, EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,71 @@ class BookService:
             logger.error(f"Failed to find cover image for {book_id}: {e}")
             return None
 
+    def _is_image_only_chapter(self, chapter: ParserChapter) -> bool:
+        """判断章节是否只包含图片"""
+        if not chapter.segments:
+            return False
+        return all(seg.type == 'image' for seg in chapter.segments)
+
+    def _merge_chapters(self, chapters: List[ParserChapter]) -> List:
+        """
+        合并章节：
+        1. 合并同名的连续章节（如 EPUB 将同一章拆分为多个文件）
+        2. 合并连续的纯图片章节（如多张插图页）
+
+        Args:
+            chapters: LightNovelParser.Chapter 对象列表
+
+        Returns:
+            合并后的章节列表
+        """
+        if not chapters:
+            return chapters
+
+        # 第一步：合并同名章节
+        if EPUB_MERGE_SAME_NAME_CHAPTERS:
+            merged = []
+            i = 0
+            while i < len(chapters):
+                current = chapters[i]
+                # 查找后续同名章节
+                j = i + 1
+                while j < len(chapters) and chapters[j].title == current.title:
+                    # 拼接 segments
+                    current.segments.extend(chapters[j].segments)
+                    logger.info(f"Merged same-name chapter: {current.title} (index {i} + {j})")
+                    j += 1
+                merged.append(current)
+                i = j
+            chapters = merged
+
+        # 第二步：合并连续纯图片章节
+        if EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS:
+            merged = []
+            i = 0
+            while i < len(chapters):
+                current = chapters[i]
+                merged.append(current)
+                # 如果当前章节是纯图片章节，查找并合并后续的纯图片章节
+                if self._is_image_only_chapter(current):
+                    j = i + 1
+                    while j < len(chapters) and self._is_image_only_chapter(chapters[j]):
+                        # 拼接 segments
+                        current.segments.extend(chapters[j].segments)
+                        logger.info(f"Merged consecutive image chapters: {current.title} (index {i} + {j})")
+                        j += 1
+                    # 跳过已合并的章节
+                    i = j
+                else:
+                    i += 1
+            chapters = merged
+
+        # 重新计算 index
+        for idx, chapter in enumerate(chapters):
+            chapter.index = idx
+
+        return chapters
+
     async def create_book_from_file(self, file: UploadFile, background_tasks: BackgroundTasks) -> Book:
         """
         接收上传文件，创建 Book 记录 (Pending 状态)，并触发后台解析任务
@@ -283,7 +349,10 @@ class BookService:
             parser = LightNovelParser(file_path, book_id, UPLOAD_DIR)
             raw_chapters = parser.parse()  # 返回 List[Chapter] (这里的 Chapter 是 parser 类，非 ORM)
 
-            # B. 初始化分词器
+            # B. 应用章节合并逻辑（合并同名章节、合并纯图片章节）
+            raw_chapters = self._merge_chapters(raw_chapters)
+
+            # C. 初始化分词器
             assert mode in ["A", "B", "C"]
             tokenizer = JapaneseTokenizer(mode=mode) #type: ignore
 

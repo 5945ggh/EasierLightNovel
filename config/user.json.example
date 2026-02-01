@@ -22,7 +22,9 @@
   },
   "epub": {
     "max_title_length": 32,
-    "max_chunk_size": 1024
+    "max_chunk_size": 1024,
+    "merge_same_name_chapters": true,
+    "merge_consecutive_image_chapters": true
   },
   "tokenizer": {
     "mode": "B"

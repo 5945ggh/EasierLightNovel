@@ -123,6 +123,8 @@ UPLOAD_ALLOWED_BOOK_TYPES: Set[str] = {'.epub'}
 # ==================== EPUB 解析 ====================
 EPUB_MAX_TITLE_LENGTH = int(_get_config("epub.max_title_length", 32, "EPUB_MAX_TITLE_LENGTH"))
 EPUB_MAX_CHUNK_SIZE = int(_get_config("epub.max_chunk_size", 1024, "EPUB_MAX_CHUNK_SIZE"))
+EPUB_MERGE_SAME_NAME_CHAPTERS = bool(_get_config("epub.merge_same_name_chapters", True))
+EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS = bool(_get_config("epub.merge_consecutive_image_chapters", True))
 
 # ==================== 分词 ====================
 TOKENIZER_DEFAULT_MODE: str = _get_config("tokenizer.mode", "B", "TOKENIZER_MODE")
