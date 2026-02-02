@@ -5,7 +5,7 @@
  * 性能优化：使用 selector 订阅特定状态，避免 store 任何变化都触发重渲染
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import clsx from 'clsx';
 import { useReaderStore, getTokenKey } from '@/stores/readerStore';
 import type { TokenData } from '@/types/chapter';
@@ -18,30 +18,6 @@ interface TokenRendererProps {
 }
 
 /**
- * 获取划线内联样式（带缓存）
- */
-let lastStyleCategory: string | null = null;
-let lastInlineStyle: { backgroundColor: string } | null = null;
-
-function getHighlightInlineStyle(styleCategory: string): { backgroundColor: string } | null {
-  // 缓存优化：如果 key 相同，直接返回缓存结果
-  if (lastStyleCategory === styleCategory && lastInlineStyle) {
-    return lastInlineStyle;
-  }
-
-  const style = getHighlightStyleWithFallback(styleCategory);
-  const hex = style.color.replace('#', '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  lastInlineStyle = { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.25)` };
-  lastStyleCategory = styleCategory;
-
-  return lastInlineStyle;
-}
-
-/**
  * TokenRenderer 组件
  *
  * 性能关键点：
@@ -51,6 +27,31 @@ function getHighlightInlineStyle(styleCategory: string): { backgroundColor: stri
  */
 export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
   ({ token, segmentIndex, tokenIndex }) => {
+    // 组件级样式缓存（避免全局变量污染）
+    const styleCacheRef = useRef<{ category: string | null; style: { backgroundColor: string } | null }>({
+      category: null,
+      style: null,
+    });
+
+    // 获取划线内联样式（使用组件级缓存）
+    const getHighlightInlineStyle = useCallback((styleCategory: string): { backgroundColor: string } | null => {
+      const cache = styleCacheRef.current;
+      if (cache.category === styleCategory && cache.style) {
+        return cache.style;
+      }
+
+      const style = getHighlightStyleWithFallback(styleCategory);
+      const hex = style.color.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+
+      cache.style = { backgroundColor: `rgba(${r}, ${g}, ${b}, 0.25)` };
+      cache.category = styleCategory;
+
+      return cache.style;
+    }, []); // 依赖为空，因为使用 ref 而不是 state
+
     // 1. 订阅选中状态 - 使用 selector 只在匹配时才触发重渲染
     const isSelected = useReaderStore((s) =>
       s.selectedToken?.segmentIndex === segmentIndex &&

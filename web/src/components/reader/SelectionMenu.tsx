@@ -289,6 +289,10 @@ export const SelectionMenu: React.FC = () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      // 重置 refs，避免内存泄漏
+      lastSelectionRangeRef.current = null;
+      clickInSelectionRef.current = false;
+      lastTouchPosRef.current = null;
     };
   }, [handleMouseUp, handleTouchStart, handleSelectionChange]);
 

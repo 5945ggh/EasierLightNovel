@@ -18,6 +18,31 @@ import { ChevronLeft, ChevronRight, Home, Settings, List } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useScrollProgress } from '@/hooks/useScrollProgress';
 
+// ==========================================
+// localStorage 降级存储工具
+// ==========================================
+const LOCAL_STORAGE_KEY_PREFIX = 'reading_progress_';
+
+/** 保存进度到 localStorage（降级存储） */
+const saveProgressToLocal = (
+  bookId: string,
+  chapterIndex: number,
+  segmentIndex: number,
+  percentage: number
+): void => {
+  try {
+    const data = {
+      chapterIndex,
+      segmentIndex,
+      percentage,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${bookId}`, JSON.stringify(data));
+  } catch (err) {
+    console.error('[ContentCanvas] Failed to save progress to localStorage:', err);
+  }
+};
+
 interface ContentCanvasProps {
   // 滚动容器的 ref（从 ReaderPage 传入）
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -36,19 +61,6 @@ interface ContentCanvasProps {
 
 // IntersectionObserver 配置：只有当段落进入视口中心区域时才触发
 const OBSERVER_ROOT_MARGIN = '-45% 0px -45% 0px'; // 只检测视口中间 10% 的区域
-
-interface ContentCanvasProps {
-  // 滚动容器的 ref（从 ReaderPage 传入）
-  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  // 章节切换回调
-  onPrevChapter?: () => void;
-  onNextChapter?: () => void;
-  hasPrevChapter?: boolean;
-  hasNextChapter?: boolean;
-  // 进度恢复参数
-  initialPercentage: number; // 初始滚动百分比 (0-1)
-  isChapterSwitch: boolean;  // 是否为章节切换（跳过百分比恢复）
-}
 
 export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   scrollContainerRef,
@@ -80,7 +92,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     cachedPercentageRef.current = initialPercentage;
   }, [initialPercentage]);
 
-  // 保存进度的核心函数
+  // 保存进度的核心函数（带 localStorage 降级）
   const saveProgress = useCallback((percentage: number): Promise<void> => {
     if (!bookId || !chapter || currentSegmentIndex < 0) {
       return Promise.resolve();
@@ -101,7 +113,9 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
         setIsSaving(false);
       })
       .catch((err) => {
-        console.error('[ContentCanvas] Failed to save progress:', err);
+        console.error('[ContentCanvas] Failed to save progress to server:', err);
+        // 网络失败时保存到 localStorage
+        saveProgressToLocal(bookId, chapter.index, currentSegmentIndex, percentage);
         setIsSaving(false);
       });
   }, [bookId, chapter, currentSegmentIndex]);
@@ -173,17 +187,21 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     };
   }, [chapter, bookId, currentSegmentIndex, scrollContainerRef, setCurrentSegmentIndex]);
 
-  // 2. 组件卸载时保存进度
+  // 2. 组件卸载时保存进度（带 localStorage 降级）
   useEffect(() => {
     return () => {
       // 组件卸载时保存当前阅读进度
       if (bookId && chapter && currentSegmentIndex >= 0) {
+        const percentage = Math.round(cachedPercentageRef.current * 1000) / 10;
         updateReadingProgress(bookId, {
           current_chapter_index: chapter.index,
           current_segment_index: currentSegmentIndex,
-          progress_percentage: Math.round(cachedPercentageRef.current * 1000) / 10,
+          progress_percentage: percentage,
         })
-          .catch(err => console.error('[ContentCanvas] Failed to save progress on unmount:', err));
+          .catch(() => {
+            // 网络失败时保存到 localStorage
+            saveProgressToLocal(bookId, chapter.index, currentSegmentIndex, cachedPercentageRef.current);
+          });
       }
     };
   }, [bookId, chapter, currentSegmentIndex]);

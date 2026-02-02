@@ -607,7 +607,7 @@ const AITab: React.FC = () => {
         isRequestingRef.current = false;
       }
     })();
-  }, [activeHighlightId, activeTab, aiAnalysisTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeHighlightId, activeTab, aiAnalysisTrigger, markHighlightAnalyzed]);
 
   // 当收到 AI 分析触发信号时，执行分析（点击"AI解析"按钮时触发）
   useEffect(() => {
