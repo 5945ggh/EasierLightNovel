@@ -31,6 +31,7 @@ import { TocModal } from '@/components/reader/TocModal';
 import { SelectionMenu } from '@/components/reader/SelectionMenu';
 import { TokenPopover } from '@/components/reader/TokenPopover';
 import { ReaderSidebar } from '@/components/reader/ReaderSidebar';
+import { MobileGuide } from '@/components/reader/MobileGuide';
 
 export const ReaderPage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
@@ -459,7 +460,7 @@ export const ReaderPage: React.FC = () => {
       <main className={clsx(
         'flex-1 relative h-full flex flex-col min-w-0 transition-all duration-300',
         themeStyles[resolvedTheme],
-        isSidebarOpen && 'mr-80'
+        isSidebarOpen && 'md:mr-80'
       )}>
         <div
           ref={scrollContainerRef}
@@ -478,6 +479,12 @@ export const ReaderPage: React.FC = () => {
             hasNextChapter={hasNextChapter}
             initialPercentage={initialPercentage}
             isChapterSwitch={isChapterSwitch}
+            onToggleToc={() => setIsTocOpen(!isTocOpen)}
+            onToggleSettings={() => {
+              // 触发 LeftDock 中的设置面板切换
+              const event = new CustomEvent('toggle-reader-settings');
+              window.dispatchEvent(event);
+            }}
           />
         </div>
 
@@ -499,6 +506,9 @@ export const ReaderPage: React.FC = () => {
 
       {/* 侧边栏 */}
       <ReaderSidebar />
+
+      {/* 移动端引导（仅首次显示） */}
+      <MobileGuide />
     </div>
   );
 };

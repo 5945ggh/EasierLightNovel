@@ -10,12 +10,29 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useReaderStore } from '@/stores/readerStore';
 import { updateReadingProgress } from '@/services/books.service';
 import { SegmentRenderer } from './SegmentRenderer';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Settings, List } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useScrollProgress } from '@/hooks/useScrollProgress';
+
+interface ContentCanvasProps {
+  // 滚动容器的 ref（从 ReaderPage 传入）
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+  // 章节切换回调
+  onPrevChapter?: () => void;
+  onNextChapter?: () => void;
+  hasPrevChapter?: boolean;
+  hasNextChapter?: boolean;
+  // 进度恢复参数
+  initialPercentage: number; // 初始滚动百分比 (0-1)
+  isChapterSwitch: boolean;  // 是否为章节切换（跳过百分比恢复）
+  // 移动端按钮回调（从 ReaderPage 传入）
+  onToggleToc?: () => void;
+  onToggleSettings?: () => void;
+}
 
 // IntersectionObserver 配置：只有当段落进入视口中心区域时才触发
 const OBSERVER_ROOT_MARGIN = '-45% 0px -45% 0px'; // 只检测视口中间 10% 的区域
@@ -41,7 +58,10 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   hasNextChapter = false,
   initialPercentage = 0,
   isChapterSwitch = false,
+  onToggleToc,
+  onToggleSettings,
 }) => {
+  const navigate = useNavigate();
   // 使用 selector 订阅特定状态，避免不必要的重渲染
   const chapter = useReaderStore((s) => s.chapter);
   const bookId = useReaderStore((s) => s.bookId);
@@ -193,38 +213,74 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
         )}
 
         {/* 章节导航 - 固定在顶部 */}
-        <div className="sticky top-0 z-10 -mx-6 px-6 md:-mx-12 md:px-12 py-3 bg-stone-50/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm">
+        <div className="sticky top-0 z-10 -mx-6 px-4 md:-mx-12 md:px-12 py-3 bg-stone-50/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm safe-area-top">
+          {/* 移动端：左侧按钮组（返回、目录） */}
+          <div className="flex md:hidden items-center gap-1">
+            <button
+              onClick={() => navigate('/')}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+              aria-label="返回书架"
+            >
+              <Home size={18} />
+            </button>
+            {onToggleToc && (
+              <button
+                onClick={onToggleToc}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+                aria-label="目录"
+              >
+                <List size={18} />
+              </button>
+            )}
+          </div>
+
+          {/* 桌面端/移动端中间：上一章按钮 */}
           <button
             onClick={handlePrevChapter}
             disabled={!hasPrevChapter}
             className={clsx(
-              'flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors',
+              'flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg transition-colors',
               hasPrevChapter
                 ? 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
                 : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
             )}
           >
             <ChevronLeft size={16} />
-            上一章
+            <span className="hidden sm:inline">上一章</span>
           </button>
 
+          {/* 章节信息 */}
           <span className="text-gray-400 dark:text-gray-500 text-xs">
             第 {chapter.index + 1} 章
           </span>
 
+          {/* 桌面端/移动端中间：下一章按钮 */}
           <button
             onClick={handleNextChapter}
             disabled={!hasNextChapter}
             className={clsx(
-              'flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors',
+              'flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg transition-colors',
               hasNextChapter
                 ? 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
                 : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
             )}
           >
-            下一章
+            <span className="hidden sm:inline">下一章</span>
             <ChevronRight size={16} />
           </button>
+
+          {/* 移动端：右侧按钮组（设置） */}
+          <div className="flex md:hidden items-center gap-1">
+            {onToggleSettings && (
+              <button
+                onClick={onToggleSettings}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+                aria-label="设置"
+              >
+                <Settings size={18} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 章节标题 */}

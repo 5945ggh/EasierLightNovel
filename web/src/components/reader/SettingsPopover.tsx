@@ -77,8 +77,8 @@ export const SettingsPopover: React.FC = () => {
   );
 
   return (
-    <div className="absolute left-full ml-2 bottom-[-10px] w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-4 z-50 animate-in slide-in-from-left-2 fade-in duration-200">
-      <div className="space-y-5">
+    <div className="md:absolute md:left-full md:ml-2 md:bottom-[-10px] md:w-72 w-full bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 md:p-4 p-3 z-50 md:animate-in md:slide-in-from-left-2 md:fade-in md:duration-200">
+      <div className="md:space-y-5 space-y-4">
         {/* 1. 字号控制 */}
         <div className="space-y-2">
           <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 font-medium">

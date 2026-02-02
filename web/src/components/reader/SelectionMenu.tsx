@@ -43,6 +43,11 @@ export const SelectionMenu: React.FC = () => {
   const [existingHighlightId, setExistingHighlightId] = useState<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
+  // 移动端二次点击唤醒相关 refs
+  const lastSelectionRangeRef = useRef<Range | null>(null);
+  const clickInSelectionRef = useRef(false);
+  const lastTouchPosRef = useRef<{ x: number; y: number } | null>(null);
+
   // 从后端配置获取划线样式选项
   const highlightOptions = getHighlightOptions();
 
@@ -93,43 +98,134 @@ export const SelectionMenu: React.FC = () => {
   }, []);
 
   /**
-   * 监听鼠标抬起事件，检测选区
+   * 检测点击位置是否在选区范围内（用于移动端二次点击唤醒）
    */
-  useEffect(() => {
-    const handleMouseUp = () => {
-      // 清除之前的定时器
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+  const isPointInSelection = useCallback((x: number, y: number, range: Range | null): boolean => {
+    if (!range) return false;
+    const rects = range.getClientRects();
+    for (let i = 0; i < rects.length; i++) {
+      const rect = rects[i];
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
+  /**
+   * 处理触摸开始事件（记录触摸位置，用于检测二次点击）
+   */
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (e.touches.length > 0) {
+      const touch = e.touches[0];
+      lastTouchPosRef.current = { x: touch.clientX, y: touch.clientY };
+      clickInSelectionRef.current = isPointInSelection(
+        touch.clientX,
+        touch.clientY,
+        lastSelectionRangeRef.current
+      );
+    }
+  }, [isPointInSelection]);
+
+  /**
+   * 处理鼠标抬起事件，检测选区（桌面端）
+   */
+  const handleMouseUp = useCallback(() => {
+    // 清除之前的定时器
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // 延迟检测，避免拖拽时误触发
+    timeoutRef.current = window.setTimeout(() => {
+      const selection = window.getSelection();
+
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+        setIsOpen(false);
+        setCoords(null);
+        return;
       }
 
-      // 延迟检测，避免拖拽时误触发
-      timeoutRef.current = window.setTimeout(() => {
-        const selection = window.getSelection();
+      const r = selection.getRangeAt(0);
+      const text = selection.toString().trim();
 
-        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-          setIsOpen(false);
-          setCoords(null);
-          return;
-        }
+      if (text.length === 0) {
+        setIsOpen(false);
+        return;
+      }
 
-        const r = selection.getRangeAt(0);
+      // 检查选区是否在阅读器内容区域内
+      const container = r.commonAncestorContainer;
+      const inReaderArea =
+        container instanceof HTMLElement &&
+        (container.closest('.reader-content') || container.closest('[data-segment-index]'));
+
+      if (!inReaderArea) {
+        setIsOpen(false);
+        return;
+      }
+
+      // 解析选区坐标
+      const parsedCoords = {
+        start: findTokenData(r.startContainer)!,
+        end: findTokenData(r.endContainer)!,
+        text,
+      };
+
+      if (!parsedCoords.start || !parsedCoords.end) {
+        setIsOpen(false);
+        return;
+      }
+
+      setCoords(parsedCoords);
+
+      // 检查选区是否已经有高亮（可能有多个重复高亮）
+      const matchingHighlights = highlights.filter((h) =>
+        h.start_segment_index === parsedCoords.start.segIdx &&
+        h.start_token_idx === parsedCoords.start.tokIdx &&
+        h.end_segment_index === parsedCoords.end.segIdx &&
+        h.end_token_idx === parsedCoords.end.tokIdx
+      );
+      // 如果有多个重复高亮，选择最新的（id 最大的）
+      const latestHighlight = matchingHighlights.length > 0
+        ? matchingHighlights.reduce((latest, current) =>
+            current.id > latest.id ? current : latest
+          )
+        : null;
+      setExistingHighlightId(latestHighlight?.id ?? null);
+
+      // 存储选区供二次点击使用
+      lastSelectionRangeRef.current = r.cloneRange();
+
+      // 设置 Floating UI 的参考元素为选区 Range
+      const virtualEl = {
+        getBoundingClientRect: () => r.getBoundingClientRect(),
+        getClientRects: () => r.getClientRects(),
+      };
+      refs.setReference(virtualEl);
+      setIsOpen(true);
+    }, 10);
+  }, [refs, findTokenData, highlights]);
+
+  /**
+   * 处理选区变化事件（用于移动端二次点击唤醒）
+   */
+  const handleSelectionChange = useCallback(() => {
+    const selection = window.getSelection();
+
+    if (!selection) return;
+
+    // 选区被清除时，检查是否是二次点击
+    if (selection.isCollapsed) {
+      // 如果上一次有选区，且点击位置在选区内，则恢复选区并显示菜单
+      if (lastSelectionRangeRef.current && clickInSelectionRef.current) {
+        // 恢复选区
+        selection.removeAllRanges();
+        selection.addRange(lastSelectionRangeRef.current);
+
+        // 显示高亮菜单
+        const r = lastSelectionRangeRef.current;
         const text = selection.toString().trim();
-
-        if (text.length === 0) {
-          setIsOpen(false);
-          return;
-        }
-
-        // 检查选区是否在阅读器内容区域内
-        const container = r.commonAncestorContainer;
-        const inReaderArea =
-          container instanceof HTMLElement &&
-          (container.closest('.reader-content') || container.closest('[data-segment-index]'));
-
-        if (!inReaderArea) {
-          setIsOpen(false);
-          return;
-        }
 
         // 解析选区坐标
         const parsedCoords = {
@@ -138,57 +234,63 @@ export const SelectionMenu: React.FC = () => {
           text,
         };
 
-        if (!parsedCoords.start || !parsedCoords.end) {
-          setIsOpen(false);
-          return;
+        if (parsedCoords.start && parsedCoords.end) {
+          setCoords(parsedCoords);
+
+          // 检查是否已有高亮
+          const matchingHighlights = highlights.filter((h) =>
+            h.start_segment_index === parsedCoords.start.segIdx &&
+            h.start_token_idx === parsedCoords.start.tokIdx &&
+            h.end_segment_index === parsedCoords.end.segIdx &&
+            h.end_token_idx === parsedCoords.end.tokIdx
+          );
+          const latestHighlight = matchingHighlights.length > 0
+            ? matchingHighlights.reduce((latest, current) =>
+                current.id > latest.id ? current : latest
+              )
+            : null;
+          setExistingHighlightId(latestHighlight?.id ?? null);
+
+          // 设置 Floating UI 的参考元素
+          const virtualEl = {
+            getBoundingClientRect: () => r.getBoundingClientRect(),
+            getClientRects: () => r.getClientRects(),
+          };
+          refs.setReference(virtualEl);
+          setIsOpen(true);
         }
 
-        setCoords(parsedCoords);
-
-        // 检查选区是否已经有高亮（可能有多个重复高亮）
-        const matchingHighlights = highlights.filter((h) =>
-          h.start_segment_index === parsedCoords.start.segIdx &&
-          h.start_token_idx === parsedCoords.start.tokIdx &&
-          h.end_segment_index === parsedCoords.end.segIdx &&
-          h.end_token_idx === parsedCoords.end.tokIdx
-        );
-        // 如果有多个重复高亮，选择最新的（id 最大的）
-        const latestHighlight = matchingHighlights.length > 0
-          ? matchingHighlights.reduce((latest, current) =>
-              current.id > latest.id ? current : latest
-            )
-          : null;
-        setExistingHighlightId(latestHighlight?.id ?? null);
-
-        // 设置 Floating UI 的参考元素为选区 Range
-        const virtualEl = {
-          getBoundingClientRect: () => r.getBoundingClientRect(),
-          getClientRects: () => r.getClientRects(),
-        };
-        refs.setReference(virtualEl);
-        setIsOpen(true);
-      }, 10);
-    };
-
-    const handleSelectionChange = () => {
-      // 当选区清空时关闭菜单
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) {
-        setIsOpen(false);
+        // 清除存储的选区
+        lastSelectionRangeRef.current = null;
+        clickInSelectionRef.current = false;
+        return;
       }
-    };
 
+      // 普通情况：关闭菜单
+      setIsOpen(false);
+      setCoords(null);
+      lastSelectionRangeRef.current = null;
+      clickInSelectionRef.current = false;
+    }
+  }, [refs, findTokenData, highlights]);
+
+  /**
+   * 事件监听器设置
+   */
+  useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
     document.addEventListener('selectionchange', handleSelectionChange);
 
     return () => {
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchstart', handleTouchStart);
       document.removeEventListener('selectionchange', handleSelectionChange);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [refs, findTokenData, highlights]);
+  }, [handleMouseUp, handleTouchStart, handleSelectionChange]);
 
   /**
    * 处理高亮操作（乐观更新）

@@ -204,3 +204,27 @@ ruby {
 .theme-sepia ::-webkit-scrollbar-thumb:hover {
   background-color: #c4b5a0;
 }
+
+/* ============================================================
+   移动端安全区域适配（刘海屏、底部手势条）
+   ============================================================ */
+
+/* 底部安全区域 - 用于底部 Tab 栏 */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* 顶部安全区域 - 用于顶部导航栏 */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* 左侧安全区域 */
+.safe-area-left {
+  padding-left: env(safe-area-inset-left, 0);
+}
+
+/* 右侧安全区域 */
+.safe-area-right {
+  padding-right: env(safe-area-inset-right, 0);
+}

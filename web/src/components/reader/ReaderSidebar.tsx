@@ -3,7 +3,7 @@
  * 包含：词典、AI分析、生词本、高亮列表四个 Tab
  */
 
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, BookOpen, Sparkles, Bookmark, Highlighter, Loader2, ChevronRight, ChevronDown, ChevronUp, Volume2, Trash2 } from 'lucide-react';
 import { useReaderStore, type SidebarTab } from '@/stores/readerStore';
@@ -625,6 +625,16 @@ const AITab: React.FC = () => {
     performAIAnalysis(aiAnalysisTrigger);
   }, [aiAnalysisTrigger, activeTab, performAIAnalysis, clearAIAnalysisTrigger]);
 
+  // 检查当前高亮是否已分析或正在分析（需要在早期返回前定义）
+  const isThisAnalyzing = activeHighlightId !== null ? isAnalyzing(activeHighlightId) : false;
+
+  // 处理 AI 分析按钮点击（需要在早期返回前定义，避免 Hooks 条件调用）
+  const handleAnalyzeClick = useCallback(() => {
+    if (activeHighlightId !== null && !isThisAnalyzing) {
+      performAIAnalysis(activeHighlightId);
+    }
+  }, [activeHighlightId, isThisAnalyzing, performAIAnalysis]);
+
   if (activeHighlightId === null) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
@@ -639,14 +649,6 @@ const AITab: React.FC = () => {
   // 检查当前高亮是否已分析或正在分析
   const hasAnalysis = aiResult !== null;
   const isAnalyzed = isHighlightAnalyzed(activeHighlightId);
-  const isThisAnalyzing = isAnalyzing(activeHighlightId);
-
-  // 处理 AI 分析按钮点击
-  const handleAnalyzeClick = useCallback(() => {
-    if (activeHighlightId !== null && !isThisAnalyzing) {
-      performAIAnalysis(activeHighlightId);
-    }
-  }, [activeHighlightId, isThisAnalyzing, performAIAnalysis]);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -1170,14 +1172,58 @@ const HighlightsTab: React.FC = () => {
 // 侧边栏主组件
 export const ReaderSidebar: React.FC = () => {
   const { isSidebarOpen, activeTab, setIsSidebarOpen, setActiveTab } = useReaderStore();
+  const [drawerHeight, setDrawerHeight] = useState<number>(50); // 默认 50vh
 
   const handleClose = useCallback(() => {
     setIsSidebarOpen(false);
+    setDrawerHeight(50); // 重置为默认高度
   }, [setIsSidebarOpen]);
 
   const handleTabChange = useCallback((tab: SidebarTab) => {
     setActiveTab(tab);
   }, [setActiveTab]);
+
+  // 当侧边栏打开时，重置高度
+  useEffect(() => {
+    if (isSidebarOpen) {
+      setDrawerHeight(50);
+    }
+  }, [isSidebarOpen]);
+
+  // 拖拽处理
+  const dragStartY = useRef<number | null>(null);
+  const dragStartHeight = useRef<number | null>(null);
+
+  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    dragStartY.current = clientY;
+    dragStartHeight.current = drawerHeight;
+
+    const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const moveY = 'touches' in moveEvent ? moveEvent.touches[0].clientY : moveEvent.clientY;
+      if (dragStartY.current !== null && dragStartHeight.current !== null) {
+        const deltaY = dragStartY.current - moveY;
+        const vhDelta = (deltaY / window.innerHeight) * 100;
+        const newHeight = Math.max(30, Math.min(90, dragStartHeight.current + vhDelta));
+        setDrawerHeight(newHeight);
+      }
+    };
+
+    const handleEnd = () => {
+      dragStartY.current = null;
+      dragStartHeight.current = null;
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
+  }, [drawerHeight]);
 
   // Tab 内容渲染
   const renderTabContent = () => {
@@ -1198,7 +1244,9 @@ export const ReaderSidebar: React.FC = () => {
   if (!isSidebarOpen) return null;
 
   return (
-    <aside className="fixed right-0 top-0 h-full w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 z-50 flex flex-col transition-transform duration-300">
+    <>
+      {/* 桌面端：右侧固定面板 */}
+      <aside className="hidden md:flex fixed right-0 top-0 h-full w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 z-50 flex-col transition-transform duration-300">
         {/* 头部 */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -1240,5 +1288,65 @@ export const ReaderSidebar: React.FC = () => {
         {/* 内容区域 */}
         {renderTabContent()}
       </aside>
+
+      {/* 移动端：底部抽屉（Bottom Sheet，可拖拽调整高度） */}
+      <div
+        className="md:hidden fixed left-0 right-0 z-50 flex flex-col bg-white dark:bg-gray-900 shadow-2xl border-t border-gray-200 dark:border-gray-700 animate-in slide-in-from-bottom duration-300 ease-out"
+        style={{
+          bottom: isSidebarOpen ? '0' : '4rem',
+          height: drawerHeight ? `${drawerHeight}vh` : '50vh',
+          maxHeight: isSidebarOpen ? '90vh' : 'calc(100vh - 5rem)',
+          transition: isSidebarOpen ? 'bottom 0.3s ease-out' : undefined,
+        }}
+      >
+        {/* Tab 切换栏（整合在抽屉顶部） */}
+        <div className="flex items-center justify-between px-2 py-2 border-b border-gray-200 dark:border-gray-700 bg-stone-50 dark:bg-gray-900">
+          <div className="flex items-center gap-1 flex-1">
+            {(Object.keys(TAB_CONFIG) as SidebarTab[]).map((tab) => {
+              const Icon = TAB_CONFIG[tab].icon;
+              const isActive = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => handleTabChange(tab)}
+                  className={clsx(
+                    'flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-all min-w-0 flex-1',
+                    isActive
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                  )}
+                >
+                  <Icon size={20} />
+                  <span className="text-[10px] font-medium">{TAB_CONFIG[tab].label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {/* 关闭按钮 */}
+          <button
+            onClick={handleClose}
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 ml-1"
+            aria-label="关闭"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* 可拖拽区域（隐形，整个 Tab 栏都可拖拽） */}
+        <div
+          className="flex justify-center pt-1 pb-0 cursor-grab active:cursor-grabbing select-none"
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+          style={{ height: '4px' }}
+        >
+          <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full opacity-50" />
+        </div>
+
+        {/* 内容区域（可滚动） */}
+        <div className="overflow-y-auto flex-1 px-3 py-2">
+          {renderTabContent()}
+        </div>
+      </div>
+    </>
   );
 };
