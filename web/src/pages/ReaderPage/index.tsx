@@ -32,32 +32,47 @@ import { SelectionMenu } from '@/components/reader/SelectionMenu';
 import { TokenPopover } from '@/components/reader/TokenPopover';
 import { ReaderSidebar } from '@/components/reader/ReaderSidebar';
 import { MobileGuide } from '@/components/reader/MobileGuide';
+import {
+  isLocalSnapshotNewer,
+  loadReadingProgressSnapshot,
+  saveReadingProgressSnapshot,
+} from '@/utils/readingProgress';
 
 export const ReaderPage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
+  const currentBookId = bookId ?? null;
 
   // 滚动容器的 ref（传递给 ContentCanvas 用于进度监听）
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // 本地状态：当前章节索引（初始为 null，等待 TOC 或进度数据）
-  const [currentChapterIndex, setCurrentChapterIndex] = useState<number | null>(null);
   // TOC 模态框状态
   const [isTocOpen, setIsTocOpen] = useState(false);
-  // 记录首次加载的章节索引，用于判断是否为章节切换
-  const [firstLoadedChapter, setFirstLoadedChapter] = useState<number | null>(null);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
 
   // 设置 Store
   const { theme, furiganaMode, fontSize, lineHeight, fontFamily } = useSettingsStore();
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      setSystemPrefersDark(event.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
   // 计算实际应用的主题（处理 system 主题）
   const resolvedTheme = useMemo(() => {
     if (theme === 'system') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      return systemPrefersDark ? 'dark' : 'light';
     }
     if (theme === 'sepia') return 'sepia';
     return theme;
-  }, [theme]);
+  }, [theme, systemPrefersDark]);
 
   // 主题样式映射
   const themeStyles = useMemo(() => ({
@@ -68,6 +83,8 @@ export const ReaderPage: React.FC = () => {
 
   // Store Actions
   const {
+    bookId: storeBookId,
+    chapterIndex: storeChapterIndex,
     setBookId,
     setChapter,
     setChapterIndex,
@@ -89,6 +106,9 @@ export const ReaderPage: React.FC = () => {
     if (bookId) {
       setBookId(bookId);
     }
+    return () => {
+      resetReader();
+    };
   }, [bookId, resetReader, setBookId]);
 
   // 2. Query: 获取章节目录（TOC）- 优先获取，用于确定有效索引
@@ -115,26 +135,74 @@ export const ReaderPage: React.FC = () => {
     retry: false,
   });
 
+  const localProgress = useMemo(
+    () => (bookId ? loadReadingProgressSnapshot(bookId) : null),
+    [bookId]
+  );
+
+  const localProgressAsResponse = useMemo(
+    () =>
+      localProgress
+        ? {
+            current_chapter_index: localProgress.chapterIndex,
+            current_segment_index: localProgress.segmentIndex,
+            progress_percentage: localProgress.percentage * 100,
+            book_id: bookId ?? '',
+            updated_at: new Date(localProgress.timestamp).toISOString(),
+          }
+        : null,
+    [localProgress, bookId]
+  );
+
+  const shouldPreferLocalProgress = useMemo(
+    () => isLocalSnapshotNewer(localProgress, progressData),
+    [localProgress, progressData]
+  );
+
+  const persistedProgress = useMemo(() => {
+    if (shouldPreferLocalProgress && localProgressAsResponse) {
+      return localProgressAsResponse;
+    }
+
+    if (progressData) {
+      return progressData;
+    }
+
+    return localProgressAsResponse;
+  }, [shouldPreferLocalProgress, localProgressAsResponse, progressData]);
+
+  useEffect(() => {
+    if (!bookId || !localProgress || !shouldPreferLocalProgress) {
+      return;
+    }
+
+    updateReadingProgress(bookId, {
+      current_chapter_index: localProgress.chapterIndex,
+      current_segment_index: localProgress.segmentIndex,
+      progress_percentage: Math.round(localProgress.percentage * 1000) / 10,
+    }).catch((error) => {
+      console.error('[ReaderPage] Failed to resync local reading progress:', error);
+    });
+  }, [bookId, localProgress, shouldPreferLocalProgress]);
+
   // 进度数据变化时不需要额外处理，仅用于触发后续计算
   // 5. 确定初始章节索引（使用派生状态而非 effect + setState）
   const targetChapterIndex = useMemo(() => {
     if (!chapterList || chapterList.length === 0) return null;
 
     // 检查进度中的章节索引是否在 TOC 中存在
-    const progressIndex = progressData?.current_chapter_index;
+    const progressIndex = persistedProgress?.current_chapter_index;
     const isValidProgressIndex =
       progressIndex !== undefined &&
       chapterList.some((ch) => ch.index === progressIndex);
 
     return isValidProgressIndex ? progressIndex : chapterList[0].index;
-  }, [progressData, chapterList]);
+  }, [persistedProgress, chapterList]);
 
-  // 当目标章节索引变化时，更新本地状态
-  useEffect(() => {
-    if (targetChapterIndex !== null) {
-      setCurrentChapterIndex(targetChapterIndex);
-    }
-  }, [targetChapterIndex]);
+  const scopedChapterIndex = storeBookId === currentBookId ? storeChapterIndex : null;
+  const scopedPendingChapterIndex = storeBookId === currentBookId ? pendingChapterIndex : null;
+  const currentChapterIndex =
+    scopedChapterIndex ?? scopedPendingChapterIndex ?? targetChapterIndex;
 
   // 6. Query: 获取章节内容（只有当 currentChapterIndex 不为 null 时才执行）
   const {
@@ -171,10 +239,10 @@ export const ReaderPage: React.FC = () => {
   });
 
   // 判断是否为章节切换（必须在 initialPercentage 之前计算）
-  const isChapterSwitch = useMemo(() => {
-    if (firstLoadedChapter === null) return false;
-    return currentChapterIndex !== null && currentChapterIndex !== firstLoadedChapter;
-  }, [firstLoadedChapter, currentChapterIndex]);
+  const isChapterSwitch =
+    scopedChapterIndex !== null &&
+    targetChapterIndex !== null &&
+    scopedChapterIndex !== targetChapterIndex;
 
   // 计算初始滚动百分比（后端返回 progress_percentage 为 0-100，转换为 0-1）
   // 基于 targetChapterIndex 而非 currentChapterIndex，避免异步 setState 导致的时序问题
@@ -183,14 +251,14 @@ export const ReaderPage: React.FC = () => {
     if (isChapterSwitch) {
       return 0;
     }
-    if (!progressData || targetChapterIndex === null) return 0;
+    if (!persistedProgress || targetChapterIndex === null) return 0;
     // 只有目标章节与进度记录匹配时才使用百分比
-    if (progressData.current_chapter_index === targetChapterIndex) {
-      return (progressData.progress_percentage ?? 0) / 100;
+    if (persistedProgress.current_chapter_index === targetChapterIndex) {
+      return (persistedProgress.progress_percentage ?? 0) / 100;
     }
     // 进度记录的章节与目标章节不匹配，从顶部开始
     return 0;
-  }, [progressData, targetChapterIndex, isChapterSwitch]);
+  }, [persistedProgress, targetChapterIndex, isChapterSwitch]);
 
   // 8. 同步数据到 Store
   useEffect(() => {
@@ -198,16 +266,14 @@ export const ReaderPage: React.FC = () => {
       // 先设置 chapterIndex，确保 setChapter 能正确过滤 allHighlights
       setChapterIndex(currentChapterIndex);
       setChapter(chapterData);
-      // 记录首次加载的章节（用于判断章节切换）
-      setFirstLoadedChapter(prev => prev === null ? currentChapterIndex : prev);
       // 如果进度数据中的章节索引匹配，设置段落索引
-      if (progressData?.current_chapter_index === currentChapterIndex) {
-        setCurrentSegmentIndex(progressData.current_segment_index ?? 0);
+      if (persistedProgress?.current_chapter_index === currentChapterIndex) {
+        setCurrentSegmentIndex(persistedProgress.current_segment_index ?? 0);
       } else {
         setCurrentSegmentIndex(0);
       }
     }
-  }, [chapterData, progressData, currentChapterIndex, setChapter, setChapterIndex, setCurrentSegmentIndex]);
+  }, [chapterData, persistedProgress, currentChapterIndex, setChapter, setChapterIndex, setCurrentSegmentIndex]);
 
   useEffect(() => {
     if (vocabBaseFormsData) {
@@ -235,32 +301,30 @@ export const ReaderPage: React.FC = () => {
     }
   }, [chapterList, setAllChapterList]);
 
-  // 处理来自 HighlightsTab 的章节切换请求
-  useEffect(() => {
-    if (pendingChapterIndex !== null) {
-      // 切换到目标章节
-      setCurrentChapterIndex(pendingChapterIndex);
-      clearPendingChapter();
-    }
-  }, [pendingChapterIndex, setCurrentChapterIndex, clearPendingChapter]);
-
   // 章节切换完成后，滚动到目标位置
   useEffect(() => {
-    if (pendingScrollTarget && chapterData) {
-      // 等待 DOM 更新后滚动
-      setTimeout(() => {
-        const selector = `[data-segment-index="${pendingScrollTarget.segmentIndex}"][data-token-index="${pendingScrollTarget.tokenIndex}"]`;
-        const element = document.querySelector(selector);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.classList.add('ring-2', 'ring-indigo-500');
-          setTimeout(() => {
-            element.classList.remove('ring-2', 'ring-indigo-500');
-          }, 2000);
-        }
-      }, 300);
+    if (!pendingScrollTarget || !chapterData) {
+      return;
     }
-  }, [pendingScrollTarget, chapterData]);
+
+    const scrollTimer = window.setTimeout(() => {
+      const selector = `[data-segment-index="${pendingScrollTarget.segmentIndex}"][data-token-index="${pendingScrollTarget.tokenIndex}"]`;
+      const element = document.querySelector(selector);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('ring-2', 'ring-indigo-500');
+        window.setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-indigo-500');
+        }, 2000);
+      }
+
+      clearPendingChapter();
+    }, 300);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+    };
+  }, [pendingScrollTarget, chapterData, clearPendingChapter]);
 
   // 章节切换完成后，立即保存新章节的进度（0%）
   // 这样即使不滚动就退出，再进入时也会回到新章节而不是旧章节
@@ -274,7 +338,15 @@ export const ReaderPage: React.FC = () => {
         progress_percentage: 0,
       })
         .then(() => {/* 新章节进度已保存 */})
-        .catch((err) => console.error('[ReaderPage] Failed to save new chapter progress:', err));
+        .catch((err) => {
+          console.error('[ReaderPage] Failed to save new chapter progress:', err);
+          saveReadingProgressSnapshot(bookId, {
+            chapterIndex: currentChapterIndex,
+            segmentIndex: 0,
+            percentage: 0,
+            timestamp: Date.now(),
+          });
+        });
     }
   }, [isChapterSwitch, chapterData, currentChapterIndex, bookId]);
 
@@ -287,9 +359,9 @@ export const ReaderPage: React.FC = () => {
     if (currentIndex > 0) {
       // 切换章节时重置为从顶部开始阅读
       setCurrentSegmentIndex(0);
-      setCurrentChapterIndex(chapterList[currentIndex - 1].index);
+      setChapterIndex(chapterList[currentIndex - 1].index);
     }
-  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex]);
+  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setChapterIndex]);
 
   const handleNextChapter = useCallback(() => {
     if (!chapterList || currentChapterIndex === null) return;
@@ -299,15 +371,15 @@ export const ReaderPage: React.FC = () => {
     if (currentIndex >= 0 && currentIndex < chapterList.length - 1) {
       // 切换章节时重置为从顶部开始阅读
       setCurrentSegmentIndex(0);
-      setCurrentChapterIndex(chapterList[currentIndex + 1].index);
+      setChapterIndex(chapterList[currentIndex + 1].index);
     }
-  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex]);
+  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setChapterIndex]);
 
   // 章节选择处理 - 移到所有条件返回之前
   const handleChapterSelect = useCallback((index: number) => {
     setCurrentSegmentIndex(0);
-    setCurrentChapterIndex(index);
-  }, [setCurrentSegmentIndex]);
+    setChapterIndex(index);
+  }, [setCurrentSegmentIndex, setChapterIndex]);
 
   // 判断是否有上一章/下一章
   const hasPrevChapter =
@@ -505,7 +577,7 @@ export const ReaderPage: React.FC = () => {
       )}
 
       {/* 侧边栏 */}
-      <ReaderSidebar />
+      <ReaderSidebar key={isSidebarOpen ? 'reader-sidebar-open' : 'reader-sidebar-closed'} />
 
       {/* 移动端引导（仅首次显示） */}
       <MobileGuide />

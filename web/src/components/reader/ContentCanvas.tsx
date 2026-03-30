@@ -17,31 +17,7 @@ import { SegmentRenderer } from './SegmentRenderer';
 import { ChevronLeft, ChevronRight, Home, Settings, List } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useScrollProgress } from '@/hooks/useScrollProgress';
-
-// ==========================================
-// localStorage 降级存储工具
-// ==========================================
-const LOCAL_STORAGE_KEY_PREFIX = 'reading_progress_';
-
-/** 保存进度到 localStorage（降级存储） */
-const saveProgressToLocal = (
-  bookId: string,
-  chapterIndex: number,
-  segmentIndex: number,
-  percentage: number
-): void => {
-  try {
-    const data = {
-      chapterIndex,
-      segmentIndex,
-      percentage,
-      timestamp: Date.now(),
-    };
-    localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${bookId}`, JSON.stringify(data));
-  } catch (err) {
-    console.error('[ContentCanvas] Failed to save progress to localStorage:', err);
-  }
-};
+import { saveReadingProgressSnapshot } from '@/utils/readingProgress';
 
 interface ContentCanvasProps {
   // 滚动容器的 ref（从 ReaderPage 传入）
@@ -108,14 +84,19 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       progress_percentage: percentageForBackend,
     };
 
+    saveReadingProgressSnapshot(bookId, {
+      chapterIndex: chapter.index,
+      segmentIndex: currentSegmentIndex,
+      percentage,
+      timestamp: Date.now(),
+    });
+
     return updateReadingProgress(bookId, payload)
       .then(() => {
         setIsSaving(false);
       })
       .catch((err) => {
         console.error('[ContentCanvas] Failed to save progress to server:', err);
-        // 网络失败时保存到 localStorage
-        saveProgressToLocal(bookId, chapter.index, currentSegmentIndex, percentage);
         setIsSaving(false);
       });
   }, [bookId, chapter, currentSegmentIndex]);
@@ -192,16 +173,22 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     return () => {
       // 组件卸载时保存当前阅读进度
       if (bookId && chapter && currentSegmentIndex >= 0) {
-        const percentage = Math.round(cachedPercentageRef.current * 1000) / 10;
+        const percentage = cachedPercentageRef.current;
+        const percentageForBackend = Math.round(percentage * 1000) / 10;
+
+        saveReadingProgressSnapshot(bookId, {
+          chapterIndex: chapter.index,
+          segmentIndex: currentSegmentIndex,
+          percentage,
+          timestamp: Date.now(),
+        });
+
         updateReadingProgress(bookId, {
           current_chapter_index: chapter.index,
           current_segment_index: currentSegmentIndex,
-          progress_percentage: percentage,
+          progress_percentage: percentageForBackend,
         })
-          .catch(() => {
-            // 网络失败时保存到 localStorage
-            saveProgressToLocal(bookId, chapter.index, currentSegmentIndex, cachedPercentageRef.current);
-          });
+          .catch(() => undefined);
       }
     };
   }, [bookId, chapter, currentSegmentIndex]);

@@ -501,6 +501,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
       return state;
     }),
   requestChapterChange: (chapterIndex, segmentIndex, tokenIndex) => set({
+    chapterIndex,
     pendingChapterIndex: chapterIndex,
     pendingScrollTarget: { segmentIndex, tokenIndex },
   }),
