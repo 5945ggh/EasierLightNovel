@@ -1,0 +1,42 @@
+backend/app/routers/user_config.py
+  d0ae0978e1d89790 64
+  5b9b832e40f59f97 99,101-103,105
+config/schema.json
+  d0ae0978e1d89790 126-130,140-152
+backend/app/services/user_config_service.py
+  5b9b832e40f59f97 231-234
+  d0ae0978e1d89790 7-8,20,74-82,84-86,141,143,146,148-151,160-161,170,176,182,185,190,195,198-200,202-205,207-210,237,243,258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "5e483ec611f9dd5df9ea989c17dee53b33f8875b",
+  "prompts": {
+    "5b9b832e40f59f97": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9a-0193-7020-8881-6c521df7ab55",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 15,
+      "overriden_lines": 0
+    },
+    "d0ae0978e1d89790": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9b-cd4e-7511-8581-4a75398acc88",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 182,
+      "overriden_lines": 0
+    }
+  }
+}
