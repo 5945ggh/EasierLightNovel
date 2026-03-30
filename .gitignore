@@ -57,3 +57,5 @@ uv.lock
 # claude
 .claude
 CLAUDE.md
+
+dev_docs/

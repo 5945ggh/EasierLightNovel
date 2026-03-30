@@ -38,7 +38,7 @@
 - 支持上传 EPUB 格式轻小说
 - 自动提取插图并保持排版
 - 按段落智能切分文本
-- 基于文件哈希生成唯一书籍 ID
+- 基于 UUID 生成唯一书籍 ID
 
 #### 2. 日语分词与注音
 - 使用 SudachiPy 进行高质量分词
@@ -98,7 +98,7 @@
 ```
 用户上传 EPUB
     ↓
-生成书籍 ID (MD5 哈希)
+生成书籍 ID (UUID)
     ↓
 提取元数据 (标题、作者)
     ↓
@@ -190,7 +190,7 @@
 - segment_index: int         # 段落索引
 - start_token_idx: int       # 起始 token
 - end_token_idx: int         # 结束 token
-- style_category: str        # 样式类别（grammar/vocab/favorite/default）
+- style_category: str        # 样式类别（default/vocab/grammar/favorite）
 - selected_text: str         # 选中文本快照
 - created_at: datetime
 - updated_at: datetime
