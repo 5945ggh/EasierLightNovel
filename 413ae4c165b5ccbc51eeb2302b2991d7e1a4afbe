@@ -1,0 +1,37 @@
+web/src/utils/readingProgress.ts
+  5b9b832e40f59f97 1-13,21-69,93
+  d0ae0978e1d89790 14-20,70-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "413ae4c165b5ccbc51eeb2302b2991d7e1a4afbe",
+  "prompts": {
+    "5b9b832e40f59f97": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9a-0193-7020-8881-6c521df7ab55",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 63,
+      "overriden_lines": 0
+    },
+    "d0ae0978e1d89790": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9b-cd4e-7511-8581-4a75398acc88",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
