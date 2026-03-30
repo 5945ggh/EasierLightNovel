@@ -167,7 +167,7 @@ export const LibraryPage: React.FC = () => {
   // 关闭编辑弹窗
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setTimeout(() => setEditingBook(null), 300); // 动画结束后清空
+    setEditingBook(null);
   };
 
   // 保存元数据（包括封面）
@@ -226,13 +226,16 @@ export const LibraryPage: React.FC = () => {
       )}
 
       {/* 编辑书籍弹窗 */}
-      <EditBookModal
-        book={editingBook}
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSave={handleSave}
-        isSaving={isUpdating}
-      />
+      {isModalOpen && editingBook && (
+        <EditBookModal
+          key={editingBook.id}
+          book={editingBook}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onSave={handleSave}
+          isSaving={isUpdating}
+        />
+      )}
 
       {/* 头部 */}
       <header className='max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4'>

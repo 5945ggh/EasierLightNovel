@@ -23,21 +23,11 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
   onSave,
   isSaving = false,
 }) => {
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [title, setTitle] = useState(() => book?.title ?? '');
+  const [author, setAuthor] = useState(() => book?.author ?? '');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => book?.cover_url ?? null);
   const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // 当 book 变化时重置表单
-  useEffect(() => {
-    if (book) {
-      setTitle(book.title);
-      setAuthor(book.author || '');
-      setPreviewUrl(book.cover_url);
-      setPendingCoverFile(null);
-    }
-  }, [book]);
 
   // 处理封面上传选择（只做本地预览，不立即上传）
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,10 +101,17 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
       />
 
       {/* 弹窗内容 */}
-      <div className='relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in overflow-hidden'>
+      <div
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='edit-book-modal-title'
+        className='relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in overflow-hidden'
+      >
         {/* 头部 */}
         <div className='flex items-center justify-between px-6 py-4 border-b border-gray-100'>
-          <h2 className='text-lg font-bold text-gray-800'>编辑书籍信息</h2>
+          <h2 id='edit-book-modal-title' className='text-lg font-bold text-gray-800'>
+            编辑书籍信息
+          </h2>
           <button
             onClick={onClose}
             className='p-1 hover:bg-gray-100 rounded-full transition-colors'

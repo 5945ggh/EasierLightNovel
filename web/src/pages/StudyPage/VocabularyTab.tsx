@@ -7,18 +7,39 @@ import { useQuery } from '@tanstack/react-query';
 import { getAllVocabularies, deleteVocabulary } from '@/services/vocabularies.service';
 import { Loader2, Trash2, Search, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { VocabularyResponse } from '@/types';
+
+type VocabularyListItem = VocabularyResponse & { book_title: string };
+
+interface DictionarySenseLike {
+  definitions?: unknown;
+}
+
+interface DictionaryEntryLike {
+  senses?: unknown;
+}
+
+const isDictionarySenseLike = (value: unknown): value is DictionarySenseLike =>
+  !!value && typeof value === 'object';
+
+const isDictionaryEntryLike = (value: unknown): value is DictionaryEntryLike =>
+  !!value && typeof value === 'object';
 
 /**
  * 从词典条目对象中提取释义
  */
-const extractDictDefinitions = (entry: any): string[] => {
+const extractDictDefinitions = (entry: DictionaryEntryLike): string[] => {
   const results: string[] = [];
 
-  if (entry.senses && Array.isArray(entry.senses)) {
-    entry.senses.forEach((sense: any) => {
-      if (sense.definitions && Array.isArray(sense.definitions)) {
-        results.push(...sense.definitions);
+  if (Array.isArray(entry.senses)) {
+    entry.senses.forEach((sense) => {
+      if (!isDictionarySenseLike(sense) || !Array.isArray(sense.definitions)) {
+        return;
       }
+
+      results.push(
+        ...sense.definitions.filter((definition): definition is string => typeof definition === 'string')
+      );
     });
   }
 
@@ -32,21 +53,21 @@ const parseDefinition = (def: string | undefined): string[] => {
   if (!def) return [];
 
   try {
-    const parsed = JSON.parse(def);
+    const parsed: unknown = JSON.parse(def);
 
     if (Array.isArray(parsed)) {
       const results: string[] = [];
-      parsed.forEach((item: any) => {
+      parsed.forEach((item) => {
         if (typeof item === 'string') {
           results.push(item);
-        } else if (typeof item === 'object' && item !== null) {
+        } else if (isDictionaryEntryLike(item)) {
           results.push(...extractDictDefinitions(item));
         }
       });
       return results.length > 0 ? results : [];
     }
 
-    if (parsed && typeof parsed === 'object') {
+    if (isDictionaryEntryLike(parsed)) {
       return extractDictDefinitions(parsed);
     }
 
@@ -132,7 +153,7 @@ const VocabularyTab: React.FC = () => {
 
 // 单个生词条目（紧凑可展开）
 const VocabItem: React.FC<{
-  vocab: any;
+  vocab: VocabularyListItem;
   onDelete: (id: number) => void;
 }> = ({ vocab, onDelete }) => {
   const [expanded, setExpanded] = useState(false);

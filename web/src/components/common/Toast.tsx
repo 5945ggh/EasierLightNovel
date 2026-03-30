@@ -59,30 +59,3 @@ export const Toast: React.FC<ToastProps> = ({ show, message, type }) => {
     </div>
   );
 };
-
-/**
- * Toast Hook - 用于管理 Toast 状态
- */
-export const useToast = () => {
-  const [toast, setToast] = React.useState<ToastState>({
-    show: false,
-    message: '',
-    type: 'info',
-  });
-
-  const showToast = React.useCallback((message: string, type: ToastType = 'info', duration = 3000) => {
-    setToast({ show: true, message, type });
-
-    if (duration > 0 && type !== 'loading') {
-      setTimeout(() => {
-        setToast((prev) => ({ ...prev, show: false }));
-      }, duration);
-    }
-  }, []);
-
-  const hideToast = React.useCallback(() => {
-    setToast((prev) => ({ ...prev, show: false }));
-  }, []);
-
-  return { toast, showToast, hideToast };
-};

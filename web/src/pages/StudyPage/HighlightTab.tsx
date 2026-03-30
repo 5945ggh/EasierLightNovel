@@ -6,9 +6,11 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAllHighlights, getArchiveItem, deleteHighlight } from '@/services/highlights.service';
 import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
-import type { ArchiveItemResponse, AIAnalysisResult } from '@/types';
+import type { ArchiveItemResponse, AIAnalysisResult, HighlightResponse } from '@/types';
 import { Loader2, Sparkles, ChevronDown, ChevronUp, Quote, Trash2, Search } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+
+type HighlightListItem = HighlightResponse & { book_title: string };
 
 /**
  * 获取样式分类的显示信息
@@ -48,6 +50,12 @@ const parseAnalysis = (analysisStr: string | undefined): AIAnalysisResult | null
     return null;
   }
 };
+
+const renderTextParagraphs = (text: string) =>
+  text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
 const HighlightTab: React.FC = () => {
   const queryClient = useQueryClient();
@@ -124,7 +132,7 @@ const HighlightTab: React.FC = () => {
 
 // 单个划线项组件
 const HighlightItem: React.FC<{
-  highlight: any;
+  highlight: HighlightListItem;
   onDelete: (id: number) => void;
 }> = ({ highlight, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
@@ -287,10 +295,13 @@ const ArchiveContent: React.FC<{ archive: ArchiveItemResponse }> = ({ archive })
       {analysis.cultural_notes && (
         <div>
           <h4 className="font-bold text-indigo-700 mb-2">文化注释</h4>
-          <div
-            className="bg-white p-3 rounded-lg border border-gray-100 prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: analysis.cultural_notes }}
-          />
+          <div className="bg-white p-3 rounded-lg border border-gray-100 space-y-2">
+            {renderTextParagraphs(analysis.cultural_notes).map((paragraph, index) => (
+              <p key={index} className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                {paragraph}
+              </p>
+            ))}
+          </div>
         </div>
       )}
 

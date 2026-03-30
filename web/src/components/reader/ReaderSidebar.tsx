@@ -774,7 +774,7 @@ const AITab: React.FC = () => {
           {aiResult.cultural_notes && (
             <div>
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">文化注释</h4>
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 prose prose-sm dark:prose-invert max-w-none">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
                 <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                   {aiResult.cultural_notes}
                 </p>
@@ -1182,13 +1182,6 @@ export const ReaderSidebar: React.FC = () => {
   const handleTabChange = useCallback((tab: SidebarTab) => {
     setActiveTab(tab);
   }, [setActiveTab]);
-
-  // 当侧边栏打开时，重置高度
-  useEffect(() => {
-    if (isSidebarOpen) {
-      setDrawerHeight(50);
-    }
-  }, [isSidebarOpen]);
 
   // 拖拽处理
   const dragStartY = useRef<number | null>(null);
