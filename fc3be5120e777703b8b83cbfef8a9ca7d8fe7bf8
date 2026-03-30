@@ -1,0 +1,47 @@
+backend/pyproject.toml
+  d0ae0978e1d89790 16
+backend/app/database.py
+  d0ae0978e1d89790 3,5,25-77,81,83-84,105
+backend/app/models.py
+  d0ae0978e1d89790 151-152,154-155
+  5b9b832e40f59f97 153
+backend/app/schemas.py
+  5b9b832e40f59f97 185,187,192-193
+  d0ae0978e1d89790 2,7-11,98-102,157-161,186,188-191,194-196
+backend/app/config.py
+  5b9b832e40f59f97 258
+  d0ae0978e1d89790 246-249,252-257,259-276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "fc3be5120e777703b8b83cbfef8a9ca7d8fe7bf8",
+  "prompts": {
+    "5b9b832e40f59f97": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9a-0193-7020-8881-6c521df7ab55",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    },
+    "d0ae0978e1d89790": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9b-cd4e-7511-8581-4a75398acc88",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 184,
+      "overriden_lines": 0
+    }
+  }
+}
