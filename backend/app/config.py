@@ -243,12 +243,36 @@ QUERY_MAX_LIMIT = _get_int_config("query.max_limit", 500, "QUERY_MAX_LIMIT")
 
 # ==================== 划线样式 ====================
 HIGHLIGHT_STYLE_CATEGORIES: Dict[str, Dict[str, str]] = {
-    "blue": {"color": "#3b82f6", "name": "Adachi"},
-    "yellow": {"color": "#efbe2b", "name": "Shimamura"},
-    "red": {"color": "#de5454", "name": "Kita"},
-    "pink": {"color": "#e8559f", "name": "Bocchi"},
-    "deep": {"color": "#9d2626", "name": "书签"},
+    "default": {"color": "#3b82f6", "name": "默认"},
+    "vocab": {"color": "#eab308", "name": "生词"},
+    "grammar": {"color": "#ef4444", "name": "语法"},
+    "favorite": {"color": "#ec4899", "name": "收藏"},
 }
+
+HIGHLIGHT_STYLE_ALIASES: Dict[str, str] = {
+    "blue": "default",
+    "yellow": "vocab",
+    "green": "vocab",
+    "red": "grammar",
+    "pink": "favorite",
+    "deep": "favorite",
+    "purple": "favorite",
+    "vocabulary": "vocab",
+}
+
+
+def normalize_highlight_style_category(category: Optional[str]) -> str:
+    """将历史样式 key 归一化为当前标准 key。"""
+    if not category:
+        return "default"
+
+    normalized = category.strip().lower()
+    normalized = HIGHLIGHT_STYLE_ALIASES.get(normalized, normalized)
+
+    if normalized not in HIGHLIGHT_STYLE_CATEGORIES:
+        return "default"
+
+    return normalized
 
 # ==================== 日志 ====================
 LOG_LEVEL = _get_str_config("logging.level", "INFO", "LOG_LEVEL")

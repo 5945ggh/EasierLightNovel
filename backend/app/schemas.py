@@ -1,10 +1,14 @@
 # app/schemas.py
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Optional, Union, Dict, Any
 from datetime import datetime
 
 from app.enums import ProcessingStatus, JLPTLevel
-from app.config import LLMConfig, HIGHLIGHT_STYLE_CATEGORIES
+from app.config import (
+    LLMConfig,
+    HIGHLIGHT_STYLE_CATEGORIES,
+    normalize_highlight_style_category,
+)
 
 # ==================== Book 相关 ====================
 class BookBase(BaseModel):
@@ -91,6 +95,11 @@ class ChapterHighlightData(BaseModel):
     end_token_idx: int
     style_category: str
 
+    @field_validator("style_category", mode="before")
+    @classmethod
+    def normalize_style_category(cls, value: str) -> str:
+        return normalize_highlight_style_category(value)
+
     class Config:
         from_attributes = True
 
@@ -145,6 +154,11 @@ class HighlightBase(BaseModel):
     style_category: str = "default"
     selected_text: str = Field(..., description="选中的纯文本内容，用于校验或回显")
 
+    @field_validator("style_category", mode="before")
+    @classmethod
+    def normalize_style_category(cls, value: str) -> str:
+        return normalize_highlight_style_category(value)
+
 class HighlightCreate(HighlightBase):
     """创建划线请求"""
     book_id: str
@@ -168,7 +182,18 @@ class HighlightResponse(HighlightCreate):
     """划线响应"""
     id: int
     created_at: datetime
-    has_Archive: bool = Field(False, description="划线句是否有对应的Archive条目")
+    # 规范字段名：新前端应读取 has_archive。
+    has_archive: bool = Field(False, description="划线句是否有对应的 Archive 条目")
+    # 兼容字段名：旧前端仍在读取 has_Archive，过渡期内保持双字段输出一致。
+    has_Archive: bool = Field(False, description="兼容旧前端的字段名")
+
+    @model_validator(mode="after")
+    def sync_legacy_archive_flag(self):
+        # from_attributes 只会稳定填充 has_archive，这里将旧字段显式对齐，
+        # 避免仍在读取 has_Archive 的前端误判为 False。
+        if self.has_Archive != self.has_archive:
+            self.has_Archive = self.has_archive
+        return self
 
     class Config:
         from_attributes = True

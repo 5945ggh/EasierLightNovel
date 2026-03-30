@@ -13,6 +13,7 @@ dependencies = [
     "jamdict-data>=1.5",
     "litellm>=1.81.3",
     "python-multipart>=0.0.21",
+    "requests>=2.32.3",
     "sqlalchemy>=2.0.46",
     "sudachidict-core>=20260116",
     "sudachipy>=0.6.10",

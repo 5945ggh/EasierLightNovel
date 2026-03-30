@@ -148,6 +148,11 @@ class UserHighlight(Base):
         # 调用方应使用 joinedload/selectinload 预加载
         return self.archive is not None
 
+    @property
+    def has_Archive(self) -> bool:
+        """兼容旧前端字段名。后续前端统一到 has_archive 后可删除。"""
+        return self.has_archive
+
 
 class ArchiveItem(Base):
     """

@@ -40,6 +40,11 @@ class MinerUProcessingError(MinerUError):
     pass
 
 
+class MinerURetryableError(MinerUProcessingError):
+    """可重试的瞬时失败"""
+    pass
+
+
 class MinerUTimeoutError(MinerUError):
     """处理超时错误"""
     pass
@@ -94,7 +99,7 @@ class MinerUClient:
         try:
             resp = self.session.request(method, url, timeout=kwargs.pop("timeout", 30), **kwargs)
         except requests.RequestException as e:
-            raise MinerUProcessingError(f"网络请求失败: {type(e).__name__}: {e}") from e
+            raise MinerURetryableError(f"网络请求失败: {type(e).__name__}: {e}") from e
 
         # 检查 HTTP 状态码
         if resp.status_code in self.NON_RETRYABLE_STATUS_CODES:
@@ -107,15 +112,17 @@ class MinerUClient:
             resp.raise_for_status()
         except requests.HTTPError as e:
             resp_text = resp.text[:200] if resp.text else "(无响应体)"
-            raise MinerUProcessingError(
-                f"HTTP 错误: {e.response.status_code}, 响应: {resp_text}"
-            ) from e
+            status_code = e.response.status_code if e.response is not None else None
+            error_message = f"HTTP 错误: {status_code}, 响应: {resp_text}"
+            if status_code in self.LONG_RETRY_STATUS_CODES or (status_code is not None and status_code >= 500):
+                raise MinerURetryableError(error_message) from e
+            raise MinerUProcessingError(error_message) from e
 
         # 解析 JSON
         try:
             data = resp.json()
         except Exception as e:
-            raise MinerUProcessingError(f"响应解析失败（非 JSON）: {e}") from e
+            raise MinerURetryableError(f"响应解析失败（非 JSON）: {e}") from e
 
         # 检查业务状态码
         if data.get("code") != 0:
@@ -259,6 +266,16 @@ class MinerUClient:
                     logger.warning(f"未知状态: {state}")
                     time.sleep(MINERU_POLL_INTERVAL)
 
+            except MinerURetryableError as e:
+                backoff = MINERU_POLL_INTERVAL
+                logger.warning(
+                    "轮询遇到可重试异常，将在 %ss 后重试 (attempt %s/%s): %s",
+                    backoff,
+                    attempt + 1,
+                    MINERU_MAX_RETRIES,
+                    e,
+                )
+                time.sleep(backoff)
             except MinerUProcessingError:
                 raise
             except Exception:
