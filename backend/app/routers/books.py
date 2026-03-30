@@ -9,7 +9,7 @@ from app.database import get_db
 from app.config import (
     UPLOAD_DIR, TEMP_UPLOAD_DIR,
     UPLOAD_ALLOWED_BOOK_TYPES, UPLOAD_ALLOWED_COVER_TYPES,
-    QUERY_DEFAULT_LIMIT, QUERY_MAX_LIMIT
+    QUERY_DEFAULT_LIMIT, QUERY_MAX_LIMIT, UPLOAD_MAX_FILE_SIZE
 )
 from app.schemas import (
     BookListItem, BookDetail, BookUpdate,
@@ -63,7 +63,10 @@ async def upload_book(
             detail=f"Only {UPLOAD_ALLOWED_BOOK_TYPES} files are supported"
         )
 
-    return await book_service.create_book_from_file(file, background_tasks)
+    try:
+        return await book_service.create_book_from_file(file, background_tasks)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.get("", response_model=List[BookListItem])
 def list_books(
@@ -136,11 +139,15 @@ async def upload_book_cover(
 
     # 5. 保存文件
     try:
-        content = await file.read()
-        with open(save_path, "wb") as f:
-            f.write(content)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+        await BookService.stream_upload_to_path(
+            file=file,
+            destination_path=save_path,
+            max_file_size=UPLOAD_MAX_FILE_SIZE
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(exc)}") from exc
 
     # 6. 更新数据库（通过 Service 层）
     # 存储相对路径: /static/books/{book_id}/images/{filename}

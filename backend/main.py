@@ -12,6 +12,7 @@ from app.config import (
     CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR,
     LOG_LEVEL, LLMConfig
 )
+from app.services.book_service import recover_interrupted_processing_books
 import os
 
 # 确保必要的目录存在
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
     _setup_logging()
     init_db()
     check_db_connection()
+    recovered_count = recover_interrupted_processing_books()
 
     # 确保必要的目录存在
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -51,6 +53,8 @@ async def lifespan(app: FastAPI):
     print(f"CORS 允许源: {', '.join(CORS_ALLOWED_ORIGINS)}")
     print(f"LLM 模型: {LLMConfig.MODEL}")
     print(f"LLM API: {'已配置' if LLMConfig.API_KEY else '未配置'}")
+    if recovered_count:
+        print(f"已回收中断的书籍处理任务: {recovered_count}")
     print("-" * 50)
 
     # 预热词典服务（可选，首次请求会自动初始化）

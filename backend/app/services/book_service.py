@@ -2,6 +2,7 @@
 import os
 import shutil
 import logging
+import uuid
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import UploadFile, BackgroundTasks
@@ -13,9 +14,19 @@ from app.utils.parsers.epub_parser import LightNovelParser
 from app.utils.parsers.pdf_parser import PDFParser
 from app.utils.domain import TextSegment, ImageSegment, Chapter as ParserChapter
 from app.utils.tokenizer import JapaneseTokenizer
-from app.config import UPLOAD_DIR, EPUB_MERGE_SAME_NAME_CHAPTERS, EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS, UPLOAD_ALLOWED_BOOK_TYPES, TOKENIZER_DEFAULT_MODE
+from app.config import (
+    UPLOAD_DIR,
+    TEMP_UPLOAD_DIR,
+    UPLOAD_MAX_FILE_SIZE,
+    EPUB_MERGE_SAME_NAME_CHAPTERS,
+    EPUB_MERGE_CONSECUTIVE_IMAGE_CHAPTERS,
+    UPLOAD_ALLOWED_BOOK_TYPES,
+    TOKENIZER_DEFAULT_MODE,
+)
 
 logger = logging.getLogger(__name__)
+
+UPLOAD_STREAM_CHUNK_SIZE = 1024 * 1024
 
 class BookService:
     def __init__(self, db: Session):
@@ -45,6 +56,47 @@ class BookService:
             return PDFParser(file_path, book_id, UPLOAD_DIR)
         else:
             raise ValueError(f"不支持的文件类型: {file_ext}")
+
+    @staticmethod
+    def build_temp_upload_path(original_filename: str, temp_dir: str = TEMP_UPLOAD_DIR) -> str:
+        """为上传文件生成唯一的临时路径，避免同名覆盖。"""
+        _, file_ext = os.path.splitext(os.path.basename(original_filename))
+        unique_name = f"book_{uuid.uuid4().hex}{file_ext.lower()}"
+        return os.path.join(temp_dir, unique_name)
+
+    @staticmethod
+    async def stream_upload_to_path(
+        file: UploadFile,
+        destination_path: str,
+        max_file_size: int = UPLOAD_MAX_FILE_SIZE
+    ) -> int:
+        """流式保存上传文件，避免一次性读入内存。"""
+        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+        total_size = 0
+
+        try:
+            with open(destination_path, "wb") as output_file:
+                while True:
+                    chunk = await file.read(UPLOAD_STREAM_CHUNK_SIZE)
+                    if not chunk:
+                        break
+
+                    total_size += len(chunk)
+                    if total_size > max_file_size:
+                        raise ValueError(f"文件过大，最大允许 {max_file_size} 字节")
+
+                    output_file.write(chunk)
+
+            if total_size == 0:
+                raise ValueError("上传文件为空")
+
+            return total_size
+        except Exception:
+            if os.path.exists(destination_path):
+                os.remove(destination_path)
+            raise
+        finally:
+            await file.close()
 
     def update_book(self, book_id: str, update_data: BookUpdate) -> Optional[Book]:
         """
@@ -306,14 +358,9 @@ class BookService:
         # 2. 生成唯一书籍 ID（UUID）
         book_id = LightNovelParser.generate_book_id()
 
-        # 3. 读取文件内容并保存到临时目录
-        content = await file.read()
-        temp_dir = "./temp_uploads"
-        os.makedirs(temp_dir, exist_ok=True)
-        temp_file_path = os.path.join(temp_dir, file.filename)
-
-        with open(temp_file_path, "wb") as f:
-            f.write(content)
+        # 3. 流式保存到临时目录，避免同名覆盖和大文件内存放大
+        temp_file_path = self.build_temp_upload_path(file.filename)
+        await self.stream_upload_to_path(file, temp_file_path)
 
         # 4. 提取元数据
         fallback_title = file.filename.replace(file_ext, "")
@@ -469,3 +516,30 @@ class BookService:
             if os.path.exists(file_path):
                 os.remove(file_path)
             # PDF 解析器已在 parse() 的 finally 块中自动清理临时目录
+
+
+def recover_interrupted_processing_books() -> int:
+    """启动时回收上次异常中断后遗留的 processing 状态。"""
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        interrupted_books = db.query(Book).filter(Book.status == ProcessingStatus.PROCESSING).all()
+        if not interrupted_books:
+            return 0
+
+        for book in interrupted_books:
+            book.status = ProcessingStatus.FAILED  # type: ignore
+            if not book.error_message:
+                book.error_message = "上次处理在后端关闭或重启时中断，请重新导入或重试。"  # type: ignore
+            book.pdf_progress_stage = ""  # type: ignore
+
+        db.commit()
+        logger.warning(f"Recovered {len(interrupted_books)} interrupted book processing task(s)")
+        return len(interrupted_books)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to recover interrupted book processing tasks")
+        raise
+    finally:
+        db.close()
