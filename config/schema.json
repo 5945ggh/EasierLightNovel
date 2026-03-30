@@ -123,6 +123,11 @@
           "description": "查询缓存大小",
           "default": 4096
         },
+        "db_path": {
+          "type": "string",
+          "description": "Jamdict 数据库路径（留空时使用默认内置路径）",
+          "default": ""
+        },
         "memory_mode": {
           "type": "boolean",
           "description": "是否将词典加载到内存(不建议加载)",
@@ -132,6 +137,19 @@
           "type": "boolean",
           "description": "是否加载汉字词典",
           "default": false
+        },
+        "preferred_languages": {
+          "type": "array",
+          "description": "释义语言优先级列表（如 chn, eng）",
+          "items": {
+            "type": "string"
+          },
+          "default": ["chn", "eng"]
+        },
+        "show_all_languages": {
+          "type": "boolean",
+          "description": "是否展示所有可用语言的释义",
+          "default": true
         }
       }
     },

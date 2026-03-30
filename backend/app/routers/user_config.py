@@ -61,7 +61,7 @@ def get_user_config(
     return UserConfigResponse(
         config=config,
         schema_info=schema_info,
-        restart_required=False,
+        restart_required=service.has_pending_restart(),
     )
 
 
@@ -96,12 +96,13 @@ def update_user_config(
     # 过滤掉未修改的敏感字段
     filtered_config = {}
     for key, value in update_data.config.items():
+        normalized_value = value.strip() if isinstance(value, str) else value
         if key in SENSITIVE_FIELDS:
-            # 如果敏感字段值以 **** 开头或为空，则不更新
-            if value and not str(value).startswith("****") and str(value) != "****":
-                filtered_config[key] = value
+            # 如果敏感字段值为空白或掩码值，则保持原值不变。
+            if normalized_value and not str(normalized_value).startswith("****") and str(normalized_value) != "****":
+                filtered_config[key] = normalized_value
         else:
-            filtered_config[key] = value
+            filtered_config[key] = normalized_value
 
     success, message, updated_fields, restart_required = service.update_config(
         filtered_config

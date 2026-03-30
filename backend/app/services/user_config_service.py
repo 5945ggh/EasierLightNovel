@@ -4,7 +4,8 @@
 负责读取、验证、更新 config/user.json
 """
 import json
-from pathlib import Path
+import os
+import time
 from typing import Any, Dict, List, Tuple, Set
 
 from app.config import BASE_DIR
@@ -16,17 +17,7 @@ SENSITIVE_FIELDS: Set[str] = {
     "pdf.mineru_api_token",
 }
 
-# 修改后需要重启后端的字段
-RESTART_REQUIRED_FIELDS: Set[str] = {
-    "backend.host",
-    "backend.port",
-    "cors.allowed_origins",
-    "paths.data_dir",
-    "paths.temp_upload_dir",
-    "tokenizer.mode",
-    "dictionary.memory_mode",
-    "dictionary.load_kanji_dict",
-}
+APP_STARTED_AT = time.time()
 
 
 class UserConfigService:
@@ -79,6 +70,19 @@ class UserConfigService:
             result = result[key]
         result[keys[-1]] = value
         return data
+
+    def _get_field_schema(self, schema: dict, path: str) -> dict | None:
+        """获取指定字段在 schema 中的定义，不存在则返回 None。"""
+        keys = path.split(".")
+        schema_node = schema.get("properties", {})
+        for key in keys[:-1]:
+            group_schema = schema_node.get(key)
+            if not isinstance(group_schema, dict):
+                return None
+            schema_node = group_schema.get("properties", {})
+
+        field_schema = schema_node.get(keys[-1])
+        return field_schema if isinstance(field_schema, dict) else None
 
     def get_config_with_schema(self) -> Tuple[dict, List[dict]]:
         """
@@ -134,34 +138,27 @@ class UserConfigService:
 
         return masked_config, schema_info
 
-    def validate_value(self, path: str, value: Any, schema: dict) -> Tuple[bool, str]:
+    def validate_value(self, path: str, value: Any, schema: dict) -> Tuple[bool, str, Any]:
         """
-        根据 schema 验证单个值
+        根据 schema 校验并规范化单个值
 
         Returns:
-            (is_valid, error_message)
+            (is_valid, error_message, normalized_value)
         """
+        field_schema = self._get_field_schema(schema, path)
+        if field_schema is None:
+            return False, "未知配置字段", value
+
         # 预处理：去除字符串首尾空白
         if isinstance(value, str):
             value = value.strip()
             # 空字符串处理
             if value == "":
-                # 检查是否允许空值
-                keys = path.split(".")
-                schema_node = schema.get("properties", {})
-                for key in keys[:-1]:
-                    schema_node = schema_node.get(key, {}).get("properties", {})
-                field_schema = schema_node.get(keys[-1], {})
                 # 如果字符串为空且有默认值，使用默认值
                 if field_schema.get("default") is not None:
                     value = field_schema.get("default")
-
-        keys = path.split(".")
-        schema_node = schema.get("properties", {})
-        for key in keys[:-1]:
-            schema_node = schema_node.get(key, {}).get("properties", {})
-
-        field_schema = schema_node.get(keys[-1], {})
+        elif isinstance(value, list):
+            value = [v.strip() if isinstance(v, str) else v for v in value]
 
         # 类型验证
         expected_type = field_schema.get("type")
@@ -170,37 +167,47 @@ class UserConfigService:
                 try:
                     value = int(str(value).strip()) if isinstance(value, str) else int(value)
                 except (ValueError, TypeError):
-                    return False, "必须是整数"
+                    return False, "必须是整数", value
         elif expected_type == "number":
             if not isinstance(value, (int, float)):
                 try:
                     value = float(str(value).strip()) if isinstance(value, str) else float(value)
                 except (ValueError, TypeError):
-                    return False, "必须是数字"
+                    return False, "必须是数字", value
         elif expected_type == "boolean":
             if not isinstance(value, bool):
                 if isinstance(value, str):
                     value = value.strip().lower() in ("true", "1", "yes", "on")
                 else:
-                    return False, "必须是布尔值"
+                    return False, "必须是布尔值", value
         elif expected_type == "array":
             if not isinstance(value, list):
-                return False, "必须是数组"
+                return False, "必须是数组", value
 
         # 枚举验证
         if "enum" in field_schema:
             if value not in field_schema["enum"]:
-                return False, f"必须是以下值之一: {', '.join(field_schema['enum'])}"
+                return False, f"必须是以下值之一: {', '.join(field_schema['enum'])}", value
 
         # 范围验证
         if "minimum" in field_schema:
             if isinstance(value, (int, float)) and value < field_schema["minimum"]:
-                return False, f"不能小于 {field_schema['minimum']}"
+                return False, f"不能小于 {field_schema['minimum']}", value
         if "maximum" in field_schema:
             if isinstance(value, (int, float)) and value > field_schema["maximum"]:
-                return False, f"不能大于 {field_schema['maximum']}"
+                return False, f"不能大于 {field_schema['maximum']}", value
 
-        return True, ""
+        return True, "", value
+
+    def has_pending_restart(self) -> bool:
+        """检查当前进程是否存在尚未应用的配置变更。"""
+        if not self.user_config_path.exists():
+            return False
+
+        try:
+            return os.path.getmtime(self.user_config_path) >= APP_STARTED_AT
+        except OSError:
+            return False
 
     def update_config(self, updates: Dict[str, Any]) -> Tuple[bool, str, List[str], bool]:
         """
@@ -217,29 +224,24 @@ class UserConfigService:
 
         updated_fields = []
         errors = []
-        restart_required = False
 
         for field_path, new_value in updates.items():
-            # 预处理：去除字符串首尾空白
             if isinstance(new_value, str):
                 new_value = new_value.strip()
-            elif isinstance(new_value, list):
-                # 去除数组中每个字符串元素的空白
-                new_value = [v.strip() if isinstance(v, str) else v for v in new_value]
+
+            # 敏感字段的空值/掩码值视为“保持原值不变”，避免误清空已配置的密钥。
+            if field_path in SENSITIVE_FIELDS and (new_value == "" or str(new_value).startswith("****")):
+                continue
 
             # 验证值
-            is_valid, error_msg = self.validate_value(field_path, new_value, schema)
+            is_valid, error_msg, normalized_value = self.validate_value(field_path, new_value, schema)
             if not is_valid:
                 errors.append(f"{field_path}: {error_msg}")
                 continue
 
             # 设置新值
-            self._set_nested_value(user_config, field_path, new_value)
+            self._set_nested_value(user_config, field_path, normalized_value)
             updated_fields.append(field_path)
-
-            # 检查是否需要重启
-            if field_path in RESTART_REQUIRED_FIELDS:
-                restart_required = True
 
         if errors:
             return False, "; ".join(errors), [], False
@@ -253,4 +255,4 @@ class UserConfigService:
         except Exception as e:
             return False, f"保存配置失败: {str(e)}", [], False
 
-        return True, "配置已保存", updated_fields, restart_required
+        return True, "配置已保存，重启后端后生效", updated_fields, bool(updated_fields)
