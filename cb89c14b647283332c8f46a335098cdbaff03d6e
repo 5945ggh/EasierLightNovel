@@ -1,0 +1,40 @@
+backend/app/services/book_service.py
+  d0ae0978e1d89790 5,17-25,29-30,60-99,361-363,519-545
+backend/app/routers/books.py
+  d0ae0978e1d89790 12,66-69,142-150
+backend/main.py
+  d0ae0978e1d89790 15,43,56-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "cb89c14b647283332c8f46a335098cdbaff03d6e",
+  "prompts": {
+    "5b9b832e40f59f97": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9a-0193-7020-8881-6c521df7ab55",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 18,
+      "total_deletions": 5,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    },
+    "d0ae0978e1d89790": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9b-cd4e-7511-8581-4a75398acc88",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 287,
+      "total_deletions": 81,
+      "accepted_lines": 286,
+      "overriden_lines": 0
+    }
+  }
+}
