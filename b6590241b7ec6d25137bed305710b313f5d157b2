@@ -1,0 +1,36 @@
+backend/README.md
+  d0ae0978e1d89790 41,101,193,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "b6590241b7ec6d25137bed305710b313f5d157b2",
+  "prompts": {
+    "5b9b832e40f59f97": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9a-0193-7020-8881-6c521df7ab55",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "d0ae0978e1d89790": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3e9b-cd4e-7511-8581-4a75398acc88",
+        "model": "gpt-5.4"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}
