@@ -1,0 +1,80 @@
+backend/tests/test_database_migrations.py
+  s_f67faabaa0a917::t_32b9d431b01dc0 25,40
+  s_f67faabaa0a917::t_072b8c9ccf2ccd 4,42-63
+backend/app/config.py
+  s_f67faabaa0a917::t_22f1be77c6b28d 172-174
+backend/app/models.py
+  s_f67faabaa0a917::t_22f1be77c6b28d 30-34,40-95
+config/README.md
+  s_f67faabaa0a917::t_a34f87b111ea2d 142
+  s_f67faabaa0a917::t_3d6ccb65b3cdfb 145
+  s_f67faabaa0a917::t_130ab402c612e9 146
+backend/main.py
+  s_f67faabaa0a917::t_0e860b674e4d79 103-108
+  s_f67faabaa0a917::t_22f1be77c6b28d 12,22,51,98-100
+  s_f67faabaa0a917::t_094eca3d694b0c 16,46,62-63
+backend/app/utils/domain.py
+  s_f67faabaa0a917::t_c1e7eab7d9cac1 51-54,83
+backend/app/database.py
+  s_f67faabaa0a917::t_22f1be77c6b28d 33
+README.md
+  s_f67faabaa0a917::t_a34f87b111ea2d 123,294
+backend/tests/test_source_content.py
+  s_f67faabaa0a917::t_2fa4e53ee4cd60 334-335
+  s_f67faabaa0a917::t_f46e4185a38812 8,274-280,294-295,315,320,328-330
+  s_f67faabaa0a917::t_78917f115b8ce8 96-113
+  s_f67faabaa0a917::t_34827ad59aa3b4 436-437
+  s_f67faabaa0a917::t_643dee80748c66 14,449-454
+  s_f67faabaa0a917::t_dd39a200870062 22,30-36,164,180-229,332
+  s_f67faabaa0a917::t_0e860b674e4d79 114-163,165-179,406-408,414-420
+  s_f67faabaa0a917::t_32b9d431b01dc0 1-6,9-13,15,18-21,23-29,37-49,72-93,250,272,281-293,296-297,299-314,316-319,321-327,331,333,337-368,425-435,438-448
+  s_f67faabaa0a917::t_648e7624c7be37 7,16-17,50-54,59,61-63,68-71,94-95,230-239,241-242,244,246-249,251-271,273,298,336,369-405,409-413,421-424
+  s_f67faabaa0a917::t_9c6cd7aca497ae 56-57
+  s_f67faabaa0a917::t_4702ab46f08567 245
+  s_f67faabaa0a917::t_ad1749e13b6935 55,58,60,64-67,240,243
+backend/app/services/book_service.py
+  s_f67faabaa0a917::t_1d6f8ede9bffe9 563-569
+  s_f67faabaa0a917::t_c1e7eab7d9cac1 22-25,145-150,173-181,340-342,362-364,486
+  s_f67faabaa0a917::t_4e1a4be44f425f 156-159
+  s_f67faabaa0a917::t_e9ce935fc44542 17-21,26-27,450,484-485,487-488,531-543,545-546,548,551,554,571-575
+backend/app/utils/parsers/epub_parser.py
+  s_f67faabaa0a917::t_e80320c1f4a0ee 338-343
+  s_f67faabaa0a917::t_a26fd7b8e949e3 366,421,424-426,471
+  s_f67faabaa0a917::t_49f87b9806485c 405
+  s_f67faabaa0a917::t_48414f1ade5d11 365,382,385,397-398,437
+  s_f67faabaa0a917::t_0e860b674e4d79 210-250,253,465
+  s_f67faabaa0a917::t_dd39a200870062 367-368,373-381,383-384,386-396,399-403,416-420,422-423,427-428,464,469
+  s_f67faabaa0a917::t_c1e7eab7d9cac1 646-648
+  s_f67faabaa0a917::t_8edd6118a10a35 46-48,331-337,344-364,369-372,404,406-415,429-436,438-463,466-468,470,472-473,639
+backend/app/services/source_content_service.py
+  s_f67faabaa0a917::t_5274c6587be678 1-11,13-14,16-23,26,28-59,62-80,129,136-137,163-165,172-173,220-266
+  s_f67faabaa0a917::t_4e1a4be44f425f 12,27,117-121
+  s_f67faabaa0a917::t_34827ad59aa3b4 60-61
+  s_f67faabaa0a917::t_8fbd508df1ac13 15,81-116,122-128,130-135,138-162,166-171,174-219
+  s_f67faabaa0a917::t_dd39a200870062 24-25
+backend/app/utils/tokenizer.py
+  s_f67faabaa0a917::t_3502741dddac02 2-3,11-38,111-147,152-160
+  s_f67faabaa0a917::t_34827ad59aa3b4 148-151
+  s_f67faabaa0a917::t_dd5e15038510fa 161
+backend/README.md
+  s_f67faabaa0a917::t_dd39a200870062 120
+  s_f67faabaa0a917::t_a34f87b111ea2d 108
+  s_f67faabaa0a917::t_3d6ccb65b3cdfb 111,121-122
+  s_f67faabaa0a917::t_e2aacf724b41e0 123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "6c35334a5f21dde88451805ec617c85918fcfd42",
+  "prompts": {},
+  "sessions": {
+    "s_f67faabaa0a917": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fb7dc-4c2b-7560-aa17-c1dfb7df2ba0",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
