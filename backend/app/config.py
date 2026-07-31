@@ -169,6 +169,9 @@ def _get_temp_upload_dir() -> str:
 
 DATA_DIR = _get_data_dir()
 UPLOAD_DIR = os.path.join(DATA_DIR, "books")
+# Immutable imported EPUB/PDF files.  This directory deliberately is not
+# mounted by FastAPI; only UPLOAD_DIR is exposed as /static/books.
+SOURCE_FILES_DIR = os.path.join(DATA_DIR, "sources")
 TEMP_UPLOAD_DIR = _get_temp_upload_dir()
 STATIC_URL_PREFIX = "/static"
 

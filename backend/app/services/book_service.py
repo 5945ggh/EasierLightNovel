@@ -14,6 +14,17 @@ from app.utils.parsers.epub_parser import LightNovelParser
 from app.utils.parsers.pdf_parser import PDFParser
 from app.utils.domain import TextSegment, ImageSegment, Chapter as ParserChapter
 from app.utils.tokenizer import JapaneseTokenizer
+from app.services.source_content_service import (
+    build_source_content,
+    copy_immutable_source,
+    create_source_records,
+    remove_private_source,
+    stage_private_source_removal,
+    finalize_staged_source_removal,
+    restore_staged_source_removal,
+    attach_reader_projections,
+    source_documents_from_chapters,
+)
 from app.config import (
     UPLOAD_DIR,
     TEMP_UPLOAD_DIR,
@@ -131,12 +142,21 @@ class BookService:
         if not book:
             return False
 
-        # 1. 先删除数据库记录 (Cascade delete 会自动删除 chapters, progress 等)
+        # Stage the private file first. A staging move is atomic on the local
+        # data volume, so a failure leaves both the database and source intact
+        # and allows the user to retry deletion.
+        staged_source_path = stage_private_source_removal(book_id)
+
+        # 1. 删除数据库记录 (Cascade delete 会自动删除 chapters, progress 等)
         try:
             self.db.delete(book)
             self.db.commit()
         except Exception as e:
             self.db.rollback()
+            try:
+                restore_staged_source_removal(book_id, staged_source_path)
+            except OSError:
+                logger.warning("Failed to restore staged private source for book %s", book_id, exc_info=True)
             logger.error(f"Failed to delete book {book_id} from database: {e}")
             raise
 
@@ -149,6 +169,15 @@ class BookService:
                 logger.info(f"Deleted book directory: {book_dir}")
             except Exception as e:
                 logger.warning(f"Failed to delete book directory {book_dir}: {e}")
+
+        if staged_source_path:
+            try:
+                finalize_staged_source_removal(staged_source_path)
+                logger.info(f"Deleted private source directory for book: {book_id}")
+            except Exception:
+                # The path remains under sources/.cleanup and is retried on
+                # the next application startup rather than becoming orphaned.
+                logger.warning("Deferred private source cleanup for book %s", book_id, exc_info=True)
 
         return True
 
@@ -308,6 +337,9 @@ class BookService:
                 while j < len(chapters) and chapters[j].title == current.title:
                     # 拼接 segments
                     current.segments.extend(chapters[j].segments)
+                    current.source_document_segment_counts.extend(
+                        chapters[j].source_document_segment_counts
+                    )
                     logger.info(f"Merged same-name chapter: {current.title} (index {i} + {j})")
                     j += 1
                 merged.append(current)
@@ -327,6 +359,9 @@ class BookService:
                     while j < len(chapters) and self._is_image_only_chapter(chapters[j]):
                         # 拼接 segments
                         current.segments.extend(chapters[j].segments)
+                        current.source_document_segment_counts.extend(
+                            chapters[j].source_document_segment_counts
+                        )
                         logger.info(f"Merged consecutive image chapters: {current.title} (index {i} + {j})")
                         j += 1
                     # 跳过已合并的章节
@@ -412,6 +447,7 @@ class BookService:
 
         book: Optional[Book] = None  # 提前声明，避免 except 块中 UnboundLocalError
         parser = None  # 用于 cleanup
+        private_source_created = False
 
         try:
             book = db.query(Book).filter(Book.id == book_id).first()
@@ -444,6 +480,11 @@ class BookService:
             # B. 应用章节合并逻辑（仅 EPUB 需要，PDF 已通过 MarkdownParser 分割）
             if file_ext == '.epub':
                 raw_chapters = self._merge_chapters(raw_chapters)
+
+            parser_documents = getattr(parser, "source_documents", None)
+            source_documents = parser_documents or source_documents_from_chapters(raw_chapters)
+            attach_reader_projections(source_documents, raw_chapters)
+            source_content = build_source_content(source_documents)
 
             # C. 初始化分词器
             assert mode in ["A", "B", "C"]
@@ -487,15 +528,30 @@ class BookService:
                 )
                 orm_chapters.append(new_chapter)
 
-            # D. 批量写入章节
-            db.bulk_save_objects(orm_chapters)
+            # D. Persist the successful upload and parser-source coordinate
+            # space separately from the compact reader cache.
+            relative_path, source_file_sha256 = copy_immutable_source(file_path, book_id, file_ext)
+            private_source_created = True
+            source_file, source_version = create_source_records(
+                book_id=book_id,
+                file_ext=file_ext,
+                relative_path=relative_path,
+                source_file_sha256=source_file_sha256,
+                source_content=source_content,
+            )
 
-            # E. 若遍历时落空, 兜底查找封面图片
+            # E. 批量写入章节及 source-content version
+            db.bulk_save_objects(orm_chapters)
+            db.add(source_file)
+            db.add(source_version)
+
+            # F. 若遍历时落空, 兜底查找封面图片
             cover_url = detected_cover_url or self._find_cover_image_fallback(book_id)
 
-            # F. 更新书籍状态
+            # G. 更新书籍状态
             book.status = ProcessingStatus.COMPLETED  # type: ignore
             book.total_chapters = total_chapters  # type: ignore
+            book.source_rebuild_status = "rebuildable"  # type: ignore
             if cover_url:
                 book.cover_url = cover_url  # type: ignore
 
@@ -504,11 +560,19 @@ class BookService:
 
         except Exception as e:
             logger.error(f"Failed to process book {book_id}: {e}", exc_info=True)
-            # book 可能为 None（如果查询时就不存在）
-            if book is not None:
-                book.status = ProcessingStatus.FAILED  # type: ignore
-                book.error_message = str(e)[:250]  # type: ignore
+            db.rollback()
+            # Re-query after rollback so a failed final commit cannot leave a
+            # session in PendingRollbackError while recording import failure.
+            failed_book = db.query(Book).filter(Book.id == book_id).first()
+            if failed_book is not None:
+                failed_book.status = ProcessingStatus.FAILED  # type: ignore
+                failed_book.error_message = str(e)[:250]  # type: ignore
                 db.commit()
+            if private_source_created:
+                try:
+                    remove_private_source(book_id)
+                except Exception:
+                    logger.warning("Failed to clean private source after import failure", exc_info=True)
 
         finally:
             db.close()

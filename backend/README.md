@@ -105,8 +105,10 @@
 创建 Book 记录 (状态: PENDING)
     ↓
 【后台任务】解析 EPUB
+    ├─ 保存私有原始副本 → static_data/sources/{id}/（不通过静态 URL 暴露）
     ├─ LightNovelParser 解析 HTML
     ├─ 提取图片 → static_data/books/{id}/images/
+    ├─ 保存可重建的 source content version、作者 ruby 提示及 source-to-reader 投影
     ├─ 按段落切分文本 → TextSegment[]
     └─ SudachiPy 分词 → Token[]
     ↓
@@ -114,6 +116,10 @@
     ↓
 前端可访问阅读
 ```
+
+`SourceContentVersion` 是私有的重建契约，不会扩展章节阅读 API 或 `Chapter.content_json`。它保存 source document 的 Unicode 字符 offset、ruby hint，以及该 document 到最终合并后 reader chapter/segment 的投影。source document 与 reader 文本使用同一规范化发射规则（移除 `U+200B`、将三个以上连续换行压缩为两个），并在每一个 reader flush 点独立发射；图片处会插入显式、不可投影的结构边界，避免把边界两侧的换行送入同一次压缩。parser 在该规则生效时显式重映射 ruby offset，绝不在投影阶段临时替换文本，从而避免重建时跨图片拼接出新词元。
+
+删除书籍时，私有原始文件会先原子移动到 `static_data/sources/.cleanup/`，数据库提交后再删除。若文件系统暂时拒绝删除，后端启动时会重试该目录，避免无归属的原始文件永久遗留。
 
 #### 划线与 AI 解析流程（计划中）
 

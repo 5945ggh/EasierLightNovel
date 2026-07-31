@@ -27,11 +27,72 @@ class Book(Base):
     pdf_progress_current = Column(Integer, default=0)         # 当前页数
     pdf_progress_total = Column(Integer, default=0)           # 总页数
 
+    # Existing rows default to legacy_unavailable through the additive SQLite
+    # migration. A value of rebuildable is set only after an immutable source
+    # file and its source-content version were committed successfully.
+    source_rebuild_status = Column(String(32), nullable=False, default="legacy_unavailable")
+
     # 关联
     chapters = relationship("Chapter", back_populates="book", cascade="all, delete-orphan")
     progress = relationship("UserProgress", back_populates="book", uselist=False, cascade="all, delete-orphan")
     vocabularies = relationship("Vocabulary", back_populates="book", cascade="all, delete-orphan")
     highlights = relationship("UserHighlight", back_populates="book", cascade="all, delete-orphan")
+    source_files = relationship("BookSourceFile", back_populates="book", cascade="all, delete-orphan")
+    source_content_versions = relationship("SourceContentVersion", back_populates="book", cascade="all, delete-orphan")
+
+
+class BookSourceFile(Base):
+    """Private immutable original uploaded file for one imported book."""
+    __tablename__ = "book_source_files"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(String(32), ForeignKey("books.id"), nullable=False, unique=True, index=True)
+    file_type = Column(String(16), nullable=False)
+    media_type = Column(String(100), nullable=False)
+    sha256 = Column(String(64), nullable=False, index=True)
+    relative_path = Column(String(512), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    book = relationship("Book", back_populates="source_files")
+
+
+class SourceContentVersion(Base):
+    """Versioned parser output used to rebuild future analysis artifacts.
+
+    source_content_json is intentionally separate from Chapter.content_json:
+    it stores parser-source documents and stable document-relative character
+    offsets, while Chapter.content_json remains the reader's compact cache.
+    """
+    __tablename__ = "source_content_versions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(String(32), ForeignKey("books.id"), nullable=False, index=True)
+    source_file_sha256 = Column(String(64), nullable=False, index=True)
+    parser_version = Column(String(64), nullable=False)
+    source_schema_version = Column(Integer, nullable=False)
+    source_content_sha256 = Column(String(64), nullable=False)
+    source_content_json = deferred(Column(JSON, nullable=False))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    book = relationship("Book", back_populates="source_content_versions")
+    ruby_hints = relationship("SourceRubyHint", back_populates="source_content_version", cascade="all, delete-orphan")
+
+
+class SourceRubyHint(Base):
+    """Author ruby retained as a source-level hint, never a rendered token reading."""
+    __tablename__ = "source_ruby_hints"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_content_version_id = Column(Integer, ForeignKey("source_content_versions.id"), nullable=False, index=True)
+    document_id = Column(String(255), nullable=False)
+    start_offset = Column(Integer, nullable=False)
+    end_offset = Column(Integer, nullable=False)
+    base_text = Column(Text, nullable=False)
+    reading_raw = Column(Text, nullable=False)
+    markup = Column(JSON, nullable=False)
+    provenance = Column(String(32), nullable=False, default="epub_ruby")
+
+    source_content_version = relationship("SourceContentVersion", back_populates="ruby_hints")
 
 
 class Chapter(Base):

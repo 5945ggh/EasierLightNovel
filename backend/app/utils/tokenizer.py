@@ -1,10 +1,39 @@
 import re
-from typing import List, Optional, Literal, Dict, Any
+from dataclasses import dataclass
+from typing import List, Optional, Literal, Dict, Any, Tuple
 from sudachipy import tokenizer, dictionary
 import jaconv
 
 from app.config import TOKENIZER_DEFAULT_MODE
 from app.utils.domain import Token
+
+
+@dataclass(frozen=True)
+class RebuildToken:
+    """Lossless-enough Sudachi semantics for a future rebuildable analysis run.
+
+    This is intentionally not serialized into Chapter.content_json.  Reading
+    is the raw Sudachi value (normally Katakana), with provenance explicit so
+    an OOV guess is never mistaken for a trusted dictionary reading.
+    """
+    surface: str
+    dictionary_form: str
+    normalized_form: str
+    part_of_speech: Tuple[str, str, str, str, str, str]
+    conjugation_type: str
+    conjugation_form: str
+    is_oov: bool
+    word_id: int
+    dictionary_id: int
+    reading_form: Optional[str]
+    reading_provenance: Literal["sudachi_registered", "oov_guess", "none"]
+    reading_confidence: Literal["trusted", "untrusted", "none"]
+    start_offset: int
+    end_offset: int
+
+    @property
+    def has_trusted_reading(self) -> bool:
+        return self.reading_confidence == "trusted"
 
 
 # ================= 核心逻辑 =================
@@ -78,6 +107,57 @@ class JapaneseTokenizer:
             results.append(Token(gap_text, is_gap=True))
 
         return results
+
+    def tokenize_for_rebuild(self, text: str) -> List[RebuildToken]:
+        """Expose a tested semantic tokenizer contract without changing UI tokens."""
+        if not text:
+            return []
+        return [self._to_rebuild_token(morpheme)
+                for morpheme in self.tokenizer.tokenize(text, self.mode)]
+
+    @staticmethod
+    def _safe_morpheme_value(morpheme: Any, method: str, default: Any) -> Any:
+        try:
+            value = getattr(morpheme, method)()
+            return default if value is None else value
+        except (AttributeError, TypeError, ValueError):
+            return default
+
+    def _to_rebuild_token(self, morpheme: Any) -> RebuildToken:
+        pos_values = tuple(str(value) for value in self._safe_morpheme_value(
+            morpheme, "part_of_speech", ()))
+        six_pos = tuple((pos_values + ("*",) * 6)[:6])
+        is_oov = bool(self._safe_morpheme_value(morpheme, "is_oov", False))
+        raw_reading = self._safe_morpheme_value(morpheme, "reading_form", None)
+        reading_form = str(raw_reading) if raw_reading else None
+        if reading_form and not is_oov:
+            provenance: Literal["sudachi_registered", "oov_guess", "none"] = "sudachi_registered"
+            confidence: Literal["trusted", "untrusted", "none"] = "trusted"
+        elif reading_form:
+            provenance = "oov_guess"
+            confidence = "untrusted"
+        else:
+            provenance = "none"
+            confidence = "none"
+
+        return RebuildToken(
+            surface=str(self._safe_morpheme_value(morpheme, "surface", "")),
+            dictionary_form=str(self._safe_morpheme_value(morpheme, "dictionary_form", "")),
+            normalized_form=str(self._safe_morpheme_value(morpheme, "normalized_form", "")),
+            part_of_speech=six_pos,  # type: ignore[arg-type]
+            # Sudachi's six-level POS is the portable source of these values;
+            # some installed bindings do not expose separate accessors.
+            conjugation_type=six_pos[4],
+            conjugation_form=six_pos[5],
+            is_oov=is_oov,
+            word_id=int(self._safe_morpheme_value(morpheme, "word_id", -1)),
+            dictionary_id=int(self._safe_morpheme_value(morpheme, "dictionary_id", -1)),
+            reading_form=reading_form,
+            reading_provenance=provenance,
+            reading_confidence=confidence,
+            start_offset=int(self._safe_morpheme_value(morpheme, "begin", 0)),
+            end_offset=int(self._safe_morpheme_value(morpheme, "end", 0)),
+        )
 
     def _has_kanji(self, text: str) -> bool:
         return bool(self.kanji_pattern.search(text))

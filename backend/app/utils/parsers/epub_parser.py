@@ -43,6 +43,9 @@ class LightNovelParser:
         self.book = epub.read_epub(epub_path)
         self.images_map = {} # map internal filename -> saved web path
         self._extract_all_images()
+        # A parser-source coordinate space kept outside the reader cache.  It
+        # is persisted by BookService as a SourceContentVersion after import.
+        self.source_documents: List[Dict[str, Any]] = []
 
         # 建立 TOC 映射: spine_id -> chapter_title
         self.toc_map = self._build_toc_map()
@@ -204,12 +207,50 @@ class LightNovelParser:
 
         return None
 
+    @staticmethod
+    def _normalize_text_with_boundary_map(text: str) -> tuple[str, List[int]]:
+        """Apply reader normalization and map raw boundaries to output ones.
+
+        Source-content offsets must use the exact normalized character space
+        that reader text uses.  The map has one entry for every boundary in
+        ``text`` so parser-captured ruby and structural-boundary offsets can
+        be moved deliberately instead of being repaired later by searching or
+        replacing text in the projection layer.
+        """
+        normalized: List[str] = []
+        boundary_map = [0] * (len(text) + 1)
+        index = 0
+
+        while index < len(text):
+            boundary_map[index] = len(normalized)
+            character = text[index]
+            if character == '\u200b':
+                boundary_map[index + 1] = len(normalized)
+                index += 1
+                continue
+
+            if character == '\n':
+                run_end = index
+                while run_end < len(text) and text[run_end] == '\n':
+                    run_end += 1
+                retained_count = min(run_end - index, 2)
+                normalized.extend('\n' for _ in range(retained_count))
+                for boundary in range(index + 1, run_end + 1):
+                    boundary_map[boundary] = len(normalized) - max(
+                        retained_count - (boundary - index), 0
+                    )
+                index = run_end
+                continue
+
+            normalized.append(character)
+            boundary_map[index + 1] = len(normalized)
+            index += 1
+
+        return ''.join(normalized), boundary_map
+
     def _clean_text(self, text: str) -> str:
         """日语文本清洗"""
-        # 移除零宽空格等不可见字符
-        text = text.replace('\u200b', '')
-        # 移除多余的空白行，但保留段落感
-        return re.sub(r'\n{3,}', '\n\n', text)
+        return self._normalize_text_with_boundary_map(text)[0]
 
     def _safe_split_text(self, text: str) -> List[str]:
         """针对日语长文本的安全切分"""
@@ -286,6 +327,149 @@ class LightNovelParser:
             # 递归后：块级元素结束，补换行
             if is_block and text_buffer and not text_buffer[-1].endswith('\n'):
                 text_buffer.append("\n")
+
+    @staticmethod
+    def _ruby_base_text(node: Tag) -> str:
+        """Return ruby base text while excluding pronunciation/fallback nodes."""
+        pieces: List[str] = []
+
+        def visit(child: Any) -> None:
+            if isinstance(child, NavigableString):
+                value = str(child)
+                # EPUB writers often pretty-print <rb> children with
+                # indentation nodes. Those nodes are markup whitespace, not
+                # ruby base text and must not shift the captured span.
+                if value.strip():
+                    pieces.append(value)
+            elif isinstance(child, Tag) and child.name not in {"rt", "rp"}:
+                for descendant in child.children:
+                    visit(descendant)
+
+        for child in node.children:
+            visit(child)
+        return "".join(pieces)
+
+    @staticmethod
+    def _ruby_reading_raw(node: Tag) -> str:
+        return "".join(rt.get_text() for rt in node.find_all("rt"))
+
+    def _extract_source_document(self, root: Tag, document_id: str, spine_index: int) -> Dict[str, Any]:
+        """Build document-relative source text and immutable ruby hints.
+
+        Offsets are Python Unicode code-point offsets into this exact ``text``
+        value.  The display parser may later split or discard TextSegment.text;
+        this document remains the stable coordinate space for reconstruction.
+        """
+        buffer: List[str] = []
+        ruby_hints: List[Dict[str, Any]] = []
+        pending_ruby_hints: List[Dict[str, Any]] = []
+        structural_boundaries: List[Dict[str, Any]] = []
+        source_parts: List[str] = []
+        source_offset = 0
+
+        def offset() -> int:
+            return sum(len(part) for part in buffer)
+
+        def flush_source_buffer() -> bool:
+            """Emit one source text buffer at the same boundary as reader flushes."""
+            nonlocal source_offset
+            if not buffer:
+                return False
+
+            source_text, boundary_map = self._normalize_text_with_boundary_map("".join(buffer))
+            if not source_text.strip():
+                buffer.clear()
+                pending_ruby_hints.clear()
+                return False
+
+            for hint in pending_ruby_hints:
+                raw_start = hint["start_offset"]
+                raw_end = hint["end_offset"]
+                hint["start_offset"] = source_offset + boundary_map[raw_start]
+                hint["end_offset"] = source_offset + boundary_map[raw_end]
+                # ``base_text`` is defined by source-content coordinates. Keep
+                # the author-emitted base when normalization removes U+200B.
+                hint["base_text_raw"] = hint["base_text"]
+                hint["base_text"] = source_text[
+                    boundary_map[raw_start]:boundary_map[raw_end]
+                ]
+
+            ruby_hints.extend(pending_ruby_hints)
+            pending_ruby_hints.clear()
+            source_parts.append(source_text)
+            source_offset += len(source_text)
+            buffer.clear()
+            return True
+
+        def visit(node: Any) -> None:
+            nonlocal source_offset
+            if isinstance(node, Comment):
+                return
+            if isinstance(node, NavigableString):
+                value = str(node)
+                if value.strip():
+                    buffer.append(value)
+                return
+            if not isinstance(node, Tag) or node.name in {"rt", "rp", "script", "style"}:
+                return
+            if node.name in {"img", "image"}:
+                # The reader flushes its text buffer before an image. Source
+                # emission must do the same so newline normalization never
+                # crosses this structural boundary.
+                flush_source_buffer()
+                if source_parts:
+                    structural_boundaries.append({
+                        "offset": source_offset,
+                        "end_offset": source_offset + 1,
+                        "text": "\n",
+                        "reason": "image",
+                    })
+                    source_parts.append("\n")
+                    source_offset += 1
+                return
+            if node.name == "ruby":
+                base_text = self._ruby_base_text(node)
+                reading_raw = self._ruby_reading_raw(node)
+                start_offset = offset()
+                buffer.append(base_text)
+                end_offset = offset()
+                if base_text and reading_raw:
+                    pending_ruby_hints.append({
+                        "start_offset": start_offset,
+                        "end_offset": end_offset,
+                        "base_text": base_text,
+                        "reading_raw": reading_raw,
+                        "markup": {
+                            "element": "ruby",
+                            "has_rb": node.find("rb") is not None,
+                            "has_rp": node.find("rp") is not None,
+                        },
+                        "provenance": "epub_ruby",
+                    })
+                return
+            if node.name == "br":
+                buffer.append("\n")
+                return
+
+            is_block = node.name in ["p", "div", "h1", "h2", "h3", "blockquote", "li"]
+            if is_block and buffer and not buffer[-1].endswith("\n"):
+                buffer.append("\n")
+            for child in node.children:
+                visit(child)
+            if is_block and buffer and not buffer[-1].endswith("\n"):
+                buffer.append("\n")
+
+        for child in root.children:
+            visit(child)
+        flush_source_buffer()
+
+        return {
+            "document_id": document_id,
+            "spine_index": spine_index,
+            "text": "".join(source_parts),
+            "ruby_hints": ruby_hints,
+            "structural_boundaries": structural_boundaries,
+        }
 
     def _flush_buffer(self, buffer: List[str], segments: List[ContentSegment]):
         if not buffer:
@@ -452,12 +636,16 @@ class LightNovelParser:
 
             # 从 body 遍历
             root = soup.body if soup.body else soup
+            self.source_documents.append(self._extract_source_document(root, item_id, i))
             for child in root.children:
                 self._process_node(child, text_buffer, current_chapter.segments)
 
             self._flush_buffer(text_buffer, current_chapter.segments)
 
             if current_chapter.segments:
+                current_chapter.source_document_segment_counts.append(
+                    (item_id, len(current_chapter.segments))
+                )
                 chapters.append(current_chapter)
 
         return chapters

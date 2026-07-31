@@ -48,6 +48,10 @@ class Chapter:
         self.title = title
         self.index = index
         self.segments: List[ContentSegment] = []
+        # Parser-private provenance. It never participates in to_dict() or
+        # Chapter.content_json, but survives chapter merging long enough to
+        # persist the source-to-reader projection separately.
+        self.source_document_segment_counts: List[tuple[str, int]] = []
 
     def to_dict(self):
         return {

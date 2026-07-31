@@ -120,7 +120,7 @@ EasierLightNovel/
 ├── config/               # 配置文件
 │   ├── schema.json       # 配置 schema
 │   └── user.json.example # 配置模板
-└── static_data/          # 运行时生成（书籍、数据库）
+└── static_data/          # 运行时生成（数据库、阅读图片、私有原始书籍副本）
 ```
 
 ---
@@ -291,7 +291,7 @@ A: 确保已配置 MinerU API Token。如果遇到网络错误，尝试关闭代
 
 **Q: 数据存储在哪里？**
 
-A: 所有数据**完全本地化**存储在 `static_data/` 目录，包括书籍信息数据库和提取出的图片。
+A: 所有数据**完全本地化**存储在 `static_data/` 目录，包括书籍信息数据库、提取出的图片和私有原始 EPUB/PDF 副本。原始副本位于 `static_data/sources/`，不会通过静态 URL 暴露。
 
 ---
 

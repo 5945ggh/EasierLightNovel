@@ -9,15 +9,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db, check_db_connection
 from app.config import (
     BASE_DIR, DATA_DIR, UPLOAD_DIR, STATIC_URL_PREFIX, HOST, PORT,
-    CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR,
+    CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR, SOURCE_FILES_DIR,
     LOG_LEVEL, LLMConfig
 )
 from app.services.book_service import recover_interrupted_processing_books
+from app.services.source_content_service import recover_staged_source_removals
 import os
 
 # 确保必要的目录存在
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(SOURCE_FILES_DIR, exist_ok=True)
 os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
 def _setup_logging():
@@ -41,10 +43,12 @@ async def lifespan(app: FastAPI):
     init_db()
     check_db_connection()
     recovered_count = recover_interrupted_processing_books()
+    recovered_source_cleanup_count = recover_staged_source_removals()
 
     # 确保必要的目录存在
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(SOURCE_FILES_DIR, exist_ok=True)
     os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
     # 打印配置信息
@@ -55,6 +59,8 @@ async def lifespan(app: FastAPI):
     print(f"LLM API: {'已配置' if LLMConfig.API_KEY else '未配置'}")
     if recovered_count:
         print(f"已回收中断的书籍处理任务: {recovered_count}")
+    if recovered_source_cleanup_count:
+        print(f"已完成延迟源文件清理: {recovered_source_cleanup_count}")
     print("-" * 50)
 
     # 预热词典服务（可选，首次请求会自动初始化）
@@ -89,10 +95,16 @@ app.add_middleware(
 
 # 挂载数据文件服务（/static）
 app.mount(
-    STATIC_URL_PREFIX,
-    StaticFiles(directory=DATA_DIR),
-    name="static"
+    f"{STATIC_URL_PREFIX}/books",
+    StaticFiles(directory=UPLOAD_DIR),
+    name="book-static"
 )
+
+
+@app.get(f"{STATIC_URL_PREFIX}/sources/{{source_path:path}}", include_in_schema=False)
+async def reject_private_source(source_path: str):
+    """Prevent the SPA fallback from treating private source paths as pages."""
+    raise HTTPException(status_code=404, detail="Not found")
 
 # 挂载前端构建文件（生产环境）
 frontend_dist = BASE_DIR / "web" / "dist"

@@ -30,6 +30,7 @@ SQLITE_ADDITIVE_MIGRATIONS: dict[str, dict[str, str]] = {
         "pdf_progress_stage": "ALTER TABLE books ADD COLUMN pdf_progress_stage VARCHAR(50) DEFAULT ''",
         "pdf_progress_current": "ALTER TABLE books ADD COLUMN pdf_progress_current INTEGER DEFAULT 0",
         "pdf_progress_total": "ALTER TABLE books ADD COLUMN pdf_progress_total INTEGER DEFAULT 0",
+        "source_rebuild_status": "ALTER TABLE books ADD COLUMN source_rebuild_status VARCHAR(32) NOT NULL DEFAULT 'legacy_unavailable'",
     },
     "user_progress": {
         "progress_percentage": "ALTER TABLE user_progress ADD COLUMN progress_percentage FLOAT DEFAULT 0.0",
