@@ -1,0 +1,22 @@
+backend/dev_docs/SOURCE_CONTENT_CONTRACT.md
+  s_2c24fd7a2accc4::t_742bd2431edea8 1-156
+README.md
+  s_2c24fd7a2accc4::t_742bd2431edea8 135-136,298-300
+  s_2c24fd7a2accc4::t_aa0fa7d9afec0a 301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "77487b7a0b2afcfd36efec8c0d342b3f5d35815a",
+  "prompts": {},
+  "sessions": {
+    "s_2c24fd7a2accc4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fb7eb-d5d3-7bf1-acbe-14d392077026",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
