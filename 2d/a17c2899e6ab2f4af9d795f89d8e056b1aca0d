@@ -1,0 +1,32 @@
+backend/dev_docs/LEARNING_MAP_CONTRACT.md
+  s_67df420e115d68::t_bae3879d36219f 28
+DESIGN.md
+  s_67df420e115d68::t_bae3879d36219f 25
+README.md
+  s_67df420e115d68::t_6a5ae6ac89dd7b 147-157,188-189,314-316
+  s_67df420e115d68::t_bae3879d36219f 22,324-325
+  s_67df420e115d68::t_3a7c18c06da747 317
+backend/README.md
+  s_67df420e115d68::t_bae3879d36219f 117-122,155,175-185
+  s_67df420e115d68::t_1c7b977ef6046f 186
+backend/dev_docs/SOURCE_CONTENT_CONTRACT.md
+  s_67df420e115d68::t_bae3879d36219f 215-219
+config/README.md
+  s_67df420e115d68::t_bae3879d36219f 98-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "2da17c2899e6ab2f4af9d795f89d8e056b1aca0d",
+  "prompts": {},
+  "sessions": {
+    "s_67df420e115d68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fbdd8-c244-7133-86de-17f0a5adba5f",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
