@@ -23,3 +23,6 @@ export * from './dictionary.service';
 
 // AI 服务
 export * from './ai.service';
+
+// 书籍学习地图
+export * from './learning-map.service';

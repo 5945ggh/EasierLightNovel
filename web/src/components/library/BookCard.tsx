@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MoreVertical, Trash2, BookOpen, AlertCircle, Loader2, ImageOff, Edit } from 'lucide-react';
+import { MoreVertical, Trash2, BookOpen, AlertCircle, Loader2, ImageOff, Edit, Map as MapIcon } from 'lucide-react';
 import clsx from 'clsx';
 import { ProcessingStatus } from '@/types/common';
 import type { BookDetail } from '@/types/book';
@@ -180,6 +180,17 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
         {/* 下拉菜单 */}
         {menuOpen && (
           <div className='absolute right-2 bottom-12 z-20 w-32 bg-white rounded-lg shadow-xl border border-gray-100 py-1.5 animate-fade-in'>
+            {/* 学习地图入口 */}
+            <button
+              onClick={() => {
+                navigate(`/study/map/${book.id}`);
+                setMenuOpen(false);
+              }}
+              className='w-full flex items-center px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors border-b border-gray-100'
+            >
+              <MapIcon size={13} className='mr-2 flex-shrink-0 text-indigo-500' />
+              学习地图
+            </button>
             {/* 编辑按钮 */}
             {onEdit && (
               <button

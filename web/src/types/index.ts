@@ -25,3 +25,6 @@ export * from './progress';
 
 // AI 相关
 export * from './ai';
+
+// 书籍学习地图
+export * from './learningMap';

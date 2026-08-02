@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Home, List, Settings, X, BookOpen, Sparkles, Bookmark, Highlighter } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Home, List, Settings, X, BookOpen, Sparkles, Bookmark, Highlighter, Map as MapIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { SettingsPopover } from './SettingsPopover';
 import { useReaderStore, type SidebarTab } from '@/stores/readerStore';
@@ -60,12 +60,14 @@ DockButton.displayName = 'DockButton';
 
 export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
   const navigate = useNavigate();
+  const { bookId: routeBookId } = useParams<{ bookId: string }>();
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
   // 侧边栏状态
   const isSidebarOpen = useReaderStore((s) => s.isSidebarOpen);
   const activeTab = useReaderStore((s) => s.activeTab);
+  const storeBookId = useReaderStore((s) => s.bookId);
   const setIsSidebarOpen = useReaderStore((s) => s.setIsSidebarOpen);
   const setActiveTab = useReaderStore((s) => s.setActiveTab);
 
@@ -83,6 +85,10 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
 
   // 使用 useCallback 稳定回调引用
   const handleNavigateHome = useCallback(() => navigate('/'), [navigate]);
+  const handleNavigateLearningMap = useCallback(() => {
+    const targetBookId = routeBookId || storeBookId;
+    if (targetBookId) navigate(`/study/map/${targetBookId}`);
+  }, [routeBookId, storeBookId, navigate]);
   const handleToggleSettings = useCallback(() => setShowSettings(prev => !prev), []);
 
   // 监听移动端设置按钮切换事件
@@ -131,6 +137,7 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
         {/* 底部区域 - 目录和设置 */}
         <div className="space-y-4 flex flex-col items-center">
           <DockButton icon={List} label="目录" onClick={onToggleToc} />
+          <DockButton icon={MapIcon} label="书籍学习地图" onClick={handleNavigateLearningMap} />
           <div className="relative" ref={settingsRef}>
             <DockButton
               icon={showSettings ? X : Settings}
@@ -190,6 +197,15 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
             </button>
           );
         })}
+        <button
+          onClick={handleNavigateLearningMap}
+          aria-label="书籍学习地图"
+          title="书籍学习地图"
+          className="flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-lg transition-all min-w-0 flex-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          <MapIcon size={20} />
+          <span className="text-[10px] font-medium truncate">地图</span>
+        </button>
       </nav>
     </>
   );
