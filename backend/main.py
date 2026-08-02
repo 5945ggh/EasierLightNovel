@@ -14,6 +14,7 @@ from app.config import (
 )
 from app.services.book_service import recover_interrupted_processing_books
 from app.services.source_content_service import recover_staged_source_removals
+from app.services.analysis_service import recover_interrupted_analysis_runs
 import os
 
 # 确保必要的目录存在
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
     init_db()
     check_db_connection()
     recovered_count = recover_interrupted_processing_books()
+    recovered_analysis_count = recover_interrupted_analysis_runs()
     recovered_source_cleanup_count = recover_staged_source_removals()
 
     # 确保必要的目录存在
@@ -59,6 +61,8 @@ async def lifespan(app: FastAPI):
     print(f"LLM API: {'已配置' if LLMConfig.API_KEY else '未配置'}")
     if recovered_count:
         print(f"已回收中断的书籍处理任务: {recovered_count}")
+    if recovered_analysis_count:
+        print(f"已回收中断的分析任务: {recovered_analysis_count}")
     if recovered_source_cleanup_count:
         print(f"已完成延迟源文件清理: {recovered_source_cleanup_count}")
     print("-" * 50)
@@ -149,10 +153,12 @@ if frontend_built:
             print(f"[Frontend] 已注册 /{file_name} -> {file_path}")
 
 # 注册 API 路由（必须在 SPA fallback 之前）
-from app.routers import books, vocabularies, highlights, dictionary, ai, config, user_config
+from app.routers import analysis, books, vocabularies, highlights, dictionary, ai, config, user_config
 from fastapi.responses import FileResponse
 from fastapi import APIRouter
 app.include_router(books.router)
+app.include_router(analysis.router)
+app.include_router(analysis.learning_map_router)
 app.include_router(vocabularies.router)
 app.include_router(highlights.router)
 app.include_router(dictionary.router)

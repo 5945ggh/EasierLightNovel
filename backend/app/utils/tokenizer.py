@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Optional, Literal, Dict, Any, Tuple
 from sudachipy import tokenizer, dictionary
 import jaconv
@@ -38,6 +38,11 @@ class RebuildToken:
 
 # ================= 核心逻辑 =================
 class JapaneseTokenizer:
+    # Sudachi rejects inputs above this UTF-8 byte length. Keep a small margin
+    # so the limit remains safe if the binding's accounting changes slightly.
+    MAX_REBUILD_INPUT_BYTES = 48_000
+    _REBUILD_BOUNDARY_CHARS = frozenset("\n。！？!?；;：:、，,」』）)]}…")
+
     def __init__(self, mode: Optional[str] = None):
         # 从配置读取默认模式
         if mode is None:
@@ -49,7 +54,9 @@ class JapaneseTokenizer:
             "C": tokenizer.Tokenizer.SplitMode.C,
         }
         self.tokenizer = dictionary.Dictionary().create()
-        self.mode = mode_map.get(mode, tokenizer.Tokenizer.SplitMode.B)
+        self.split_mode = mode if mode in mode_map else "B"
+        self.mode = mode_map[self.split_mode]
+        self._canonical_reading_cache: Dict[str, Optional[str]] = {}
         # 预编译正则，提升字符处理性能
         self.kanji_pattern = re.compile(r'[\u4e00-\u9fff]')
         self.kana_pattern = re.compile(r'[ぁ-んァ-ンー]')
@@ -112,8 +119,89 @@ class JapaneseTokenizer:
         """Expose a tested semantic tokenizer contract without changing UI tokens."""
         if not text:
             return []
-        return [self._to_rebuild_token(morpheme)
-                for morpheme in self.tokenizer.tokenize(text, self.mode)]
+        if len(text.encode("utf-8")) <= self.MAX_REBUILD_INPUT_BYTES:
+            return self._tokenize_rebuild_chunk(text)
+
+        tokens: List[RebuildToken] = []
+        cursor = 0
+        while cursor < len(text):
+            end = self._rebuild_chunk_end(text, cursor)
+            tokens.extend(
+                replace(
+                    token,
+                    start_offset=token.start_offset + cursor,
+                    end_offset=token.end_offset + cursor,
+                )
+                for token in self._tokenize_rebuild_chunk(text[cursor:end])
+            )
+            cursor = end
+        return tokens
+
+    def _tokenize_rebuild_chunk(self, text: str) -> List[RebuildToken]:
+        return [
+            self._to_rebuild_token(morpheme)
+            for morpheme in self.tokenizer.tokenize(text, self.mode)
+        ]
+
+    def _rebuild_chunk_end(self, text: str, start: int) -> int:
+        """Choose a byte-safe chunk boundary and always make progress."""
+        byte_count = 0
+        hard_end = start
+        for index in range(start, len(text)):
+            char = text[index]
+            char_bytes = len(char.encode("utf-8"))
+            if byte_count + char_bytes > self.MAX_REBUILD_INPUT_BYTES:
+                break
+            byte_count += char_bytes
+            hard_end = index + 1
+
+        if hard_end == len(text):
+            return hard_end
+
+        # Prefer a sentence/line boundary near the byte limit. Falling back to
+        # the hard boundary still guarantees progress for unbroken text.
+        boundary = max(
+            (
+                index + 1
+                for index in range(start, hard_end)
+                if text[index] in self._REBUILD_BOUNDARY_CHARS
+            ),
+            default=hard_end,
+        )
+        return boundary if boundary > start else hard_end
+
+    def canonical_reading_for(self, token: RebuildToken) -> Optional[str]:
+        """Return a conservative dictionary-form reading for stable identity.
+
+        An inflected surface is keyed by the reading of its dictionary form.
+        An uninflected surface whose observed reading disagrees with a fresh
+        dictionary-form lookup remains provisional instead of minting a
+        context-specific permanent identity.
+        """
+        dictionary_form = token.dictionary_form
+        if token.is_oov or not dictionary_form:
+            return None
+
+        if dictionary_form not in self._canonical_reading_cache:
+            pieces = self.tokenizer.tokenize(
+                dictionary_form,
+                tokenizer.Tokenizer.SplitMode.C,
+            )
+            candidate = None
+            if (
+                len(pieces) == 1
+                and pieces[0].surface() == dictionary_form
+                and not pieces[0].is_oov()
+            ):
+                candidate = pieces[0].reading_form() or None
+            self._canonical_reading_cache[dictionary_form] = candidate
+
+        candidate = self._canonical_reading_cache[dictionary_form]
+        if not candidate:
+            return None
+        if token.surface != dictionary_form or token.reading_form == candidate:
+            return candidate
+        return None
 
     @staticmethod
     def _safe_morpheme_value(morpheme: Any, method: str, default: Any) -> Any:

@@ -35,6 +35,12 @@ SQLITE_ADDITIVE_MIGRATIONS: dict[str, dict[str, str]] = {
     "user_progress": {
         "progress_percentage": "ALTER TABLE user_progress ADD COLUMN progress_percentage FLOAT DEFAULT 0.0",
     },
+    "run_lexemes": {
+        "excluded_from_learning_target": (
+            "ALTER TABLE run_lexemes ADD COLUMN "
+            "excluded_from_learning_target BOOLEAN NOT NULL DEFAULT 0"
+        ),
+    },
 }
 
 

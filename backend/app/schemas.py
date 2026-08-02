@@ -1,9 +1,9 @@
 # app/schemas.py
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict, Any, Literal
 from datetime import datetime
 
-from app.enums import ProcessingStatus, JLPTLevel
+from app.enums import AnalysisRunStatus, ProcessingStatus, JLPTLevel
 from app.config import (
     LLMConfig,
     HIGHLIGHT_STYLE_CATEGORIES,
@@ -115,6 +115,134 @@ class ChapterListItem(BaseModel):
     """章节列表项"""
     index: int
     title: str
+
+
+# ==================== Disposable lexical analysis ====================
+class AnalysisRebuildRequest(BaseModel):
+    source_content_version_id: Optional[int] = None
+    split_mode: Literal["A", "B", "C"] = "B"
+
+
+class AnalysisRunResponse(BaseModel):
+    id: int
+    book_id: str
+    source_content_version_id: int
+    status: AnalysisRunStatus
+    is_active: bool
+    tokenizer_name: str
+    tokenizer_version: str
+    tokenizer_contract_version: str
+    dictionary_name: str
+    dictionary_version: str
+    split_mode: str
+    analysis_schema_version: int
+    source_content_sha256: str
+    filter_spec: Dict[str, Any]
+    lexeme_count: int
+    occurrence_count: int
+    chapter_stat_count: int
+    result_sha256: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ChapterLexemeCountResponse(BaseModel):
+    chapter_index: int
+    occurrence_count: int
+
+
+class LexemeStatResponse(BaseModel):
+    lexeme_id: int
+    normalized_form: str
+    canonical_reading_kana: Optional[str] = None
+    is_provisional: bool
+    merged_into_id: Optional[int] = None
+    occurrence_count: int
+    chapter_counts: List[ChapterLexemeCountResponse]
+
+
+class ActiveLexemeIndexResponse(BaseModel):
+    run: Optional[AnalysisRunResponse] = None
+    lexemes: List[LexemeStatResponse]
+
+
+class LexemeOccurrenceResponse(BaseModel):
+    occurrence_id: int
+    run_lexeme_id: int
+    chapter_index: int
+    surface: str
+    source_document_id: str
+    source_start: int
+    source_end: int
+    source_token_index: int
+    reader_segment_index: Optional[int] = None
+
+
+class ActiveLexemeOccurrencesResponse(BaseModel):
+    run: Optional[AnalysisRunResponse] = None
+    lexeme_id: int
+    occurrences: List[LexemeOccurrenceResponse]
+
+
+class LearningMapFilterSpec(BaseModel):
+    pos_allowlist: List[str]
+    exclude_proper_nouns: bool
+    exclude_oov: bool
+    identity: str
+
+
+class LearningMapCoverage(BaseModel):
+    explicit_known_coverage: float
+    known_occurrences: int
+    eligible_occurrences: int
+
+
+class LearningMapCurvePoint(BaseModel):
+    target_coverage: float
+    required_lexeme_count: int
+    covered_occurrences: int
+
+
+class LearningMapChapterResponse(BaseModel):
+    chapter_index: int
+    title: str
+    eligible_occurrences: int
+    explicit_known_occurrences: Optional[int] = None
+    unknown_occurrences: Optional[int] = None
+    unknown_lexeme_count: Optional[int] = None
+    new_lexeme_count: int
+
+
+class LearningMapRecommendedLexeme(BaseModel):
+    lexeme_id: int
+    normalized_form: str
+    display_form: str
+    reading: Optional[str] = None
+    part_of_speech: str
+    book_occurrence_count: int
+    upcoming_chapter_occurrence_count: int
+    first_chapter_index: int
+    excluded_from_learning_target: bool
+
+
+class LearningMapResponse(BaseModel):
+    book_id: str
+    analysis_status: Literal["ready", "needs_analysis"]
+    analysis_run_id: Optional[int] = None
+    knowledge_baseline_status: Literal["ready", "uninitialized"]
+    knowledge_baseline_migration_status: Literal["none", "ready", "partial", "uninitialized"]
+    knowledge_baseline_message: str
+    filter_spec: LearningMapFilterSpec
+    reading_anchor_chapter_index: int
+    coverage: Optional[LearningMapCoverage] = None
+    coverage_curve: List[LearningMapCurvePoint]
+    chapters: List[LearningMapChapterResponse]
+    recommended_lexemes: List[LearningMapRecommendedLexeme]
 
 # ==================== Vocabulary 相关 ====================
 class VocabularyBaseFormsResponse(BaseModel):

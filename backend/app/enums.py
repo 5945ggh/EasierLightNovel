@@ -6,6 +6,14 @@ class ProcessingStatus(str, Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class AnalysisRunStatus(str, Enum):
+    """Lifecycle of a disposable analysis build."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
     
 class JLPTLevel(str, Enum):
     """JLPT 等级"""

@@ -9,8 +9,16 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.enums import ProcessingStatus
-from app.models import Base, Book, BookSourceFile, SourceContentVersion, SourceRubyHint
+from app.enums import AnalysisRunStatus, ProcessingStatus
+from app.models import (
+    AnalysisRun,
+    Base,
+    Book,
+    BookSourceFile,
+    LexemeOccurrence,
+    SourceContentVersion,
+    SourceRubyHint,
+)
 from app.schemas import ChapterResponse
 from app.services.book_service import BookService
 from app.services.source_content_service import attach_reader_projections, source_documents_from_chapters
@@ -224,6 +232,9 @@ def test_epub_import_preserves_distinct_reader_spans_across_image_boundary(tmp_p
         "text": "\n",
         "reason": "image",
     }]
+    analysis_run = session.query(AnalysisRun).one()
+    assert analysis_run.status == AnalysisRunStatus.COMPLETED
+    assert analysis_run.is_active is True
     session.close()
 
 
@@ -310,6 +321,7 @@ def test_successful_import_keeps_private_source_and_version_after_temp_cleanup(
                 "markup": {"element": "ruby", "has_rb": False, "has_rp": False},
                 "provenance": "epub_ruby",
             }],
+            "structural_boundaries": [],
         }]
 
         def parse(self, *_args):
@@ -335,6 +347,68 @@ def test_successful_import_keeps_private_source_and_version_after_temp_cleanup(
     assert document["text"][hint.start_offset:hint.end_offset] == hint.base_text
     assert document["reader_projection"]["reader_chapter_index"] == 0
     assert session.get(Book, "book-source").source_rebuild_status == "rebuildable"
+    analysis_run = session.query(AnalysisRun).one()
+    assert analysis_run.source_content_version_id == version.id
+    assert analysis_run.status == AnalysisRunStatus.COMPLETED
+    assert analysis_run.is_active is True
+    assert analysis_run.occurrence_count >= 1
+    assert session.query(LexemeOccurrence).count() == analysis_run.occurrence_count
+    session.close()
+
+
+def test_analysis_startup_failure_does_not_fail_completed_import(tmp_path, monkeypatch):
+    import app.database as database_module
+    import app.services.book_service as book_service_module
+    import app.services.source_content_service as source_module
+
+    source_root = tmp_path / "private-sources"
+    monkeypatch.setattr(source_module, "SOURCE_FILES_DIR", str(source_root))
+    Session = _session_factory(tmp_path)
+    monkeypatch.setattr(database_module, "SessionLocal", Session)
+
+    initial = Session()
+    initial.add(Book(id="analysis-startup", title="Fixture", status=ProcessingStatus.PENDING))
+    initial.commit()
+    initial.close()
+
+    temp_file = tmp_path / "startup.epub"
+    temp_file.write_bytes(b"immutable epub bytes")
+    parser_chapter = Chapter("Fixture", 0)
+    parser_chapter.segments.append(TextSegment("行なう"))
+    parser_chapter.source_document_segment_counts.append(("fixture.xhtml", 1))
+
+    class FakeParser:
+        source_documents = [{
+            "document_id": "fixture.xhtml",
+            "spine_index": 0,
+            "text": "行なう",
+            "ruby_hints": [],
+            "structural_boundaries": [],
+        }]
+
+        def parse(self, *_args):
+            return [parser_chapter]
+
+    def fail_analysis(*_args, **_kwargs):
+        raise ValueError("invalid analysis configuration")
+
+    monkeypatch.setattr(book_service_module, "AnalysisService", type(
+        "FailingAnalysisService",
+        (),
+        {"rebuild_book_analysis": fail_analysis},
+    ))
+
+    service = BookService(Session())
+    monkeypatch.setattr(service, "_create_parser", lambda *_: FakeParser())
+    service.process_book_task("analysis-startup", str(temp_file), ".epub")
+
+    session = Session()
+    book = session.get(Book, "analysis-startup")
+    assert book is not None
+    assert book.status == ProcessingStatus.COMPLETED
+    assert book.source_rebuild_status == "rebuildable"
+    assert session.query(SourceContentVersion).count() == 1
+    assert session.query(AnalysisRun).count() == 0
     session.close()
 
 
@@ -452,3 +526,21 @@ def test_rebuild_token_contract_preserves_semantics_without_changing_ui_token_sh
         segments=[{"type": "text", "tokens": [ui_token]}],
     )
     assert response.segments[0].tokens[0].s == "行なう"
+
+
+def test_rebuild_tokenizer_chunks_inputs_beyond_sudachi_byte_limit():
+    tokenizer = JapaneseTokenizer()
+    text = "安達としまむら。" * 4_000
+
+    assert len(text.encode("utf-8")) > tokenizer.MAX_REBUILD_INPUT_BYTES
+    records = tokenizer.tokenize_for_rebuild(text)
+
+    assert records
+    assert all(0 <= record.start_offset < record.end_offset <= len(text) for record in records)
+    assert all(
+        text[record.start_offset:record.end_offset] == record.surface
+        for record in records
+    )
+    assert [record.start_offset for record in records] == sorted(
+        record.start_offset for record in records
+    )

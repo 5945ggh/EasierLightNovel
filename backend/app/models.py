@@ -1,9 +1,9 @@
 # app/models.py
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean, UniqueConstraint, Float
+from sqlalchemy import CheckConstraint, Column, Integer, String, DateTime, ForeignKey, Text, JSON, Boolean, UniqueConstraint, Float, Index
 from sqlalchemy.orm import relationship, declarative_base, deferred
 from sqlalchemy.sql import func
-from app.enums import ProcessingStatus
+from app.enums import AnalysisRunStatus, ProcessingStatus
 
 Base = declarative_base()
 
@@ -39,6 +39,7 @@ class Book(Base):
     highlights = relationship("UserHighlight", back_populates="book", cascade="all, delete-orphan")
     source_files = relationship("BookSourceFile", back_populates="book", cascade="all, delete-orphan")
     source_content_versions = relationship("SourceContentVersion", back_populates="book", cascade="all, delete-orphan")
+    analysis_runs = relationship("AnalysisRun", back_populates="book", cascade="all, delete-orphan")
 
 
 class BookSourceFile(Base):
@@ -76,6 +77,7 @@ class SourceContentVersion(Base):
 
     book = relationship("Book", back_populates="source_content_versions")
     ruby_hints = relationship("SourceRubyHint", back_populates="source_content_version", cascade="all, delete-orphan")
+    analysis_runs = relationship("AnalysisRun", back_populates="source_content_version", cascade="all, delete-orphan")
 
 
 class SourceRubyHint(Base):
@@ -110,6 +112,206 @@ class Chapter(Base):
     content_json = deferred(Column(JSON, nullable=False)) # 注意防止N+1
     
     book = relationship("Book", back_populates="chapters")
+    lexeme_occurrences = relationship("LexemeOccurrence", back_populates="chapter")
+    lexeme_stats = relationship("ChapterLexemeStat", back_populates="chapter")
+
+
+class AnalysisRun(Base):
+    """Disposable analysis output rooted in one immutable source coordinate space."""
+    __tablename__ = "analysis_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(String(32), ForeignKey("books.id"), nullable=False, index=True)
+    source_content_version_id = Column(
+        Integer,
+        ForeignKey("source_content_versions.id"),
+        nullable=False,
+        index=True,
+    )
+    status = Column(
+        SQLEnum(
+            AnalysisRunStatus,
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=AnalysisRunStatus.PENDING,
+        index=True,
+    )
+    is_active = Column(Boolean, nullable=False, default=False, index=True)
+
+    tokenizer_name = Column(String(64), nullable=False)
+    tokenizer_version = Column(String(64), nullable=False)
+    tokenizer_contract_version = Column(String(64), nullable=False)
+    dictionary_name = Column(String(64), nullable=False)
+    dictionary_version = Column(String(64), nullable=False)
+    split_mode = Column(String(1), nullable=False)
+    analysis_schema_version = Column(Integer, nullable=False)
+    source_content_sha256 = Column(String(64), nullable=False)
+    filter_spec = Column(JSON, nullable=False)
+
+    lexeme_count = Column(Integer, nullable=False, default=0)
+    occurrence_count = Column(Integer, nullable=False, default=0)
+    chapter_stat_count = Column(Integer, nullable=False, default=0)
+    result_sha256 = Column(String(64), nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    book = relationship("Book", back_populates="analysis_runs")
+    source_content_version = relationship("SourceContentVersion", back_populates="analysis_runs")
+    run_lexemes = relationship("RunLexeme", back_populates="analysis_run", cascade="all, delete-orphan")
+    occurrences = relationship("LexemeOccurrence", back_populates="analysis_run", cascade="all, delete-orphan")
+    chapter_stats = relationship("ChapterLexemeStat", back_populates="analysis_run", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint(
+            "is_active = 0 OR status = 'completed'",
+            name="ck_analysis_run_active_completed",
+        ),
+        CheckConstraint(
+            "lexeme_count >= 0 AND occurrence_count >= 0 AND chapter_stat_count >= 0",
+            name="ck_analysis_run_nonnegative_counts",
+        ),
+        Index(
+            "uq_analysis_runs_one_active_per_book",
+            "book_id",
+            unique=True,
+            sqlite_where=is_active.is_(True),
+            postgresql_where=is_active.is_(True),
+        ),
+    )
+
+
+class Lexeme(Base):
+    """Cross-run language identity; provisional rows never trust guessed readings."""
+    __tablename__ = "lexemes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    normalized_form = Column(String(255), nullable=False, index=True)
+    canonical_reading_kana = Column(String(255), nullable=True, index=True)
+    is_provisional = Column(Boolean, nullable=False, default=False, index=True)
+    identity_key = Column(String(64), nullable=False, unique=True, index=True)
+    merged_into_id = Column(Integer, ForeignKey("lexemes.id"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    merged_into = relationship("Lexeme", remote_side=[id], foreign_keys=[merged_into_id])
+    run_lexemes = relationship("RunLexeme", back_populates="lexeme")
+    chapter_stats = relationship("ChapterLexemeStat", back_populates="lexeme")
+
+    __table_args__ = (
+        CheckConstraint(
+            "(is_provisional = 1 AND canonical_reading_kana IS NULL) OR "
+            "(is_provisional = 0 AND canonical_reading_kana IS NOT NULL)",
+            name="ck_lexeme_provisional_reading",
+        ),
+        CheckConstraint(
+            "merged_into_id IS NULL OR merged_into_id != id",
+            name="ck_lexeme_no_self_merge",
+        ),
+    )
+
+
+class RunLexeme(Base):
+    """One run's morphological observation associated with a stable identity."""
+    __tablename__ = "run_lexemes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_run_id = Column(Integer, ForeignKey("analysis_runs.id"), nullable=False, index=True)
+    lexeme_id = Column(Integer, ForeignKey("lexemes.id"), nullable=False, index=True)
+    observation_key = Column(String(64), nullable=False)
+
+    dictionary_form = Column(String(255), nullable=False)
+    normalized_form = Column(String(255), nullable=False)
+    observed_reading = Column(String(255), nullable=True)
+    observed_reading_kana = Column(String(255), nullable=True)
+    reading_source = Column(String(32), nullable=False)
+    reading_is_trusted = Column(Boolean, nullable=False)
+    is_oov = Column(Boolean, nullable=False)
+    # OOV observations stay in the coverage denominator by default, but are
+    # not presented as learning targets unless a future explicit policy says so.
+    excluded_from_learning_target = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+    )
+    part_of_speech = Column(JSON, nullable=False)
+    inflection_type = Column(String(255), nullable=False)
+    inflection_form = Column(String(255), nullable=False)
+    word_id = Column(Integer, nullable=False)
+    dictionary_id = Column(Integer, nullable=False)
+
+    analysis_run = relationship("AnalysisRun", back_populates="run_lexemes")
+    lexeme = relationship("Lexeme", back_populates="run_lexemes")
+    occurrences = relationship("LexemeOccurrence", back_populates="run_lexeme")
+
+    __table_args__ = (
+        UniqueConstraint("analysis_run_id", "observation_key", name="uq_run_lexeme_observation"),
+    )
+
+
+class LexemeOccurrence(Base):
+    """One lexical token located in a SourceContentVersion document."""
+    __tablename__ = "lexeme_occurrences"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_run_id = Column(Integer, ForeignKey("analysis_runs.id"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=False, index=True)
+    chapter_index = Column(Integer, nullable=False, index=True)
+    run_lexeme_id = Column(Integer, ForeignKey("run_lexemes.id"), nullable=False, index=True)
+    surface = Column(Text, nullable=False)
+    source_document_id = Column(String(255), nullable=False)
+    source_start = Column(Integer, nullable=False)
+    source_end = Column(Integer, nullable=False)
+    source_token_index = Column(Integer, nullable=False)
+    reader_segment_index = Column(Integer, nullable=True)
+
+    analysis_run = relationship("AnalysisRun", back_populates="occurrences")
+    chapter = relationship("Chapter", back_populates="lexeme_occurrences")
+    run_lexeme = relationship("RunLexeme", back_populates="occurrences")
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_start >= 0 AND source_end > source_start AND source_token_index >= 0",
+            name="ck_lexeme_occurrence_offsets",
+        ),
+        UniqueConstraint(
+            "analysis_run_id",
+            "source_document_id",
+            "source_start",
+            "source_end",
+            "source_token_index",
+            name="uq_run_source_occurrence",
+        ),
+    )
+
+
+class ChapterLexemeStat(Base):
+    """Per-run, per-chapter aggregate; book counts are derived from these rows."""
+    __tablename__ = "chapter_lexeme_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    analysis_run_id = Column(Integer, ForeignKey("analysis_runs.id"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=False, index=True)
+    chapter_index = Column(Integer, nullable=False, index=True)
+    lexeme_id = Column(Integer, ForeignKey("lexemes.id"), nullable=False, index=True)
+    occurrence_count = Column(Integer, nullable=False)
+
+    analysis_run = relationship("AnalysisRun", back_populates="chapter_stats")
+    chapter = relationship("Chapter", back_populates="lexeme_stats")
+    lexeme = relationship("Lexeme", back_populates="chapter_stats")
+
+    __table_args__ = (
+        CheckConstraint("occurrence_count > 0", name="ck_chapter_lexeme_stat_positive"),
+        UniqueConstraint(
+            "analysis_run_id",
+            "chapter_id",
+            "lexeme_id",
+            name="uq_run_chapter_lexeme_stat",
+        ),
+    )
 
 
 # 难点预警：React 渲染是异步的。不能在组件 mount 时立刻 scroll。必须等待 DOM 里的 Token 渲染完毕。建议使用 useLayoutEffect 或监听最后一个 Token 的渲染回调，然后再执行 document.querySelector([data-token-index="${offset}"]).scrollIntoView()。

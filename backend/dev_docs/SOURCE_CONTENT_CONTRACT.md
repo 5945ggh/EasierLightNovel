@@ -11,12 +11,12 @@ The lifecycle is deliberately one-directional:
 ```text
 immutable original EPUB/PDF
   -> parser-derived SourceContentVersion
-  -> future rebuildable analysis artifacts
+  -> rebuildable AnalysisRun artifacts
 ```
 
 The original file is authoritative input. `SourceContentVersion` is a
-versioned derivative. Future `AnalysisRun`, lexeme, sentence, and occurrence
-data must be derived from a specific source-content version and must remain
+versioned derivative. `AnalysisRun`, lexeme observation, occurrence, and chapter
+stat data are derived from a specific source-content version and remain
 discardable/rebuildable.
 
 ## Storage And Visibility
@@ -94,6 +94,13 @@ separator. This would make source and reader coordinates diverge.
 segment index. A source span must slice to exactly the pre-tokenization reader
 segment text. Spans for distinct reader text segments must not overlap.
 
+`structural_boundaries` use the Phase 1 offset-based shape: `offset`, `text`,
+and `reason`, with EPUB documents also persisting `end_offset`. The boundary
+range is `[offset, end_offset)`, or `[offset, offset + len(text))` when
+the fallback producer omits `end_offset`. Its text must match that exact source
+slice, ranges must be ordered and non-overlapping, and reader text spans must
+not intersect a boundary.
+
 ## Ruby Provenance
 
 For each author ruby hint:
@@ -134,9 +141,27 @@ It must not be serialized through the reader cache.
   for old books. Do not advise users to delete and re-import a book as a way to
   preserve its existing reading progress, highlights, or vocabulary records.
 
-## Requirements For Future Analysis
+## Phase 2 Analysis Contract
 
-Before adding analysis tables:
+The first rebuildable analysis layer uses these tables:
+
+- `AnalysisRun`: one versioned build with tokenizer, dictionary, split mode,
+  filter, source hash, and analysis-schema metadata;
+- `Lexeme`: a cross-run identity keyed by normalized form plus a trusted,
+  normalized reading, or an explicitly provisional null reading;
+- `RunLexeme`: the run-local Sudachi observation, including full POS,
+  inflection, reading provenance, OOV, word ID, and dictionary ID diagnostics;
+- `LexemeOccurrence`: one lexical occurrence with source-document offsets and
+  an optional reader segment projection;
+- `ChapterLexemeStat`: the only materialized aggregate. Book totals are summed
+  from chapter rows; there is no `BookLexemeStat`.
+
+The current filter indexes content-word POS (`名詞`, `動詞`, `形容詞`, `形状詞`,
+`副詞`), including OOV and proper nouns. The complete filter specification is
+stored on every run. `word_id` and `dictionary_id` are diagnostics only and do
+not participate in canonical or provisional identity.
+
+Run publication follows these rules:
 
 1. Make every analysis run reference a concrete `SourceContentVersion`.
 2. Store occurrence offsets in that version's document coordinate space.
@@ -147,6 +172,45 @@ Before adding analysis tables:
    occurrences that span them.
 5. Keep analysis data disposable. Rebuilding a version must not mutate reader
    caches or user-owned learning state.
+6. Build the new run while inactive. Mark it completed and switch the book's
+   single active run in one transaction only after all rows validate.
+7. Roll back partial derived rows on failure, persist the run as failed, and
+   leave the previous active run unchanged.
+
+Before tokenization, the analysis service strictly validates the persisted
+version-4 source shape. The payload must declare `unicode_codepoint` offsets
+and a `documents` array. Every document needs a unique non-empty ID, text,
+`ruby_hints`, and `structural_boundaries`; each non-blank reader-source
+document also needs a projection with a valid chapter index and ordered,
+in-bounds, non-overlapping text spans. Ruby hints and structural boundaries
+must slice back to their declared source text; reader spans cannot cross a
+structural boundary. Contract or hash validation failures produce a failed,
+inactive run and can never publish an empty active index.
+
+Successful imports start an initial analysis only after the reader chapters,
+immutable source file, and source-content version have committed. Analysis
+failure therefore cannot turn a readable imported book into a failed import.
+
+The Phase 3-facing internal API is intentionally separate from the reader API:
+
+```text
+POST /api/internal/books/{book_id}/analysis-runs
+GET  /api/internal/books/{book_id}/analysis/lexemes
+GET  /api/internal/books/{book_id}/analysis/lexemes/{lexeme_id}/occurrences
+```
+
+The two GET routes always read the completed active run. The first aggregates
+book counts from `ChapterLexemeStat`; an optional `chapter_index` limits the
+same contract to one chapter. No analysis fields are added to
+`Chapter.content_json` or the existing chapter response.
+
+`POST /analysis-runs` is synchronous. HTTP `200` means the rebuild request was
+processed, not necessarily that an index was published: callers must inspect
+the returned run's `status`. A body with `status: "completed"` is the success
+case; `status: "failed"` reports a retained failed run while any previously
+active completed run remains queryable. HTTP `409` means source analysis could
+not be started because the book or requested rebuildable source version is
+unavailable.
 
 ## Regression Coverage
 
@@ -154,3 +218,8 @@ Before adding analysis tables:
 fixtures: ruby variants and remapped offsets, zero-width text, newline
 normalization, source-to-merged-chapter projection, image boundaries, PDF
 fallback boundaries, private static-path denial, and deferred source cleanup.
+
+`backend/tests/test_analysis_service.py` covers canonical/provisional identity,
+OOV convergence, occurrence offsets, chapter/book aggregation, deterministic
+rebuilds, active-run switching, malformed-source rejection, failed-run
+isolation, deletion, and the internal API contract.

@@ -7,6 +7,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import UploadFile, BackgroundTasks
 
+from app.enums import AnalysisRunStatus
 from app.models import Book, Chapter, ProcessingStatus, Vocabulary
 from app.schemas import BookUpdate
 from sqlalchemy.orm import defer
@@ -25,6 +26,7 @@ from app.services.source_content_service import (
     attach_reader_projections,
     source_documents_from_chapters,
 )
+from app.services.analysis_service import AnalysisService, AnalysisSourceUnavailable
 from app.config import (
     UPLOAD_DIR,
     TEMP_UPLOAD_DIR,
@@ -557,6 +559,40 @@ class BookService:
 
             db.commit()
             logger.info(f"Successfully processed book: {book.title} ({total_chapters} chapters)")
+
+            # Phase 2 is published independently after the reader/source import
+            # commits. A failed analysis run must not invalidate a readable book
+            # or remove its immutable source.
+            try:
+                analysis_run = AnalysisService(db).rebuild_book_analysis(
+                    book_id,
+                    source_content_version_id=source_version.id,
+                    split_mode=mode,
+                )
+                if analysis_run.status == AnalysisRunStatus.FAILED:
+                    logger.warning(
+                        "Initial analysis run %s failed for imported book %s: %s",
+                        analysis_run.id,
+                        book_id,
+                        analysis_run.error_message,
+                    )
+            except AnalysisSourceUnavailable as exc:
+                # The import has already committed its source contract. This
+                # expected gate failure is non-fatal, but remains visible in
+                # logs instead of being confused with a failed analysis run.
+                logger.warning(
+                    "Initial analysis is unavailable for imported book %s: %s",
+                    book_id,
+                    exc,
+                )
+            except Exception:
+                # Analysis starts after the import commit. A startup/configuration
+                # failure must not turn an otherwise readable book into a failed
+                # import; rebuild can be retried against the persisted source.
+                logger.exception(
+                    "Initial analysis could not start for imported book %s",
+                    book_id,
+                )
 
         except Exception as e:
             logger.error(f"Failed to process book {book_id}: {e}", exc_info=True)

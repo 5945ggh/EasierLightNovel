@@ -164,6 +164,8 @@ def source_documents_from_chapters(chapters: Iterable[Any]) -> list[dict[str, An
             "document_id": f"chapter-{chapter.index}",
             "spine_index": chapter.index,
             "text": "".join(text_parts),
+            "ruby_hints": [],
+            "structural_boundaries": boundaries,
             "reader_projection": {
                 "reader_chapter_index": chapter.index,
                 "text_spans": spans,
