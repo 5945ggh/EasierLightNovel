@@ -58,4 +58,9 @@ uv.lock
 .claude
 CLAUDE.md
 
+#codex
+AGENTS.md
+
+
 dev_docs/
+.design-notes/
