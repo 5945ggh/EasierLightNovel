@@ -1,0 +1,20 @@
+.gitignore
+  s_f044046cebdff0::t_2e85d2ac600df9 65-66
+  s_f044046cebdff0::t_a0c4b5733e3583 62-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "62738ab2bcf75125b904e1245e69b7999e409991",
+  "prompts": {},
+  "sessions": {
+    "s_f044046cebdff0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fb741-69d3-7271-b621-9f7c84b5d48d",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
