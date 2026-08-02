@@ -1,0 +1,49 @@
+web/src/components/reader/LeftDock.tsx
+  s_bf94ac5128adec::t_1e9cb8c3207d97 7,63,70,89-91
+  s_bf94ac5128adec::t_e9a57478f1bf40 8,88,140
+  s_bf94ac5128adec::t_48d000a3d71cd8 200-208
+web/src/pages/LearningMapPage.tsx
+  s_bf94ac5128adec::t_a40fe912c5ce4a 25
+  s_bf94ac5128adec::t_48d000a3d71cd8 23-24,26-44,119,282
+  s_bf94ac5128adec::t_72eb72875fb16c 1-22,45-91,94-118,120-281,283-339
+  s_bf94ac5128adec::t_ab29ec8da396f5 92-93
+web/src/types/learningMap.ts
+  s_bf94ac5128adec::t_e9a57478f1bf40 1-55
+web/src/App.tsx
+  s_bf94ac5128adec::t_e9a57478f1bf40 13,75
+DESIGN.md
+  s_67df420e115d68::t_ec0e341efaec73 7
+  s_bf94ac5128adec::t_a6f74bcda8b718 1-6,8-82
+web/src/services/index.ts
+  s_bf94ac5128adec::t_e9a57478f1bf40 26-28
+web/src/services/learning-map.service.ts
+  s_bf94ac5128adec::t_e9a57478f1bf40 1-15
+web/src/components/library/BookCard.tsx
+  s_bf94ac5128adec::t_e9a57478f1bf40 9,183-193
+web/src/types/index.ts
+  s_bf94ac5128adec::t_e9a57478f1bf40 28-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "9bd71fe4bf9569267e1e61227fe9d2619e90d3a5",
+  "prompts": {},
+  "sessions": {
+    "s_67df420e115d68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fbdd8-c244-7133-86de-17f0a5adba5f",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_bf94ac5128adec": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fbbb8-cdfd-79a2-a653-0b932da3842e",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
