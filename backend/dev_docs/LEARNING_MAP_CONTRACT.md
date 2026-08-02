@@ -25,7 +25,7 @@ OOV and proper-noun behavior is therefore visible and reproducible. OOV can rema
 
 Phase 3 consumes only legacy `Vocabulary.status == 3` rows. A row maps to a canonical active-run Lexeme only when:
 
-1. the legacy `base_form` exactly matches one active-run `RunLexeme.dictionary_form`;
+1. the legacy `base_form` is NFKC-normalized and trimmed, then matches one active-run `RunLexeme.dictionary_form`;
 2. the candidate Lexeme is non-provisional and not merged; and
 3. the candidate is unambiguous, or a supplied legacy reading matches its canonical/observed reading.
 

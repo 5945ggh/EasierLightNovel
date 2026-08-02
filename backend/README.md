@@ -114,7 +114,12 @@
     ↓
 存储到数据库 (状态: COMPLETED)
     ↓
-前端可访问阅读
+【派生分析】从 SourceContentVersion 构建 AnalysisRun
+    ├─ 以受 Sudachi 输入长度保护的分块重建词元
+    ├─ 记录 Lexeme、RunLexeme、LexemeOccurrence 与 ChapterLexemeStat
+    └─ 仅在成功后发布为 active run；失败不影响已完成导入
+    ↓
+前端可访问阅读与书籍学习地图
 ```
 
 `SourceContentVersion` 是私有的重建契约，不会扩展章节阅读 API 或 `Chapter.content_json`。它保存 source document 的 Unicode 字符 offset、ruby hint，以及该 document 到最终合并后 reader chapter/segment 的投影。source document 与 reader 文本使用同一规范化发射规则（移除 `U+200B`、将三个以上连续换行压缩为两个），并在每一个 reader flush 点独立发射；图片处会插入显式、不可投影的结构边界，避免把边界两侧的换行送入同一次压缩。parser 在该规则生效时显式重映射 ruby offset，绝不在投影阶段临时替换文本，从而避免重建时跨图片拼接出新词元。
@@ -147,7 +152,7 @@
 
 #### Book（书籍）
 ```python
-- id: str                    # 唯一标识（文件哈希）
+- id: str                    # UUID 唯一标识
 - title: str                 # 标题
 - author: Optional[str]      # 作者
 - cover_url: Optional[str]   # 封面图片
@@ -166,6 +171,18 @@
   ├─ TextSegment: { type: "text", tokens: TokenData[] }
   └─ ImageSegment: { type: "image", src: str, alt: str }
 ```
+
+#### 派生分析实体（AnalysisRun / Lexeme）
+
+`AnalysisRun`、`Lexeme`、`RunLexeme`、`LexemeOccurrence` 和
+`ChapterLexemeStat` 组成可丢弃、可重建的分析层。每个 run 明确关联一个
+`SourceContentVersion`，并记录 tokenizer、词典、切分模式、过滤条件与 source hash。
+只有完成的 active run 才会驱动书籍学习地图；失败的 run 保留错误信息，但不会让已可读的书籍
+回退为导入失败。
+
+详细的 source coordinate、身份和 API 契约见
+[`dev_docs/SOURCE_CONTENT_CONTRACT.md`](dev_docs/SOURCE_CONTENT_CONTRACT.md) 与
+[`dev_docs/LEARNING_MAP_CONTRACT.md`](dev_docs/LEARNING_MAP_CONTRACT.md)。
 
 #### TokenData（分词单元）
 ```python

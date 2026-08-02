@@ -22,7 +22,7 @@
 - Key contexts of use: desktop study sessions and narrow mobile reading breaks
 
 ## Information architecture
-- Primary navigation: Library -> Reader; Library -> Study; Study -> Vocabulary, Highlights, Learning map
+- Primary navigation: Library -> Reader; Library -> Study; Library book menu -> Learning map; Reader -> current-book Learning map; Study -> Vocabulary, Highlights
 - Core routes/screens: `/`, `/read/:bookId`, `/study`, `/study/map/:bookId`
 - Content hierarchy: book identity and data status, one coverage metric, chapter scan, current/upcoming recommendations, frequency curve, scope notes
 

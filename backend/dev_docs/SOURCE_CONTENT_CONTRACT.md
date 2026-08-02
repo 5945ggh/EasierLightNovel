@@ -212,6 +212,11 @@ active completed run remains queryable. HTTP `409` means source analysis could
 not be started because the book or requested rebuildable source version is
 unavailable.
 
+The public, user-visible consumer of an active run is documented separately in
+[Book Learning Map Contract](LEARNING_MAP_CONTRACT.md). It owns coverage,
+knowledge-baseline, and recommendation semantics; this document owns the
+source coordinate and analysis-lifecycle invariants beneath it.
+
 ## Regression Coverage
 
 `backend/tests/test_source_content.py` covers the source contract's critical
