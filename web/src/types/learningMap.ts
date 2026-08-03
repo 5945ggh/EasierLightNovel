@@ -41,10 +41,27 @@ export interface LearningMapRecommendedLexeme {
   excluded_from_learning_target: boolean;
   state?: LexemeKnowledgeStatus | null;
   knowledge_status?: LexemeKnowledgeStatus | null;
+  lookup_observation?: LearningMapLookupObservation | null;
 }
 
 export interface LearningMapManageableLexeme extends LearningMapRecommendedLexeme {
   is_recommended: boolean;
+}
+
+export interface LearningMapLookupPosition {
+  chapter_index: number;
+  reader_segment_index: number;
+  reader_token_index: number;
+  created_at: string;
+}
+
+export interface LearningMapLookupObservation {
+  lookup_count: number;
+  first_lookup: LearningMapLookupPosition;
+  last_lookup: LearningMapLookupPosition;
+  occurrences_after_first_lookup: number | null;
+  occurrences_after_last_lookup: number | null;
+  later_lookup_count_after_first: number;
 }
 
 export interface LearningMapResponse {

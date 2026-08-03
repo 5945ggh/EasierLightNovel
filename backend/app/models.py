@@ -40,6 +40,7 @@ class Book(Base):
     source_files = relationship("BookSourceFile", back_populates="book", cascade="all, delete-orphan")
     source_content_versions = relationship("SourceContentVersion", back_populates="book", cascade="all, delete-orphan")
     analysis_runs = relationship("AnalysisRun", back_populates="book", cascade="all, delete-orphan")
+    lookup_events = relationship("ReaderLookupEvent", back_populates="book", cascade="all, delete-orphan")
 
 
 class BookSourceFile(Base):
@@ -114,6 +115,7 @@ class Chapter(Base):
     book = relationship("Book", back_populates="chapters")
     lexeme_occurrences = relationship("LexemeOccurrence", back_populates="chapter")
     lexeme_stats = relationship("ChapterLexemeStat", back_populates="chapter")
+    lookup_events = relationship("ReaderLookupEvent", back_populates="chapter")
 
 
 class AnalysisRun(Base):
@@ -164,6 +166,7 @@ class AnalysisRun(Base):
     run_lexemes = relationship("RunLexeme", back_populates="analysis_run", cascade="all, delete-orphan")
     occurrences = relationship("LexemeOccurrence", back_populates="analysis_run", cascade="all, delete-orphan")
     chapter_stats = relationship("ChapterLexemeStat", back_populates="analysis_run", cascade="all, delete-orphan")
+    lookup_events = relationship("ReaderLookupEvent", back_populates="analysis_run", passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -200,6 +203,7 @@ class Lexeme(Base):
     run_lexemes = relationship("RunLexeme", back_populates="lexeme")
     chapter_stats = relationship("ChapterLexemeStat", back_populates="lexeme")
     user_knowledge = relationship("UserLexemeKnowledge", back_populates="lexeme")
+    lookup_events = relationship("ReaderLookupEvent", back_populates="lexeme", passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -314,6 +318,7 @@ class RunLexeme(Base):
     analysis_run = relationship("AnalysisRun", back_populates="run_lexemes")
     lexeme = relationship("Lexeme", back_populates="run_lexemes")
     occurrences = relationship("LexemeOccurrence", back_populates="run_lexeme")
+    lookup_events = relationship("ReaderLookupEvent", back_populates="run_lexeme", passive_deletes=True)
 
     __table_args__ = (
         UniqueConstraint("analysis_run_id", "observation_key", name="uq_run_lexeme_observation"),
@@ -335,6 +340,9 @@ class LexemeOccurrence(Base):
     source_end = Column(Integer, nullable=False)
     source_token_index = Column(Integer, nullable=False)
     reader_segment_index = Column(Integer, nullable=True)
+    # Added in Phase 5. This is a reader-cache coordinate, never inferred from
+    # source_token_index or from the ordering of filtered analysis occurrences.
+    reader_token_index = Column(Integer, nullable=True)
 
     analysis_run = relationship("AnalysisRun", back_populates="occurrences")
     chapter = relationship("Chapter", back_populates="lexeme_occurrences")
@@ -352,6 +360,64 @@ class LexemeOccurrence(Base):
             "source_end",
             "source_token_index",
             name="uq_run_source_occurrence",
+        ),
+    )
+
+
+class ReaderLookupEvent(Base):
+    """Immutable fact that the reader deliberately requested a dictionary lookup."""
+    __tablename__ = "reader_lookup_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(String(32), ForeignKey("books.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_index = Column(Integer, nullable=False, index=True)
+    analysis_run_id = Column(
+        Integer,
+        ForeignKey("analysis_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # These are historical references. They may be null for unresolved events,
+    # and are never rewritten when a later Lexeme merge occurs.
+    lexeme_id = Column(Integer, ForeignKey("lexemes.id", ondelete="SET NULL"), nullable=True, index=True)
+    run_lexeme_id = Column(
+        Integer,
+        ForeignKey("run_lexemes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    surface = Column(Text, nullable=False)
+    query_text = Column(Text, nullable=False)
+    reader_segment_index = Column(Integer, nullable=False)
+    reader_token_index = Column(Integer, nullable=False)
+    source_document_id = Column(String(255), nullable=True)
+    source_start = Column(Integer, nullable=True)
+    source_end = Column(Integer, nullable=True)
+    source_token_index = Column(Integer, nullable=True)
+    event_type = Column(String(64), nullable=False, default="reader_dictionary_lookup")
+    client_event_id = Column(String(128), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    book = relationship("Book", back_populates="lookup_events")
+    chapter = relationship("Chapter", back_populates="lookup_events")
+    analysis_run = relationship("AnalysisRun", back_populates="lookup_events", passive_deletes=True)
+    lexeme = relationship("Lexeme", back_populates="lookup_events", passive_deletes=True)
+    run_lexeme = relationship("RunLexeme", back_populates="lookup_events", passive_deletes=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "chapter_index >= 0 AND reader_segment_index >= 0 AND reader_token_index >= 0",
+            name="ck_reader_lookup_event_reader_coordinates",
+        ),
+        CheckConstraint(
+            "(source_start IS NULL AND source_end IS NULL) OR "
+            "(source_start >= 0 AND source_end > source_start)",
+            name="ck_reader_lookup_event_source_coordinates",
+        ),
+        CheckConstraint(
+            "event_type = 'reader_dictionary_lookup'",
+            name="ck_reader_lookup_event_type",
         ),
     )
 

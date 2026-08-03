@@ -10,6 +10,10 @@ import clsx from 'clsx';
 import { useReaderStore, getTokenKey } from '@/stores/readerStore';
 import type { TokenData } from '@/types/chapter';
 import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
+import {
+  createReaderLookupEventId,
+  recordReaderLookup,
+} from '@/services/reader-lookup.service';
 
 interface TokenRendererProps {
   token: TokenData;
@@ -56,6 +60,8 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
 
     // 2. 只订阅 actions（函数引用稳定，不会触发重渲染）
     const setSelectedToken = useReaderStore((s) => s.setSelectedToken);
+    const bookId = useReaderStore((s) => s.bookId);
+    const chapterIndex = useReaderStore((s) => s.chapterIndex);
 
     // 3. 订阅生词状态 - 使用 selector 只在匹配时才触发重渲染
     // 这样添加/删除生词时，只有相关的 Token 会重新渲染
@@ -82,6 +88,22 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
 
         e.stopPropagation();
 
+        // TokenRenderer is the sole owner of deliberate lookup logging. The
+        // Popover and Sidebar may both display the same dictionary result, but
+        // their GET requests are intentionally not user-event writes.
+        if (bookId && chapterIndex !== null && token.s) {
+          void recordReaderLookup(bookId, {
+            client_event_id: createReaderLookupEventId(),
+            chapter_index: chapterIndex,
+            reader_segment_index: segmentIndex,
+            reader_token_index: tokenIndex,
+            surface: token.s,
+            query_text: token.b || token.s,
+          }).catch((error) => {
+            console.error('[TokenRenderer] Failed to record dictionary lookup:', error);
+          });
+        }
+
         // 设置选中状态
         setSelectedToken({
           token,
@@ -90,7 +112,7 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
           text: token.s,
         });
       },
-      [token, segmentIndex, tokenIndex, setSelectedToken]
+      [token, segmentIndex, tokenIndex, setSelectedToken, bookId, chapterIndex]
     );
 
     // 8. 样式组合

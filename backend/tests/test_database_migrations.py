@@ -22,7 +22,8 @@ def test_apply_sqlite_additive_migrations_adds_missing_columns(tmp_path):
 
     applied_count = apply_sqlite_additive_migrations(engine)
 
-    assert applied_count == 5
+    # One new additive table plus the five legacy columns.
+    assert applied_count == 6
 
     with engine.begin() as conn:
         book_columns = {
@@ -69,6 +70,7 @@ def test_legacy_database_gets_source_tables_and_explicit_legacy_status(tmp_path)
         "run_lexemes",
         "lexeme_occurrences",
         "chapter_lexeme_stats",
+        "reader_lookup_events",
     }.issubset(tables)
 
 
@@ -92,7 +94,8 @@ def test_legacy_phase_two_run_lexemes_get_learning_target_column(tmp_path):
 
     assert "excluded_from_learning_target" in columns
     assert SQLITE_ADDITIVE_MIGRATIONS["run_lexemes"]["excluded_from_learning_target"]
-    assert applied_count == 1
+    # The lookup-event table is created alongside the legacy column.
+    assert applied_count == 2
 
 
 def test_full_phase_two_run_lexeme_schema_remains_orm_readable_after_migration(tmp_path):

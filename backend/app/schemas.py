@@ -181,12 +181,76 @@ class LexemeOccurrenceResponse(BaseModel):
     source_end: int
     source_token_index: int
     reader_segment_index: Optional[int] = None
+    reader_token_index: Optional[int] = None
 
 
 class ActiveLexemeOccurrencesResponse(BaseModel):
     run: Optional[AnalysisRunResponse] = None
     lexeme_id: int
     occurrences: List[LexemeOccurrenceResponse]
+
+
+class ReaderLookupEventCreate(BaseModel):
+    """One deliberate Reader token selection that opened dictionary lookup."""
+
+    client_event_id: str = Field(..., min_length=1, max_length=128)
+    chapter_index: int = Field(..., ge=0)
+    reader_segment_index: int = Field(..., ge=0)
+    reader_token_index: int = Field(..., ge=0)
+    surface: str = Field(..., min_length=1, max_length=1024)
+    query_text: str = Field(..., min_length=1, max_length=1024)
+    event_type: Literal["reader_dictionary_lookup"] = "reader_dictionary_lookup"
+    source_document_id: Optional[str] = Field(default=None, max_length=255)
+    source_start: Optional[int] = Field(default=None, ge=0)
+    source_end: Optional[int] = Field(default=None, ge=1)
+    source_token_index: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_source_coordinate_pair(self):
+        if (self.source_start is None) != (self.source_end is None):
+            raise ValueError("source_start and source_end must be supplied together")
+        if self.source_start is not None and self.source_end is not None:
+            if self.source_end <= self.source_start:
+                raise ValueError("source_end must be greater than source_start")
+        return self
+
+
+class ReaderLookupEventResponse(BaseModel):
+    id: int
+    client_event_id: str
+    book_id: str
+    chapter_id: int
+    chapter_index: int
+    analysis_run_id: Optional[int] = None
+    lexeme_id: Optional[int] = None
+    run_lexeme_id: Optional[int] = None
+    surface: str
+    query_text: str
+    reader_segment_index: int
+    reader_token_index: int
+    source_document_id: Optional[str] = None
+    source_start: Optional[int] = None
+    source_end: Optional[int] = None
+    source_token_index: Optional[int] = None
+    event_type: Literal["reader_dictionary_lookup"]
+    mapping_status: Literal["resolved", "unresolved"]
+    created_at: datetime
+
+
+class ReaderLookupEventFirstLast(BaseModel):
+    chapter_index: int
+    reader_segment_index: int
+    reader_token_index: int
+    created_at: datetime
+
+
+class LearningMapLookupObservation(BaseModel):
+    lookup_count: int
+    first_lookup: ReaderLookupEventFirstLast
+    last_lookup: ReaderLookupEventFirstLast
+    occurrences_after_first_lookup: Optional[int] = None
+    occurrences_after_last_lookup: Optional[int] = None
+    later_lookup_count_after_first: int
 
 
 class LearningMapFilterSpec(BaseModel):
@@ -229,6 +293,7 @@ class LearningMapRecommendedLexeme(BaseModel):
     first_chapter_index: int
     excluded_from_learning_target: bool
     knowledge_status: Optional[Literal["learning", "known", "ignored"]] = None
+    lookup_observation: Optional[LearningMapLookupObservation] = None
 
 
 class LearningMapManageableLexeme(LearningMapRecommendedLexeme):

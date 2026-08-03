@@ -192,6 +192,31 @@
 [`dev_docs/LEARNING_MAP_CONTRACT.md`](dev_docs/LEARNING_MAP_CONTRACT.md)。后者同时是词汇基线、
 推荐集合与外部已知集导入语义的权威说明。
 
+#### ReaderLookupEvent（Reader 主动查词事实）
+
+Reader 点击 token 并打开词典的行为通过
+`POST /api/books/{book_id}/reader/lookup-events` 单独写入
+`ReaderLookupEvent`。事件是不可变的用户行为历史，不是词汇状态；它保留
+书籍/章节、当时的 `analysis_run_id`（若存在）、Reader segment/token 坐标、
+查询文本、客户端幂等 ID 和时间，并在能够由一致坐标唯一证明时保存
+Lexeme/RunLexeme 与 source offset。无法无歧义映射是合法的 unresolved 数据，
+不得通过猜测补齐。相同客户端事件 ID 的重试只返回原事件，用户再次点击则
+使用新的事件 ID。
+
+`GET /api/dictionary/search` 仍是纯查询。Study、Vocabulary hydration、后台
+字典请求以及 `TokenPopover`/`ReaderSidebar` 的展示查询不会写入事件；Reader
+的 token click handler 是唯一的事件所有者。Learning Map 只在查询期将事件和
+后续 occurrence 汇总为事实型 `lookup_observation`，并沿
+`Lexeme.merged_into_id` 解析当前 canonical Lexeme，不改写历史事件。
+这类观察不增加唯一的 `explicit-known coverage`，不创建
+`acquired_in_context`，也不修改 `UserLexemeKnowledge`。
+汇总只接受事件当时的 `AnalysisRun.source_content_version_id` 与当前 active
+run 相同的记录；旧 source version 的事件仍保留为历史事实，但不混入当前
+Learning Map 的坐标观察。同一 source version 的重新分析可以继续使用兼容
+历史。旧分析结果若没有 `reader_token_index`，仍可阅读，但当前 Reader 只
+提交 Reader 坐标，相关查词通常会保留为 unresolved；重新分析后才能稳定
+获得词元级查词观察。
+
 #### TokenData（分词单元）
 ```python
 - s: str                     # 表层形（显示文本）
@@ -252,6 +277,10 @@
 - updated_at: datetime
 - UniqueConstraint: (book_id, base_form)  # 同一书同一原型只记录一次
 ```
+
+未来 Anki 导出必须由只增的 `AnkiExportLedger` 持有稳定 GUID，不能直接由
+数据库自增 `lexeme_id` 派生。本阶段不实现 Sentence、i+1、例句缓存、Anki
+写入/导出、TTS 或媒体文件导出，也不引入新的覆盖率定义。
 
 ---
 

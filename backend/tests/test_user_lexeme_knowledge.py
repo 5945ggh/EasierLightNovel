@@ -351,5 +351,6 @@ def test_additive_migration_keeps_older_source_scoped_table_readable(tmp_path):
             for row in conn.execute(text("PRAGMA table_info('user_lexeme_knowledge')")).fetchall()
         }
 
-    assert applied_count == 1
+    # The new append-only Reader lookup table is also created for a legacy DB.
+    assert applied_count == 2
     assert "note" in columns

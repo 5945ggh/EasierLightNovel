@@ -152,7 +152,7 @@ The first rebuildable analysis layer uses these tables:
 - `RunLexeme`: the run-local Sudachi observation, including full POS,
   inflection, reading provenance, OOV, word ID, and dictionary ID diagnostics;
 - `LexemeOccurrence`: one lexical occurrence with source-document offsets and
-  an optional reader segment projection;
+  optional Reader segment/token projections;
 - `ChapterLexemeStat`: the only materialized aggregate. Book totals are summed
   from chapter rows; there is no `BookLexemeStat`.
 
@@ -176,6 +176,19 @@ Run publication follows these rules:
    single active run in one transaction only after all rows validate.
 7. Roll back partial derived rows on failure, persist the run as failed, and
    leave the previous active run unchanged.
+
+`reader_segment_index` and `reader_token_index` are coordinates in the compact
+Reader cache, not source coordinates. The analysis service writes
+`reader_token_index` only after one source span, one rendered text segment, and
+the segment's token surfaces reconstruct the same text and identify one
+non-gap token. It must not derive the value from `source_token_index`, filtered
+occurrence order, or a guessed token sequence. Existing runs may have a null
+Reader token coordinate and remain readable. The current Reader lookup payload
+contains Reader coordinates, so a lookup against such a legacy run generally
+cannot be associated with a Lexeme and remains a valid unresolved event instead
+of guessing. Re-analyzing from the retained source content is the supported way
+to obtain the reliable Reader projection needed for Lexeme-level lookup
+observations.
 
 Before tokenization, the analysis service strictly validates the persisted
 version-4 source shape. The payload must declare `unicode_codepoint` offsets

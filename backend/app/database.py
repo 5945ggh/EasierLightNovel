@@ -44,6 +44,56 @@ SQLITE_ADDITIVE_MIGRATIONS: dict[str, dict[str, str]] = {
     "user_lexeme_knowledge": {
         "note": "ALTER TABLE user_lexeme_knowledge ADD COLUMN note TEXT",
     },
+    "lexeme_occurrences": {
+        "reader_token_index": (
+            "ALTER TABLE lexeme_occurrences ADD COLUMN "
+            "reader_token_index INTEGER"
+        ),
+    },
+}
+
+
+SQLITE_ADDITIVE_TABLE_MIGRATIONS: dict[str, tuple[str, ...]] = {
+    # Base.metadata.create_all handles new databases. This explicit CREATE is
+    # also needed by upgrade tests and by existing SQLite files initialized
+    # before the Phase 5 model was present.
+    "reader_lookup_events": (
+        """
+        CREATE TABLE IF NOT EXISTS reader_lookup_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id VARCHAR(32) NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+            chapter_id INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+            chapter_index INTEGER NOT NULL,
+            analysis_run_id INTEGER REFERENCES analysis_runs(id) ON DELETE SET NULL,
+            lexeme_id INTEGER REFERENCES lexemes(id) ON DELETE SET NULL,
+            run_lexeme_id INTEGER REFERENCES run_lexemes(id) ON DELETE SET NULL,
+            surface TEXT NOT NULL,
+            query_text TEXT NOT NULL,
+            reader_segment_index INTEGER NOT NULL,
+            reader_token_index INTEGER NOT NULL,
+            source_document_id VARCHAR(255),
+            source_start INTEGER,
+            source_end INTEGER,
+            source_token_index INTEGER,
+            event_type VARCHAR(64) NOT NULL DEFAULT 'reader_dictionary_lookup',
+            client_event_id VARCHAR(128) NOT NULL UNIQUE,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT ck_reader_lookup_event_reader_coordinates
+                CHECK (chapter_index >= 0 AND reader_segment_index >= 0 AND reader_token_index >= 0),
+            CONSTRAINT ck_reader_lookup_event_source_coordinates
+                CHECK (
+                    (source_start IS NULL AND source_end IS NULL)
+                    OR (source_start >= 0 AND source_end > source_start)
+                ),
+            CONSTRAINT ck_reader_lookup_event_type
+                CHECK (event_type = 'reader_dictionary_lookup')
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_reader_lookup_events_book_id ON reader_lookup_events(book_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reader_lookup_events_lexeme_id ON reader_lookup_events(lexeme_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reader_lookup_events_analysis_run_id ON reader_lookup_events(analysis_run_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reader_lookup_events_client_event_id ON reader_lookup_events(client_event_id)",
+    ),
 }
 
 
@@ -58,6 +108,20 @@ def apply_sqlite_additive_migrations(target_engine: Engine) -> int:
 
     applied_count = 0
     with target_engine.begin() as conn:
+        for table_name, statements in SQLITE_ADDITIVE_TABLE_MIGRATIONS.items():
+            existing_table = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name = :table_name"),
+                {"table_name": table_name},
+            ).fetchone()
+            if existing_table:
+                continue
+
+            logger.warning("Applying SQLite compatibility migration: table=%s", table_name)
+            conn.execute(text(statements[0]))
+            for statement in statements[1:]:
+                conn.execute(text(statement))
+            applied_count += 1
+
         for table_name, column_statements in SQLITE_ADDITIVE_MIGRATIONS.items():
             existing_tables = conn.execute(
                 text("SELECT name FROM sqlite_master WHERE type='table' AND name = :table_name"),

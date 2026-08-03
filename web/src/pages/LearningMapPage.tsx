@@ -21,6 +21,7 @@ import {
 import type {
   LexemeKnowledgeStatus,
   LearningMapChapter,
+  LearningMapLookupObservation,
   LearningMapManageableLexeme,
   LearningMapRecommendedLexeme,
   LearningMapResponse,
@@ -97,6 +98,39 @@ const MetricCell: React.FC<{ label: string; value: string }> = ({ label, value }
     <span className="font-medium tabular-nums text-gray-800">{value}</span>
   </div>
 );
+
+const formatLookupTime = (value: string): string => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
+};
+
+const LookupObservation: React.FC<{ observation?: LearningMapLookupObservation | null }> = ({
+  observation,
+}) => {
+  if (!observation) return null;
+
+  const laterLookupText = observation.later_lookup_count_after_first === 0
+    ? '之后没有再次查询'
+    : `之后又查询 ${observation.later_lookup_count_after_first} 次`;
+  const afterFirstText = observation.occurrences_after_first_lookup === null
+    ? `${laterLookupText}。`
+    : `首次查询后又出现 ${observation.occurrences_after_first_lookup} 次，${laterLookupText}。`;
+  const afterLastText = observation.occurrences_after_last_lookup === null
+    ? ''
+    : `最近一次查询后又出现 ${observation.occurrences_after_last_lookup} 次。`;
+  const lastLookupText = observation.lookup_count > 1
+    ? `最近一次查询在第 ${observation.last_lookup.chapter_index + 1} 章，${formatLookupTime(observation.last_lookup.created_at)}。`
+    : '';
+
+  return (
+    <div className="col-span-2 min-w-0 text-xs leading-5 text-indigo-700 sm:col-span-5">
+      <p className="break-words">
+        本书中查过 {observation.lookup_count} 次；首次查询在第 {observation.first_lookup.chapter_index + 1} 章，
+        {formatLookupTime(observation.first_lookup.created_at)}。{afterFirstText}{lastLookupText}{afterLastText}
+      </p>
+    </div>
+  );
+};
 
 interface StatusMutationVariables {
   lexemeId: number;
@@ -321,6 +355,7 @@ const RecommendationRow: React.FC<{
           </select>
         </span>
       </label>
+      <LookupObservation observation={lexeme.lookup_observation} />
     </li>
   );
 };

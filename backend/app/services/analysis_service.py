@@ -27,6 +27,7 @@ from app.models import (
     Vocabulary,
 )
 from app.services.source_content_service import source_content_hash
+from app.services.lookup_event_service import LookupEventService
 from app.services.user_lexeme_knowledge_service import UserLexemeKnowledgeService
 from app.utils.lexeme_identity import normalize_canonical_reading, normalize_identity_text
 from app.utils.tokenizer import JapaneseTokenizer, RebuildToken
@@ -93,6 +94,76 @@ def _reader_segment_for(
         if start_offset >= span["start_offset"] and end_offset <= span["end_offset"]:
             return int(span["reader_segment_index"])
     return None
+
+
+def _reader_token_for(
+    chapter: Chapter,
+    document_text: str,
+    start_offset: int,
+    end_offset: int,
+    spans: Iterable[dict[str, Any]],
+) -> Optional[int]:
+    """Map source offsets through the persisted Reader token text when exact.
+
+    The source span and the stored Reader segment must reconstruct the same
+    text. Only then is a Reader token index accepted; source token order and
+    filtered occurrence order are deliberately not used as a substitute.
+    """
+    matching_spans = [
+        span
+        for span in spans
+        if start_offset >= span["start_offset"]
+        and end_offset <= span["end_offset"]
+    ]
+    if len(matching_spans) != 1:
+        return None
+
+    span = matching_spans[0]
+    segment_index = span["reader_segment_index"]
+    content = chapter.content_json
+    if not isinstance(content, list) or not 0 <= segment_index < len(content):
+        return None
+    segment = content[segment_index]
+    if not isinstance(segment, dict) or segment.get("type") != "text":
+        return None
+    tokens = segment.get("tokens")
+    if not isinstance(tokens, list):
+        return None
+
+    segment_text = document_text[span["start_offset"]:span["end_offset"]]
+    cursor = 0
+    relative_start = start_offset - span["start_offset"]
+    relative_end = end_offset - span["start_offset"]
+    matched_index: Optional[int] = None
+    current_start_index = 0
+    current_group_length = 0
+    for token_index, token in enumerate(tokens):
+        if not isinstance(token, dict) or not isinstance(token.get("s"), str):
+            return None
+        surface = token["s"]
+        token_start = cursor
+        cursor += len(surface)
+        if segment_text[token_start:cursor] != surface:
+            return None
+        is_paragraph_break = bool(token.get("gap")) or not surface.strip()
+        if is_paragraph_break:
+            # Match SegmentRenderer: a leading break with no accumulated
+            # tokens leaves the visible token index at zero; later breaks
+            # start the next group at the source token position after them.
+            if current_group_length > 0:
+                current_start_index = token_index + 1
+                current_group_length = 0
+            continue
+
+        if token_start == relative_start and cursor == relative_end:
+            if matched_index is not None:
+                return None
+            matched_index = current_start_index + current_group_length
+        current_group_length += 1
+
+    if cursor != len(segment_text):
+        return None
+    return matched_index
 
 
 def _is_nonnegative_int(value: Any) -> bool:
@@ -449,6 +520,13 @@ class AnalysisService:
                         token.end_offset,
                         spans,
                     ),
+                    "reader_token_index": _reader_token_for(
+                        chapter,
+                        text,
+                        token.start_offset,
+                        token.end_offset,
+                        spans,
+                    ),
                 })
                 stat_counts[(chapter.id, chapter_index, identity_key)] += 1
 
@@ -467,6 +545,7 @@ class AnalysisService:
                 source_end=draft["source_end"],
                 source_token_index=draft["source_token_index"],
                 reader_segment_index=draft["reader_segment_index"],
+                reader_token_index=draft["reader_token_index"],
             )
             for draft in occurrence_drafts
         ]
@@ -872,6 +951,11 @@ class AnalysisService:
             chapters.append(chapter)
 
         effective_states = knowledge_service.effective_states(set(aggregates))
+        lookup_observations = LookupEventService(self.db).get_learning_map_observations(
+            book_id,
+            run,
+            set(aggregates),
+        )
         manageable_lexemes = []
         recommendation_candidates = []
         for lexeme_id, item in aggregates.items():
@@ -911,6 +995,7 @@ class AnalysisService:
                     item["lexeme"].id not in known_ids
                     and effective_states.get(item["lexeme"].id) != "ignored"
                 ),
+                "lookup_observation": lookup_observations.get(item["lexeme"].id),
             })
 
         recommended_lexemes = []
@@ -935,6 +1020,7 @@ class AnalysisService:
                     "first_chapter_index": item["first_chapter_index"],
                     "excluded_from_learning_target": item["excluded_from_learning_target"],
                     "knowledge_status": effective_states.get(item["lexeme"].id),
+                    "lookup_observation": lookup_observations.get(item["lexeme"].id),
                 })
 
         return {
@@ -1025,6 +1111,7 @@ class AnalysisService:
                 "source_end": occurrence.source_end,
                 "source_token_index": occurrence.source_token_index,
                 "reader_segment_index": occurrence.reader_segment_index,
+                "reader_token_index": occurrence.reader_token_index,
             }
             for occurrence, run_lexeme in rows
         ]

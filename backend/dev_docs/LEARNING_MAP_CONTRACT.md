@@ -57,6 +57,68 @@ Unmapped legacy rows remain preserved and are counted in
 
 When no canonical known Lexeme is available, `knowledge_baseline_status` is `"uninitialized"`, `coverage` is `null`, chapter unknown fields are `null`, and recommendations are empty. This does not mean every lexeme is unknown.
 
+## Reader lookup facts and context observations
+
+`POST /api/books/{book_id}/reader/lookup-events` is the dedicated write API for
+deliberate Reader dictionary lookups. `GET /api/dictionary/search` remains a
+pure dictionary query. Study-page dictionary hydration, Vocabulary detail
+loading, background requests, and either dictionary display surface do not
+create lookup events.
+
+The event table is an append-only history of user behavior. Each event keeps
+the book and chapter identity, chapter index, the active `analysis_run_id` when
+one exists, Reader segment/token coordinates, the surface/query text, the
+event type, server creation time, and a client event id. It may also keep a
+canonical/provisional Lexeme and RunLexeme reference plus source document
+offsets when the mapping is proven. The client id is unique, so retries are
+idempotent; a later deliberate selection gets a new id and is a new event.
+
+`TokenRenderer` is the sole frontend event owner. `TokenPopover` and
+`ReaderSidebar` may issue the dictionary GET needed to display the result, but
+they do not write the event. This boundary is stable under React effect
+replays, Strict Mode, duplicate rendering surfaces, and dictionary cache
+hydration.
+
+Lexeme association is conservative. Source offsets and Reader coordinates are
+accepted only when they identify one occurrence with matching surface and
+consistent coordinate evidence. A missing, contradictory, or multiply matched
+identity remains a valid unresolved event with its surface and coordinates;
+the system never fills it by guessing from source token order or filtered
+occurrence order. `LexemeOccurrence.reader_token_index` is an additive,
+nullable Reader-cache coordinate. Older analysis rows can therefore continue
+to load and can remain unresolved.
+
+The optional `lookup_observation` on manageable/recommended Lexeme rows is
+derived at Learning Map query time. It can report lookup count, first/recent
+lookup location and time, later occurrence count when both events and active
+occurrences share a proven source coordinate space, and whether later lookups
+occurred. These are explainable facts such as “查过 2 次；首次查询后又出现
+2 次”，not a second coverage metric, a hidden threshold, or a user knowledge
+state. Lookup counts, frequency, OOV status, external candidates, and this
+observation never increase `explicit_known_coverage`, and lookup writes never
+modify `UserLexemeKnowledge`.
+
+Events retain the Lexeme id that was known at write time. If a Lexeme is later
+merged, summary queries follow `Lexeme.merged_into_id` to the current canonical
+Lexeme without rewriting historical events. Observations are omitted when
+there is no real lookup history; unavailable source-coordinate evidence is
+reported as unavailable rather than converted into a fabricated page number.
+Observation history is limited to events whose recorded analysis run points to
+the active run's `source_content_version_id`. A re-analysis of the same source
+version may therefore retain compatible lookup history, while events from an
+older or different source version do not enter the current Learning Map
+observation. Legacy analysis rows remain readable, but their nullable
+`reader_token_index` cannot be reconstructed from the Reader token index; with
+the current Reader event payload, lookups against those rows are preserved as
+unresolved until the book is re-analyzed from its source content.
+
+Sentence entities, Japanese sentence splitting, i+1 selection/scoring,
+sentence caches, AnkiConnect writes, Anki exports, TTS/media exports, JLPT
+datasets, and new frequency baselines remain deferred. A future Anki export
+must obtain stable GUID ownership from an append-only `AnkiExportLedger`, never
+from `lexeme_id` or another auto-increment id; Phase 5 does not create that
+ledger.
+
 ## Recommendation order
 
 `recommended_lexemes` is the actionable learning-target set. It excludes
@@ -74,8 +136,9 @@ ignored row as a recommendation. Both collections use upcoming occurrence
 count from the reading anchor (descending), book occurrence count (descending),
 first chapter (ascending), then stable lexeme text/id tie-breakers.
 
-The endpoint does not implement lookup logs, acquired-in-context, sentence
-cards, i+1 selection, exports, external frequency data, or new OOV categories.
+The endpoint does not implement an `acquired_in_context` state, sentence cards,
+i+1 selection, exports, external frequency data, or new OOV categories. Its
+lookup observation is explanatory output only.
 
 ## External baseline imports
 

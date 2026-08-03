@@ -28,3 +28,6 @@ export * from './ai';
 
 // 书籍学习地图
 export * from './learningMap';
+
+// Reader 主动查词事件
+export * from './readerLookup';

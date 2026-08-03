@@ -2,9 +2,9 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-08-01
+- Last refreshed: 2026-08-03
 - Primary product surfaces: Library, Reader, Study, book learning map
-- Evidence reviewed: `web/src/App.tsx`, `web/src/pages/LibraryPage.tsx`, `web/src/pages/LearningMapPage.tsx`, `backend/app/services/analysis_service.py`, `backend/tests/test_learning_map.py`, `backend/dev_docs/LEARNING_MAP_CONTRACT.md`
+- Evidence reviewed: `web/src/App.tsx`, `web/src/pages/LibraryPage.tsx`, `web/src/pages/LearningMapPage.tsx`, `web/src/components/reader/TokenRenderer.tsx`, `backend/app/services/analysis_service.py`, `backend/app/services/lookup_event_service.py`, `backend/tests/test_learning_map.py`, `backend/tests/test_lookup_events.py`, `backend/dev_docs/LEARNING_MAP_CONTRACT.md`
 
 ## Brand
 - Personality: quiet, practical, study-focused, and local-first
@@ -13,8 +13,8 @@
 
 ## Product goals
 - Goals: help a reader decide what to read next and which unknown lexemes matter in the current book
-- Non-goals: spaced repetition, external corpus ranking, Anki export, sentence cards, or inferred context acquisition
-- Success signals: a reader can identify the next chapter, its unresolved vocabulary density, and the real long-tail cost of book coverage
+- Non-goals: spaced repetition, external corpus ranking, Anki export, sentence cards, or treating lookup history as inferred context acquisition
+- Success signals: a reader can identify the next chapter, its unresolved vocabulary density, the real long-tail cost of book coverage, and factual lookup/recurrence evidence without mistaking it for mastery
 
 ## Personas and jobs
 - Primary personas: one local reader studying Japanese through imported light novels
@@ -30,6 +30,7 @@
 - Evidence before interpretation: show the filter scope, run identity, and actual curve values close to the metric
 - Compact scanning: use dense rows and restrained panels instead of a marketing-style dashboard
 - Honest empty states: uninitialized baseline and missing analysis are explicit states, never zero-filled substitutes
+- Fact versus inference: lookup history is an immutable user-action fact; recurrence after a lookup is a query-time observation and must never be presented as a knowledge-state decision
 - Tradeoffs: small-screen readability and stable labels take priority over showing every metadata field at once
 
 ## Visual language
@@ -43,7 +44,7 @@
 ## Components
 - Existing components to reuse: Study header/tab pattern, `Loader2`, `AlertCircle`, `BookOpen`, `ArrowLeft`, Tailwind status colors
 - New/changed components: learning map page, chapter density rows, frequency curve table, recommendation rows
-- Variants and states: loading, ready, uninitialized baseline, needs analysis, and request error
+- Variants and states: loading, ready, uninitialized baseline, needs analysis, request error, and an optional lookup observation only when real event evidence exists
 - Token/component ownership: page-local Tailwind classes, with global changes limited to responsive behavior if required
 
 ## Accessibility
@@ -69,13 +70,16 @@
 ## Content voice
 - Tone: concise, factual, non-judgmental
 - Terminology: use “明确掌握” for explicit known, “个人词汇基线” for the baseline, and “待确认” for unavailable chapter unknown counts
-- Microcopy rules: explain OOV/proper-noun handling in plain language; do not promise that a small word list reaches a target percentage
+- Microcopy rules: explain OOV/proper-noun handling in plain language; state that the reader queried and that the word later appeared, never that the system decided the reader learned it; do not promise that a small word list reaches a target percentage
 
 ## Implementation constraints
 - Framework/styling system: React 19, TypeScript, Vite, Tailwind, React Query, lucide-react
 - Design-token constraints: follow existing utility classes and palette; no new dependency or parallel design system
 - Performance constraints: one learning-map request per book view, bounded recommendation list, no client-side corpus computation
 - Compatibility constraints: preserve existing Reader, Vocabulary, Highlight, and Progress routes and API contracts
+- Lookup constraints: `GET /api/dictionary/search` stays side-effect free; only the Reader token selection handler owns the idempotent lookup-event write. Unresolved mappings remain valid data, while Lexeme merges are resolved only during summary queries.
+- Lookup provenance: Learning Map observations only use events whose recorded analysis run shares the active run's `source_content_version_id`; legacy analysis rows without a Reader token projection remain readable, but Reader-originated events against them generally stay unresolved until re-analysis.
+- Deferred exports: Sentence/i+1/Anki write remain out of scope. Future Anki GUIDs belong to an append-only `AnkiExportLedger`, not auto-increment Lexeme ids.
 - Test/screenshot expectations: lint and build; inspect desktop and mobile widths when a browser surface is available
 
 ## Open questions
