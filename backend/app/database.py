@@ -41,6 +41,9 @@ SQLITE_ADDITIVE_MIGRATIONS: dict[str, dict[str, str]] = {
             "excluded_from_learning_target BOOLEAN NOT NULL DEFAULT 0"
         ),
     },
+    "user_lexeme_knowledge": {
+        "note": "ALTER TABLE user_lexeme_knowledge ADD COLUMN note TEXT",
+    },
 }
 
 

@@ -180,9 +180,17 @@
 只有完成的 active run 才会驱动书籍学习地图；失败的 run 保留错误信息，但不会让已可读的书籍
 回退为导入失败。
 
+`UserLexemeKnowledge` 是与上述派生层分离的单用户 canonical Lexeme 状态层：
+`known`、`learning`、`ignored` 和无记录（未声明）是学习地图的状态语义，其中只有有效
+`known` 会进入明确掌握覆盖率。它不能因分析 run 重建而丢失。`ExternalKnowledgeImport` 和
+`ExternalKnowledgeImportItem` 保存 AnkiConnect/JLPT 外部已知集的可撤销证据；手动状态优先于
+外部证据，外部证据优先于旧 `Vocabulary.status == 3` 的兼容迁移。`Vocabulary.status` 仍服务
+既有生词本/复习功能，但不再是学习地图的主真值来源。
+
 详细的 source coordinate、身份和 API 契约见
 [`dev_docs/SOURCE_CONTENT_CONTRACT.md`](dev_docs/SOURCE_CONTENT_CONTRACT.md) 与
-[`dev_docs/LEARNING_MAP_CONTRACT.md`](dev_docs/LEARNING_MAP_CONTRACT.md)。
+[`dev_docs/LEARNING_MAP_CONTRACT.md`](dev_docs/LEARNING_MAP_CONTRACT.md)。后者同时是词汇基线、
+推荐集合与外部已知集导入语义的权威说明。
 
 #### TokenData（分词单元）
 ```python

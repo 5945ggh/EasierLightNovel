@@ -5,13 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Any, Callable, Iterable, Optional
 
-import jaconv
 from sqlalchemy.orm import Session
 
 from app.config import TOKENIZER_DEFAULT_MODE
@@ -29,6 +27,8 @@ from app.models import (
     Vocabulary,
 )
 from app.services.source_content_service import source_content_hash
+from app.services.user_lexeme_knowledge_service import UserLexemeKnowledgeService
+from app.utils.lexeme_identity import normalize_canonical_reading, normalize_identity_text
 from app.utils.tokenizer import JapaneseTokenizer, RebuildToken
 
 
@@ -77,13 +77,11 @@ def _stable_hash(value: Any) -> str:
 
 
 def _normalize_identity_text(value: str) -> str:
-    return unicodedata.normalize("NFKC", value).strip()
+    return normalize_identity_text(value)
 
 
 def _normalize_reading(value: Optional[str]) -> Optional[str]:
-    if not value:
-        return None
-    return jaconv.kata2hira(unicodedata.normalize("NFKC", value))
+    return normalize_canonical_reading(value)
 
 
 def _reader_segment_for(
@@ -711,6 +709,7 @@ class AnalysisService:
                 "coverage_curve": [],
                 "chapters": [],
                 "recommended_lexemes": [],
+                "manageable_lexemes": [],
             }
 
         chapter_rows = self.db.query(Chapter).filter(
@@ -750,9 +749,11 @@ class AnalysisService:
             LexemeOccurrence.source_token_index,
         ).all()
 
+        knowledge_service = UserLexemeKnowledgeService(self.db)
         for occurrence, run_lexeme, lexeme in occurrence_rows:
             if not self._occurrence_matches_filter(run_lexeme, filter_spec):
                 continue
+            canonical_lexeme = knowledge_service.resolve_canonical_lexeme(lexeme.id)
             chapter = chapter_data.setdefault(occurrence.chapter_index, {
                 "chapter_index": occurrence.chapter_index,
                 "title": f"第 {occurrence.chapter_index + 1} 章",
@@ -764,10 +765,10 @@ class AnalysisService:
                 "lexeme_ids": set(),
             })
             chapter["eligible_occurrences"] += 1
-            chapter["lexeme_ids"].add(lexeme.id)
+            chapter["lexeme_ids"].add(canonical_lexeme.id)
 
-            item = aggregates.setdefault(lexeme.id, {
-                "lexeme": lexeme,
+            item = aggregates.setdefault(canonical_lexeme.id, {
+                "lexeme": canonical_lexeme,
                 "representative": run_lexeme,
                 "book_occurrence_count": 0,
                 "chapter_counts": defaultdict(int),
@@ -790,27 +791,19 @@ class AnalysisService:
                 or self._is_learning_target_excluded(run_lexeme)
             )
 
-        known_ids, migration_status, unmapped_count = self._legacy_known_lexeme_ids(
+        known_ids, baseline_summary = knowledge_service.effective_known_lexeme_ids(
             book_id,
-            run.id,
+            run_id=run.id,
+            migrate_legacy=True,
         )
         baseline_ready = bool(known_ids)
+        migration_status = baseline_summary["migration_status"]
+        unmapped_count = baseline_summary["legacy_unmapped_count"]
         if baseline_ready:
             baseline_status = "ready"
-            if unmapped_count:
-                baseline_message = (
-                    f"已读取明确掌握的词汇；另有 {unmapped_count} 条旧的已掌握记录无法无歧义映射。"
-                )
-            else:
-                baseline_message = "覆盖率只统计明确掌握的 canonical Lexeme。"
-        elif migration_status == "uninitialized" and unmapped_count:
-            baseline_status = "uninitialized"
-            baseline_message = (
-                f"尚未建立个人词汇基线；有 {unmapped_count} 条旧的已掌握记录无法无歧义映射。"
-            )
         else:
             baseline_status = "uninitialized"
-            baseline_message = "尚未建立个人词汇基线；尚无可用于覆盖率的明确掌握词。"
+        baseline_message = baseline_summary["message"]
 
         eligible_occurrences = sum(
             item["book_occurrence_count"] for item in aggregates.values()
@@ -878,29 +871,57 @@ class AnalysisService:
                 chapter["unknown_lexeme_count"] = len(lexeme_ids - known_ids)
             chapters.append(chapter)
 
+        effective_states = knowledge_service.effective_states(set(aggregates))
+        manageable_lexemes = []
+        recommendation_candidates = []
+        for lexeme_id, item in aggregates.items():
+            if item["excluded_from_learning_target"]:
+                continue
+            upcoming_count = sum(
+                count
+                for index, count in item["chapter_counts"].items()
+                if index >= anchor_chapter_index
+            )
+            recommendation_candidates.append((
+                -upcoming_count,
+                -item["book_occurrence_count"],
+                item["first_chapter_index"],
+                item["lexeme"].normalized_form,
+                item["lexeme"].id,
+                item,
+                upcoming_count,
+            ))
+        recommendation_candidates.sort(key=lambda candidate: candidate[:5])
+        for candidate in recommendation_candidates[:recommendation_limit]:
+            item = candidate[5]
+            representative = item["representative"]
+            pos = representative.part_of_speech or []
+            manageable_lexemes.append({
+                "lexeme_id": item["lexeme"].id,
+                "normalized_form": item["lexeme"].normalized_form,
+                "display_form": representative.dictionary_form or item["lexeme"].normalized_form,
+                "reading": item["lexeme"].canonical_reading_kana,
+                "part_of_speech": str(pos[0]) if pos else "",
+                "book_occurrence_count": item["book_occurrence_count"],
+                "upcoming_chapter_occurrence_count": candidate[6],
+                "first_chapter_index": item["first_chapter_index"],
+                "excluded_from_learning_target": item["excluded_from_learning_target"],
+                "knowledge_status": effective_states.get(item["lexeme"].id),
+                "is_recommended": (
+                    item["lexeme"].id not in known_ids
+                    and effective_states.get(item["lexeme"].id) != "ignored"
+                ),
+            })
+
         recommended_lexemes = []
         if baseline_ready:
-            recommendation_candidates = []
-            for lexeme_id, item in aggregates.items():
-                if lexeme_id in known_ids or item["excluded_from_learning_target"]:
-                    continue
-                upcoming_count = sum(
-                    count
-                    for index, count in item["chapter_counts"].items()
-                    if index >= anchor_chapter_index
-                )
-                recommendation_candidates.append((
-                    -upcoming_count,
-                    -item["book_occurrence_count"],
-                    item["first_chapter_index"],
-                    item["lexeme"].normalized_form,
-                    item["lexeme"].id,
-                    item,
-                    upcoming_count,
-                ))
-            recommendation_candidates.sort(key=lambda candidate: candidate[:5])
             for candidate in recommendation_candidates[:recommendation_limit]:
                 item = candidate[5]
+                if (
+                    item["lexeme"].id in known_ids
+                    or effective_states.get(item["lexeme"].id) == "ignored"
+                ):
+                    continue
                 representative = item["representative"]
                 pos = representative.part_of_speech or []
                 recommended_lexemes.append({
@@ -913,6 +934,7 @@ class AnalysisService:
                     "upcoming_chapter_occurrence_count": candidate[6],
                     "first_chapter_index": item["first_chapter_index"],
                     "excluded_from_learning_target": item["excluded_from_learning_target"],
+                    "knowledge_status": effective_states.get(item["lexeme"].id),
                 })
 
         return {
@@ -928,6 +950,7 @@ class AnalysisService:
             "coverage_curve": coverage_curve,
             "chapters": chapters,
             "recommended_lexemes": recommended_lexemes,
+            "manageable_lexemes": manageable_lexemes,
         }
 
     def get_active_lexeme_stats(

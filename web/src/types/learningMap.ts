@@ -27,6 +27,8 @@ export interface LearningMapChapter {
   new_lexeme_count: number;
 }
 
+export type LexemeKnowledgeStatus = 'learning' | 'known' | 'ignored';
+
 export interface LearningMapRecommendedLexeme {
   lexeme_id: number;
   normalized_form: string;
@@ -37,6 +39,12 @@ export interface LearningMapRecommendedLexeme {
   upcoming_chapter_occurrence_count: number;
   first_chapter_index: number;
   excluded_from_learning_target: boolean;
+  state?: LexemeKnowledgeStatus | null;
+  knowledge_status?: LexemeKnowledgeStatus | null;
+}
+
+export interface LearningMapManageableLexeme extends LearningMapRecommendedLexeme {
+  is_recommended: boolean;
 }
 
 export interface LearningMapResponse {
@@ -52,4 +60,16 @@ export interface LearningMapResponse {
   coverage_curve: LearningMapCurvePoint[];
   chapters: LearningMapChapter[];
   recommended_lexemes: LearningMapRecommendedLexeme[];
+  manageable_lexemes?: LearningMapManageableLexeme[];
+}
+
+export interface LexemeKnowledgeUpdateRequest {
+  state: LexemeKnowledgeStatus;
+}
+
+export interface LexemeKnowledgeUpdateResponse {
+  lexeme_id: number;
+  state?: LexemeKnowledgeStatus;
+  knowledge_status?: LexemeKnowledgeStatus | null;
+  message?: string;
 }

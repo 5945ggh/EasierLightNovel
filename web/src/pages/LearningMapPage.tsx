@@ -1,10 +1,11 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
   BookOpen,
+  CheckCircle2,
   Info,
   Loader2,
   Map as MapIcon,
@@ -12,8 +13,18 @@ import {
   Target,
 } from 'lucide-react';
 import { getBookDetail } from '@/services/books.service';
-import { getLearningMap } from '@/services/learning-map.service';
-import type { LearningMapChapter, LearningMapResponse } from '@/types';
+import {
+  deleteLexemeKnowledgeStatus,
+  getLearningMap,
+  putLexemeKnowledgeStatus,
+} from '@/services/learning-map.service';
+import type {
+  LexemeKnowledgeStatus,
+  LearningMapChapter,
+  LearningMapManageableLexeme,
+  LearningMapRecommendedLexeme,
+  LearningMapResponse,
+} from '@/types';
 
 const formatCount = (value: number | null): string =>
   value === null ? '待确认' : value.toLocaleString('zh-CN');
@@ -27,6 +38,19 @@ const POS_LABELS: Record<string, string> = {
   形状詞: '形状词',
   副詞: '副词',
 };
+
+const LEARNING_MAP_QUERY_KEY = 'learning-map';
+
+const MANUAL_STATUS_OPTIONS: Array<{
+  value: LexemeKnowledgeStatus | 'unset';
+  label: string;
+  description: string;
+}> = [
+  { value: 'unset', label: '未设置', description: '不覆盖当前基线判断' },
+  { value: 'learning', label: '学习中', description: '标记为正在学习' },
+  { value: 'known', label: '已掌握', description: '计入明确掌握基线' },
+  { value: 'ignored', label: '暂不学习', description: '从学习目标中排除' },
+];
 
 const formatFilterScope = (map: LearningMapResponse): string => {
   const { filter_spec: filterSpec } = map;
@@ -74,9 +98,34 @@ const MetricCell: React.FC<{ label: string; value: string }> = ({ label, value }
   </div>
 );
 
-const LearningMapReady: React.FC<{ map: LearningMapResponse }> = ({ map }) => {
+interface StatusMutationVariables {
+  lexemeId: number;
+  status: LexemeKnowledgeStatus | null;
+}
+
+const LearningMapReady: React.FC<{ bookId: string; map: LearningMapResponse }> = ({ bookId, map }) => {
+  const queryClient = useQueryClient();
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
   const coverage = map.coverage;
   const baselineReady = map.knowledge_baseline_status === 'ready';
+  const manageableLexemes = map.manageable_lexemes ?? map.recommended_lexemes;
+  const statusMutation = useMutation({
+    mutationFn: ({ lexemeId, status }: StatusMutationVariables) =>
+      status === null
+        ? deleteLexemeKnowledgeStatus(lexemeId)
+        : putLexemeKnowledgeStatus(lexemeId, status),
+    onMutate: () => {
+      setStatusFeedback(null);
+    },
+    onSuccess: async (response) => {
+      setStatusFeedback(response.message || '词汇状态已更新。');
+      await queryClient.invalidateQueries({
+        queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
+        exact: true,
+      });
+    },
+  });
+  const pendingLexemeId = statusMutation.isPending ? statusMutation.variables?.lexemeId : null;
 
   return (
     <>
@@ -154,38 +203,36 @@ const LearningMapReady: React.FC<{ map: LearningMapResponse }> = ({ map }) => {
           }
         />
         {!baselineReady ? (
-          <div className="mx-4 mb-5 border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-            尚未建立个人词汇基线。章节中的词不能被直接假定为未知，因此这里暂不生成推荐词。
+          <div className="mx-4 mb-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+            尚未建立个人词汇基线。未设置状态的词不会被假定为未知；可以手动标记“已掌握”来建立基线。
           </div>
-        ) : map.recommended_lexemes.length === 0 ? (
-          <p className="px-4 pb-5 text-sm text-gray-500">当前分析范围内没有待推荐的词。</p>
+        ) : null}
+        {manageableLexemes.length === 0 ? (
+          <p className="px-4 pb-5 text-sm text-gray-500">
+            {baselineReady ? '当前分析范围内没有可手动标记的词。' : '当前没有可手动标记的词。'}
+          </p>
         ) : (
-          <ul className="divide-y divide-gray-100">
-            {map.recommended_lexemes.map((lexeme) => (
-              <li
-                key={lexeme.lexeme_id}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_110px_90px_90px] sm:items-center sm:gap-4"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-gray-900" title={lexeme.display_form}>
-                    {lexeme.display_form}
-                  </p>
-                  <p className="truncate text-xs text-gray-500">
-                    {lexeme.reading || '读音待确认'} · {lexeme.part_of_speech || '词性待确认'}
-                  </p>
-                </div>
-                <span className="text-right text-sm tabular-nums text-gray-700">
-                  {lexeme.upcoming_chapter_occurrence_count} 次将出现
-                </span>
-                <span className="hidden text-right text-sm tabular-nums text-gray-600 sm:block">
-                  全书 {lexeme.book_occurrence_count} 次
-                </span>
-                <span className="hidden text-right text-xs text-gray-500 sm:block">
-                  首见第 {lexeme.first_chapter_index + 1} 章
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <StatusFeedback
+              error={statusMutation.error}
+              message={statusFeedback}
+            />
+            <ul className="divide-y divide-gray-100">
+              {manageableLexemes.map((lexeme) => (
+                <RecommendationRow
+                  key={lexeme.lexeme_id}
+                  lexeme={lexeme}
+                  isPending={pendingLexemeId === lexeme.lexeme_id}
+                  onStatusChange={(status) =>
+                    statusMutation.mutate({
+                      lexemeId: lexeme.lexeme_id,
+                      status,
+                    })
+                  }
+                />
+              ))}
+            </ul>
+          </>
         )}
       </section>
 
@@ -218,6 +265,86 @@ const LearningMapReady: React.FC<{ map: LearningMapResponse }> = ({ map }) => {
   );
 };
 
+const RecommendationRow: React.FC<{
+  lexeme: LearningMapRecommendedLexeme | LearningMapManageableLexeme;
+  isPending: boolean;
+  onStatusChange: (status: LexemeKnowledgeStatus | null) => void;
+}> = ({ lexeme, isPending, onStatusChange }) => {
+  const currentStatus = lexeme.knowledge_status ?? lexeme.state ?? 'unset';
+  const isRecommended = !('is_recommended' in lexeme) || lexeme.is_recommended;
+
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_110px_90px_90px_132px] sm:items-center sm:gap-4">
+      <div className="min-w-0">
+        <p className="truncate font-medium text-gray-900" title={lexeme.display_form}>
+          {lexeme.display_form}
+        </p>
+        <p className="truncate text-xs text-gray-500">
+          {lexeme.reading || '读音待确认'} · {lexeme.part_of_speech || '词性待确认'}
+          {isRecommended ? '' : ' · 已从推荐中移除'}
+        </p>
+      </div>
+      <span className="text-right text-sm tabular-nums text-gray-700">
+        {lexeme.upcoming_chapter_occurrence_count} 次将出现
+      </span>
+      <span className="hidden text-right text-sm tabular-nums text-gray-600 sm:block">
+        全书 {lexeme.book_occurrence_count} 次
+      </span>
+      <span className="hidden text-right text-xs text-gray-500 sm:block">
+        首见第 {lexeme.first_chapter_index + 1} 章
+      </span>
+      <label className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end">
+        <span className="text-xs text-gray-500 sm:hidden">状态</span>
+        <span className="relative inline-flex min-w-[124px] items-center">
+          {isPending ? (
+            <Loader2
+              size={14}
+              className="pointer-events-none absolute left-2.5 z-10 animate-spin text-blue-600"
+              aria-hidden="true"
+            />
+          ) : null}
+          <select
+            aria-label={`设置 ${lexeme.display_form} 的掌握状态`}
+            className="h-9 w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-8 text-sm text-gray-700 transition-colors hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:bg-gray-50 disabled:text-gray-400"
+            value={currentStatus}
+            disabled={isPending}
+            onChange={(event) => {
+              const nextValue = event.target.value as LexemeKnowledgeStatus | 'unset';
+              onStatusChange(nextValue === 'unset' ? null : nextValue);
+            }}
+          >
+            {MANUAL_STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value} title={option.description}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </span>
+      </label>
+    </li>
+  );
+};
+
+const StatusFeedback: React.FC<{ error: unknown; message: string | null }> = ({ error, message }) => {
+  if (error) {
+    return (
+      <div className="mx-4 mb-3 flex items-start gap-2 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <AlertCircle size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+        <span>{getErrorMessage(error)}</span>
+      </div>
+    );
+  }
+
+  if (!message) return null;
+
+  return (
+    <div className="mx-4 mb-3 flex items-start gap-2 border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+      <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+  );
+};
+
 const SectionHeading: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
   <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
     <h2 className="text-base font-semibold text-gray-900">{title}</h2>
@@ -233,7 +360,7 @@ const LearningMapPage: React.FC = () => {
     enabled: Boolean(bookId),
   });
   const mapQuery = useQuery({
-    queryKey: ['learning-map', bookId],
+    queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
     queryFn: () => getLearningMap(bookId as string),
     enabled: Boolean(bookId),
   });
@@ -303,7 +430,7 @@ const LearningMapPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <LearningMapReady map={map} />
+          <LearningMapReady bookId={bookId} map={map} />
         )}
 
         <p className="px-1 text-xs leading-5 text-gray-500">

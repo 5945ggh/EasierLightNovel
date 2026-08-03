@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.enums import AnalysisRunStatus, ProcessingStatus
-from app.models import AnalysisRun, Base, Book, Chapter, SourceContentVersion, Vocabulary
+from app.models import AnalysisRun, Base, Book, Chapter, Lexeme, SourceContentVersion, UserLexemeKnowledge, Vocabulary
 from app.routers.analysis import get_analysis_service, learning_map_router
 from app.services.analysis_service import AnalysisService
 from app.services.source_content_service import build_source_content, source_content_hash
@@ -220,6 +220,56 @@ def test_learning_map_does_not_turn_vocab_or_missing_baseline_into_zero(tmp_path
     assert result["chapters"][0]["explicit_known_occurrences"] is None
     assert result["chapters"][0]["unknown_occurrences"] is None
     assert result["chapters"][0]["new_lexeme_count"] == 1
+    session.close()
+
+
+def test_learning_map_counts_only_formal_known_state(tmp_path):
+    Session = _session_factory(tmp_path)
+    _seed_source(Session)
+    session = Session()
+    AnalysisService(session, tokenizer_factory=LearningMapTokenizer).rebuild_book_analysis(BOOK_ID)
+    lexemes = {row.normalized_form: row for row in session.query(Lexeme).all()}
+    session.add_all([
+        UserLexemeKnowledge(lexeme_id=lexemes["猫"].id, state="known", source="manual"),
+        UserLexemeKnowledge(lexeme_id=lexemes["本"].id, state="learning", source="manual"),
+        UserLexemeKnowledge(lexeme_id=lexemes["山"].id, state="ignored", source="manual"),
+    ])
+    session.commit()
+
+    result = AnalysisService(session, tokenizer_factory=LearningMapTokenizer).get_learning_map(BOOK_ID)
+
+    assert result["coverage"] == {
+        "explicit_known_coverage": 3 / 7,
+        "known_occurrences": 3,
+        "eligible_occurrences": 7,
+    }
+    assert result["chapters"][1]["unknown_occurrences"] == 1
+    statuses = {row["normalized_form"]: row["knowledge_status"] for row in result["manageable_lexemes"]}
+    assert statuses["本"] == "learning"
+    assert statuses["山"] == "ignored"
+    manageable = {row["normalized_form"]: row for row in result["manageable_lexemes"]}
+    assert manageable["山"]["is_recommended"] is False
+    assert "山" not in {row["normalized_form"] for row in result["recommended_lexemes"]}
+    session.close()
+
+
+def test_learning_map_with_only_learning_or_ignored_state_keeps_coverage_unavailable(tmp_path):
+    Session = _session_factory(tmp_path)
+    _seed_source(Session)
+    session = Session()
+    AnalysisService(session, tokenizer_factory=LearningMapTokenizer).rebuild_book_analysis(BOOK_ID)
+    lexemes = {row.normalized_form: row for row in session.query(Lexeme).all()}
+    session.add_all([
+        UserLexemeKnowledge(lexeme_id=lexemes["本"].id, state="learning", source="manual"),
+        UserLexemeKnowledge(lexeme_id=lexemes["山"].id, state="ignored", source="manual"),
+    ])
+    session.commit()
+
+    result = AnalysisService(session, tokenizer_factory=LearningMapTokenizer).get_learning_map(BOOK_ID)
+
+    assert result["knowledge_baseline_status"] == "uninitialized"
+    assert result["coverage"] is None
+    assert result["chapters"][0]["unknown_occurrences"] is None
     session.close()
 
 

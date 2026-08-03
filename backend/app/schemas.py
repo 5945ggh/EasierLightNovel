@@ -228,6 +228,11 @@ class LearningMapRecommendedLexeme(BaseModel):
     upcoming_chapter_occurrence_count: int
     first_chapter_index: int
     excluded_from_learning_target: bool
+    knowledge_status: Optional[Literal["learning", "known", "ignored"]] = None
+
+
+class LearningMapManageableLexeme(LearningMapRecommendedLexeme):
+    is_recommended: bool
 
 
 class LearningMapResponse(BaseModel):
@@ -243,6 +248,111 @@ class LearningMapResponse(BaseModel):
     coverage_curve: List[LearningMapCurvePoint]
     chapters: List[LearningMapChapterResponse]
     recommended_lexemes: List[LearningMapRecommendedLexeme]
+    manageable_lexemes: List[LearningMapManageableLexeme] = Field(default_factory=list)
+
+
+class UserLexemeKnowledgeUpdate(BaseModel):
+    state: Literal["learning", "known", "ignored"]
+    note: Optional[str] = None
+
+
+class UserLexemeKnowledgeResponse(BaseModel):
+    lexeme_id: int
+    requested_lexeme_id: Optional[int] = None
+    state: Literal["learning", "known", "ignored"]
+    source: str
+    note: Optional[str] = None
+    normalized_form: str
+    canonical_reading_kana: Optional[str] = None
+    is_provisional: bool
+    merged_into_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserLexemeKnowledgeSummaryResponse(BaseModel):
+    book_id: str
+    analysis_run_id: Optional[int] = None
+    baseline_status: Literal["ready", "uninitialized"]
+    migration_status: Literal["none", "ready", "partial", "uninitialized"]
+    known_lexeme_count: int
+    learning_lexeme_count: int
+    ignored_lexeme_count: int
+    unknown_lexeme_count: int
+    legacy_mastered_count: int
+    legacy_mapped_count: int
+    legacy_unmapped_count: int
+    manual_count: int
+    source_distribution: Dict[str, int]
+    latest_updated_at: Optional[datetime] = None
+    message: str
+
+
+class UserLexemeKnowledgeMigrationResponse(UserLexemeKnowledgeSummaryResponse):
+    created_count: int
+    updated_count: int
+    preserved_manual_count: int
+
+
+class UserLexemeKnowledgeIndexResponse(BaseModel):
+    items: List[UserLexemeKnowledgeResponse]
+
+
+class ExternalKnowledgeImportStatsResponse(BaseModel):
+    total: int
+    parsable: int
+    unique: int
+    ambiguous: int
+    unmatched: int
+    provisional: int
+
+
+class ExternalKnowledgeImportCandidateResponse(BaseModel):
+    lexeme_id: int
+    normalized_form: str
+    canonical_reading_kana: str
+    source_entry_id: str
+    level: Optional[str] = None
+
+
+class ExternalKnowledgeImportSkipResponse(BaseModel):
+    source_entry_id: str
+    reason: str
+    normalized_form: Optional[str] = None
+    canonical_reading_kana: Optional[str] = None
+
+
+class ExternalKnowledgeImportPreviewResponse(BaseModel):
+    source_kind: Literal["anki", "jlpt"]
+    import_digest: str
+    stats: ExternalKnowledgeImportStatsResponse
+    accepted: List[ExternalKnowledgeImportCandidateResponse]
+    skipped: List[ExternalKnowledgeImportSkipResponse]
+
+
+class AnkiKnowledgeImportRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    expression_fields: List[str] = Field(default_factory=lambda: ["Expression", "Word", "Vocabulary", "Front"])
+    reading_fields: List[str] = Field(default_factory=lambda: ["Reading", "Kana", "Yomi"])
+    timeout_seconds: float = Field(default=2.0, gt=0, le=10)
+
+
+class JLPTKnowledgeImportRequest(BaseModel):
+    path: str = Field(..., min_length=1, max_length=2048)
+    levels: List[Literal["N5", "N4", "N3", "N2", "N1"]] = Field(..., min_length=1)
+
+
+class ExternalKnowledgeImportApplyResponse(BaseModel):
+    batch_id: str
+    source_kind: Literal["anki", "jlpt"]
+    import_digest: str
+    created_count: int
+    skipped: List[ExternalKnowledgeImportSkipResponse]
+
+
+class ExternalKnowledgeImportRevokeResponse(BaseModel):
+    batch_id: str
+    deleted_count: int
 
 # ==================== Vocabulary 相关 ====================
 class VocabularyBaseFormsResponse(BaseModel):

@@ -199,6 +199,7 @@ class Lexeme(Base):
     merged_into = relationship("Lexeme", remote_side=[id], foreign_keys=[merged_into_id])
     run_lexemes = relationship("RunLexeme", back_populates="lexeme")
     chapter_stats = relationship("ChapterLexemeStat", back_populates="lexeme")
+    user_knowledge = relationship("UserLexemeKnowledge", back_populates="lexeme")
 
     __table_args__ = (
         CheckConstraint(
@@ -210,6 +211,73 @@ class Lexeme(Base):
             "merged_into_id IS NULL OR merged_into_id != id",
             name="ck_lexeme_no_self_merge",
         ),
+    )
+
+
+class UserLexemeKnowledge(Base):
+    """Single-user canonical knowledge state for a stable Lexeme identity."""
+    __tablename__ = "user_lexeme_knowledge"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lexeme_id = Column(Integer, ForeignKey("lexemes.id"), nullable=False, index=True)
+    state = Column(String(32), nullable=False)
+    source = Column(String(32), nullable=False, default="manual")
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    lexeme = relationship("Lexeme", back_populates="user_knowledge")
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('learning', 'known', 'ignored')",
+            name="ck_user_lexeme_knowledge_state",
+        ),
+        UniqueConstraint("lexeme_id", "source", name="uq_user_lexeme_knowledge_source"),
+    )
+
+
+class ExternalKnowledgeImport(Base):
+    """One reversible confirmation of an external known-word baseline."""
+    __tablename__ = "external_knowledge_imports"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    batch_id = Column(String(64), nullable=False, unique=True, index=True)
+    source_kind = Column(String(32), nullable=False, index=True)
+    import_digest = Column(String(64), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="applied", index=True)
+    summary_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    items = relationship("ExternalKnowledgeImportItem", back_populates="knowledge_import", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('applied', 'rolled_back')", name="ck_external_knowledge_import_status"),
+    )
+
+
+class ExternalKnowledgeImportItem(Base):
+    """A source entry matched to one trusted canonical Lexeme in an import."""
+    __tablename__ = "external_knowledge_import_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    import_id = Column(Integer, ForeignKey("external_knowledge_imports.id"), nullable=False, index=True)
+    lexeme_id = Column(Integer, ForeignKey("lexemes.id"), nullable=False, index=True)
+    source_entry_id = Column(String(255), nullable=False)
+    normalized_form = Column(String(255), nullable=False)
+    canonical_reading_kana = Column(String(255), nullable=False)
+    level = Column(String(8), nullable=True)
+    metadata_json = Column(JSON, nullable=False, default=dict)
+    status = Column(String(32), nullable=False, default="applied", index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    knowledge_import = relationship("ExternalKnowledgeImport", back_populates="items")
+    lexeme = relationship("Lexeme")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('applied', 'rolled_back')", name="ck_external_knowledge_import_item_status"),
+        UniqueConstraint("import_id", "source_entry_id", name="uq_external_knowledge_import_item_source"),
     )
 
 
