@@ -1,0 +1,87 @@
+backend/main.py
+  s_77a32dc7c49a87::t_ad8b7089d40a04 156,164
+web/src/types/index.ts
+  s_77a32dc7c49a87::t_36ff85aa9f6a7b 31-33
+backend/tests/test_database_migrations.py
+  s_77a32dc7c49a87::t_e774dc8374162c 25-26,73,97-98
+backend/README.md
+  s_77a32dc7c49a87::t_9b8e1ff3855d81 195-212,219,281-283
+  s_77a32dc7c49a87::t_5ba84e2c997b76 213-218
+  s_77a32dc7c49a87::t_97becff1593b9a 284
+backend/dev_docs/SOURCE_CONTENT_CONTRACT.md
+  s_77a32dc7c49a87::t_5ba84e2c997b76 186-191
+  s_77a32dc7c49a87::t_e8b96eea9b07b1 155,180-185
+  s_77a32dc7c49a87::t_6df1cefc2dfcfc 192
+backend/app/routers/lookup_events.py
+  s_77a32dc7c49a87::t_ad8b7089d40a04 1-50
+DESIGN.md
+  s_77a32dc7c49a87::t_738f2e417ab352 7,16-17,33,47,73,80,82
+  s_77a32dc7c49a87::t_15c2757b2733f0 5
+  s_77a32dc7c49a87::t_5ba84e2c997b76 81
+web/src/types/readerLookup.ts
+  s_77a32dc7c49a87::t_36ff85aa9f6a7b 1-24
+backend/dev_docs/LEARNING_MAP_CONTRACT.md
+  s_77a32dc7c49a87::t_9b8e1ff3855d81 60-105,114-121,139-141
+  s_77a32dc7c49a87::t_5ba84e2c997b76 106-113
+backend/tests/test_user_lexeme_knowledge.py
+  s_77a32dc7c49a87::t_f19277ced3c869 354-355
+backend/app/schemas.py
+  s_77a32dc7c49a87::t_4807c3844565f4 296
+  s_77a32dc7c49a87::t_92744337001517 184,193-253
+  s_77a32dc7c49a87::t_3a745b34df7388 254-255
+backend/app/services/lookup_event_service.py
+  s_77a32dc7c49a87::t_87248b6d1bddb7 1-66,81-152,168-175,223-258,263-264,267-372,381-447
+  s_77a32dc7c49a87::t_8b612451ce9255 67-80,153-167,176-222
+  s_77a32dc7c49a87::t_5ba84e2c997b76 259-262,265-266
+  s_77a32dc7c49a87::t_3f46c8c594f1cf 373-380
+backend/tests/test_lookup_events.py
+  s_77a32dc7c49a87::t_8b612451ce9255 23,227-264
+  s_77a32dc7c49a87::t_c6d69d69b690c1 485,495-497
+  s_77a32dc7c49a87::t_3f46c8c594f1cf 330-349
+  s_77a32dc7c49a87::t_0421be49f6135e 36
+  s_77a32dc7c49a87::t_bbc9d8512c1024 75-76,547-548
+  s_77a32dc7c49a87::t_5ba84e2c997b76 408-457
+  s_77a32dc7c49a87::t_549c470f49d8a5 267-285
+  s_77a32dc7c49a87::t_e774dc8374162c 1-22,25-35,37-74,77-101,104-226,265-266,286-329,350-407,458-484,486-494,498-546,549-555
+  s_77a32dc7c49a87::t_6c1d7dede2d4ee 102-103
+  s_77a32dc7c49a87::t_e85ce591e75bd5 24
+README.md
+  s_77a32dc7c49a87::t_9b8e1ff3855d81 158,195-197
+  s_77a32dc7c49a87::t_5ba84e2c997b76 159
+  s_77a32dc7c49a87::t_7398979f78f489 198
+backend/app/database.py
+  s_77a32dc7c49a87::t_e301f148f94fd4 47-96,111-124
+web/src/types/learningMap.ts
+  s_77a32dc7c49a87::t_435ca48ac0bcb4 51-66
+  s_77a32dc7c49a87::t_02fa813e916715 44
+web/src/components/reader/TokenRenderer.tsx
+  s_77a32dc7c49a87::t_2ff0b5c07b6129 13-16,63-64,91-106,115
+web/src/pages/LearningMapPage.tsx
+  s_77a32dc7c49a87::t_0a0a621bd66410 116
+  s_77a32dc7c49a87::t_ab27b528437bb3 24,102-115,117-120,124-128,130-134,358
+  s_77a32dc7c49a87::t_34a07e0af02010 121-123,129
+web/src/services/reader-lookup.service.ts
+  s_77a32dc7c49a87::t_36ff85aa9f6a7b 1-22
+backend/app/models.py
+  s_77a32dc7c49a87::t_397bebb2400d17 43,118,169,206,321,343-345,367-422
+  s_77a32dc7c49a87::t_ff8f21334702e2 423-424
+backend/app/services/analysis_service.py
+  s_77a32dc7c49a87::t_388043370eba69 30,99-137,140-147,159-160,163-168,523-529,548,954-958,998,1023,1114
+  s_77a32dc7c49a87::t_549c470f49d8a5 138-139,148-158,161-162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "0afc59a9f8d8adec308b82aedd0e8c696b533478",
+  "prompts": {},
+  "sessions": {
+    "s_77a32dc7c49a87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc5b8-a20d-7030-9ffb-a2726c8dc5e3",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
