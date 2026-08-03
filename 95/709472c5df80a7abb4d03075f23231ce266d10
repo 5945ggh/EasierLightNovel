@@ -1,0 +1,148 @@
+backend/tests/test_user_lexeme_knowledge.py
+  s_cea4cae35723fb::t_bf48554d848c8e 1-161,191-219,225-253,256-262,264-313,319,330-355
+  s_cea4cae35723fb::t_677a4367e21e21 162-178,182-184,188-190
+  s_cea4cae35723fb::t_45c715d3b1ff46 179-181,185-187
+  s_cea4cae35723fb::t_76165ab86f253b 320-329
+  s_cea4cae35723fb::t_fb4a168055926b 220-224,254-255,263,314-318
+backend/app/services/external_knowledge_import_service.py
+  s_cea4cae35723fb::t_cb68a1406f172d 70-113
+  s_cea4cae35723fb::t_a86a1a2edbd2a5 739,755-758
+  s_cea4cae35723fb::t_55450fb8667503 13,181-184,194,200,203-208,210,221-227,230-237,250,256-266,268,275,294,296-325,530-542
+  s_cea4cae35723fb::t_4e461e18bee898 469-473,476,482,504-509,519-526,589-604,608,615
+  s_cea4cae35723fb::t_b49c68609d0068 139,162,171,362
+  s_cea4cae35723fb::t_86511e8a5b0e44 1-12,14-19,21,23-45,59-65,67-69,114-138,140-161,163-167,170,172-175,338-345,347-361,363-391,393-395,397-468,474-475,477-481,483-503,510-518,527-529,543-548,550-556,561,568-588,605-607,609-614,616-651,659,663-664,670,672-676,678-679,685-738,740-754,759-782
+  s_cea4cae35723fb::t_c693281ae668e9 20,22,392,396
+  s_cea4cae35723fb::t_c21284e53b657f 46-58,66,176-177,330-337,346
+  s_cea4cae35723fb::t_8e28db78487d88 168,241,247,549,557-560,564
+  s_cea4cae35723fb::t_63da78fac92304 169,242,249,562-563,565-567
+  s_cea4cae35723fb::t_1b71585a6a360c 178-180,185-193,195-199,201-202,218-220,228-229,238-240,243-246,248,251-255,267,269-274,276-293,295,326-329
+  s_cea4cae35723fb::t_27c0e8e4f25e87 652-658,660-662,665-669,671,677,680-684
+  s_cea4cae35723fb::t_799c7b195a462e 209,211-217
+backend/app/routers/analysis.py
+  s_cea4cae35723fb::t_c3b1a4976ea9f1 15-19,26-30,41-46,94-134,150-169
+  s_cea4cae35723fb::t_dda8eb86c4630a 135-149
+  s_cea4cae35723fb::t_77459d0fe5dc5d 170-171
+backend/app/schemas.py
+  s_cea4cae35723fb::t_fb4a168055926b 286-287
+  s_cea4cae35723fb::t_109482cfb17d09 300-355
+  s_cea4cae35723fb::t_3c2ec9be100bce 255,262-263
+  s_cea4cae35723fb::t_e0e4ec8cda24ff 231-235,251
+  s_cea4cae35723fb::t_7c28c42a744ec8 253-254,256-261,264-285,288-299
+  s_cea4cae35723fb::t_10a277939dc698 252
+backend/README.md
+  s_7052eda9cf274c::t_33c87e1969e899 183-189,192-193
+backend/app/routers/knowledge_imports.py
+  s_cea4cae35723fb::t_109482cfb17d09 1-137
+backend/main.py
+  s_cea4cae35723fb::t_1e5d691661c3af 156,163
+  s_cea4cae35723fb::t_109482cfb17d09 162
+web/src/pages/LearningMapPage.tsx
+  s_cea4cae35723fb::t_87558df7b03d9f 206-207,209,211,213
+  s_cea4cae35723fb::t_65ad47874962a0 16-20,22,24,45,103,111,114-116,210,212,221,269,271,274,284,312
+  s_cea4cae35723fb::t_88b49dc9d0856f 273
+  s_cea4cae35723fb::t_a40e1cd9d1cf60 21,23,25-27,363,433
+  s_cea4cae35723fb::t_4359c3139f1015 1-2,8,42-44,46-54,101-102,104-108,112-113,117-128,215-220,222-235,268,270,272,275-283,285-311,313-346
+  s_cea4cae35723fb::t_db727a17a6ac42 347
+README.md
+  s_7052eda9cf274c::t_33c87e1969e899 156-157
+backend/app/models.py
+  s_cea4cae35723fb::t_a5e2c566b16d82 222,236
+  s_cea4cae35723fb::t_2afd1f44f3d0d7 202
+  s_cea4cae35723fb::t_55450fb8667503 237,240-281
+  s_cea4cae35723fb::t_1fab41dda8d9d9 223,233
+  s_cea4cae35723fb::t_52a04f9978e73b 217-221,224-232,234
+  s_67df420e115d68::t_e4be5f46f78dec 235,238-239,282-283
+backend/tests/test_learning_map.py
+  s_cea4cae35723fb::t_620cc663eb541d 9
+  s_cea4cae35723fb::t_37fbe42fb3a024 226-249,253-273
+  s_cea4cae35723fb::t_677a4367e21e21 250-252
+  s_cea4cae35723fb::t_1b200c4e6e8ac2 274-275
+backend/app/services/user_lexeme_knowledge_service.py
+  s_cea4cae35723fb::t_397e6bfb335a29 1-5,7-11,13-15,17-29,31-33,35-72,77-81,96-102,106-107,110,116-117,130-181,184-186,200-201,209-233,236-239,259-349,351-361,367-378,380-393,416-421,423,425,427-437
+  s_cea4cae35723fb::t_c693281ae668e9 12,30,34
+  s_cea4cae35723fb::t_61c857b77f4f5b 16,73-76,202-208
+  s_cea4cae35723fb::t_88b0fb53e88b9b 82-83,90,93-95
+  s_cea4cae35723fb::t_e0e4ec8cda24ff 118-122,124-129
+  s_cea4cae35723fb::t_aebc7887dbca5b 426
+  s_cea4cae35723fb::t_fb4a168055926b 182-183,195-199,234-235
+  s_cea4cae35723fb::t_236b4ca04bfb92 424
+  s_cea4cae35723fb::t_8e28db78487d88 6,84-89,91-92,103-105,108-109,111-115,123,187,192-193,240-258,362-365,399,402,407,409,414-415,422
+  s_cea4cae35723fb::t_8962a30ebb3d42 188-191,194,350,366,379,394-398,400-401,403-406,408,410-413
+web/src/types/learningMap.ts
+  s_cea4cae35723fb::t_87b714a8df2b1e 67,72-73
+  s_cea4cae35723fb::t_e03a7ad954c2c9 42
+  s_cea4cae35723fb::t_e264d934e19c98 30,43-47,63,66,70
+  s_cea4cae35723fb::t_abfbd67cf692eb 31,64-65,68-69,71,74
+backend/app/services/analysis_service.py
+  s_cea4cae35723fb::t_c693281ae668e9 31,80,84
+  s_cea4cae35723fb::t_e0e4ec8cda24ff 30,712,752,756,768,770-771,794,796-797,800-801,806,874-909,914,924,937,953
+  s_cea4cae35723fb::t_8e28db78487d88 910-913,920-923
+  s_cea4cae35723fb::t_ca9f0f5618b93b 915
+backend/app/database.py
+  s_cea4cae35723fb::t_e9710cdf748249 44-46
+backend/tests/test_external_knowledge_imports.py
+  s_cea4cae35723fb::t_8924483b111b72 1-4,15-22,24,27-34,36-49,62-107,111,113-115,117-122,124-129,131-133,135-159,163-164,169-173,175-216,218-219,250-288
+  s_cea4cae35723fb::t_5ef8d59ba43973 402-404,411
+  s_cea4cae35723fb::t_645d352c57becf 217
+  s_cea4cae35723fb::t_d3e78c722abaae 35,50-52,56,61
+  s_cea4cae35723fb::t_37fbe42fb3a024 5-14,25-26,289-319,321-323,325-348,355
+  s_cea4cae35723fb::t_9d8bf4b9d79a9e 53-55,57-60
+  s_cea4cae35723fb::t_4f9e83bc762d86 320,324,349-354
+  s_cea4cae35723fb::t_06ffe56ff3dc02 23,108-110,112,116,123,130,134,160-162,165-168,174,220-249
+  s_cea4cae35723fb::t_677a4367e21e21 356-401,405-410,412-414
+backend/dev_docs/LEARNING_MAP_CONTRACT.md
+  s_cea4cae35723fb::t_a86a1a2edbd2a5 79-97,103-116
+  s_7052eda9cf274c::t_33c87e1969e899 62-75
+  s_cea4cae35723fb::t_57d25c458bd907 31-37
+  s_cea4cae35723fb::t_5ef8d59ba43973 98-102
+  s_cea4cae35723fb::t_7093b5002543b1 26-29,38-45,51-56,77-78
+  s_1a3f3551ea1352::t_6fc956a1839c94 30,76
+web/src/services/learning-map.service.ts
+  s_cea4cae35723fb::t_84adc649c09714 2,5-6,20,29
+  s_cea4cae35723fb::t_8aa02c53e9367d 25
+  s_cea4cae35723fb::t_a113ff3e00c8c2 3-4,21-24,26-28,30-32
+backend/app/utils/lexeme_identity.py
+  s_cea4cae35723fb::t_c693281ae668e9 1-19
+backend/app/routers/lexeme_knowledge.py
+  s_cea4cae35723fb::t_1e5d691661c3af 1-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "95709472c5df80a7abb4d03075f23231ce266d10",
+  "prompts": {},
+  "sessions": {
+    "s_1a3f3551ea1352": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fbade-d4da-7600-abd9-bad754d3e5b0",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_67df420e115d68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fbdd8-c244-7133-86de-17f0a5adba5f",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_7052eda9cf274c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc533-475e-74e3-99c7-c14711df16de",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_cea4cae35723fb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc2f9-911f-79f1-b944-29a188bbf6f6",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
