@@ -24,7 +24,7 @@
 ## Information architecture
 - Primary navigation: Library -> Reader; Library -> Study; Library book menu -> Learning map; Reader -> current-book Learning map; Study -> Vocabulary, Highlights
 - Core routes/screens: `/`, `/read/:bookId`, `/study`, `/study/map/:bookId`
-- Content hierarchy: book identity and data status, one coverage metric, chapter scan, current/upcoming recommendations, frequency curve, scope notes
+- Content hierarchy: book identity and reading anchor context, primary reading readiness & explicit-known coverage, chapter route & unknown vocabulary burden, next step priority words / baseline setup, learning investment & coverage yield curve, collapsible scope notes
 
 ## Design principles
 - Evidence before interpretation: show the filter scope, run identity, and actual curve values close to the metric
