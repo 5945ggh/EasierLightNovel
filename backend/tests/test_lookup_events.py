@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 from app.enums import AnalysisRunStatus, ProcessingStatus
@@ -402,6 +402,52 @@ def test_lookup_observation_counts_follow_up_occurrences_and_queries(tmp_path):
     assert observation["occurrences_after_first_lookup"] == 2
     assert observation["occurrences_after_last_lookup"] == 1
     assert observation["later_lookup_count_after_first"] == 1
+    session.close()
+
+
+def test_lookup_observation_counts_relevant_occurrences_in_sql(tmp_path):
+    Session, run = _seed_book(tmp_path, with_run=True)
+    session = Session()
+    cat, _ = _seed_lexeme_occurrences(session, run)
+    service = LookupEventService(session)
+    service.record_reader_lookup(BOOK_ID, **_event_request("sql-observe-1", 0))
+    for index in range(25):
+        service.record_reader_lookup(
+            BOOK_ID,
+            **_event_request(f"sql-unrelated-{index}", 3, surface="犬"),
+        )
+
+    statements: list[str] = []
+    engine = session.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        observation = service.get_learning_map_observations(BOOK_ID, run, {cat.id})
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    occurrence_statements = [
+        statement.upper()
+        for statement in statements
+        if "LEXEME_OCCURRENCES" in statement.upper()
+    ]
+    event_statements = [
+        statement.upper()
+        for statement in statements
+        if "READER_LOOKUP_EVENTS" in statement.upper()
+        and "SELECT" in statement.upper()
+    ]
+    assert observation[cat.id]["occurrences_after_first_lookup"] == 2
+    assert len(occurrence_statements) == 1
+    assert any("SUM(CASE" in statement for statement in occurrence_statements)
+    assert not any("SELECT LEXEME_OCCURRENCES.ID" in statement
+                   and "COUNT(" not in statement
+                   for statement in occurrence_statements)
+    assert any("LEXEME_ID IN" in statement and "WITH" in statement
+               for statement in event_statements)
     session.close()
 
 

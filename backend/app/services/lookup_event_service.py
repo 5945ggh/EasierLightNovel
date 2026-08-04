@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Optional
 
+from sqlalchemy import and_, case, func, literal, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.models import (
     AnalysisRun,
     Book,
     Chapter,
+    Lexeme,
     LexemeOccurrence,
     ReaderLookupEvent,
     RunLexeme,
@@ -255,64 +257,167 @@ class LookupEventService:
             return {}
 
         knowledge_service = UserLexemeKnowledgeService(self.db)
-        grouped_events: dict[int, list[ReaderLookupEvent]] = defaultdict(list)
-        for event in self.db.query(ReaderLookupEvent).join(
+        candidate_lexeme_tree = select(Lexeme.id).where(
+            Lexeme.id.in_(canonical_lexeme_ids),
+        ).cte("learning_map_candidate_lexemes", recursive=True)
+        candidate_lexeme_tree = candidate_lexeme_tree.union(
+            select(Lexeme.id).join(
+                candidate_lexeme_tree,
+                Lexeme.merged_into_id == candidate_lexeme_tree.c.id,
+            ),
+        )
+        candidate_lexeme_ids = select(candidate_lexeme_tree.c.id)
+        event_rows = self.db.query(ReaderLookupEvent).join(
             AnalysisRun,
             AnalysisRun.id == ReaderLookupEvent.analysis_run_id,
         ).filter(
             ReaderLookupEvent.book_id == book_id,
             ReaderLookupEvent.lexeme_id.is_not(None),
+            ReaderLookupEvent.lexeme_id.in_(candidate_lexeme_ids),
             AnalysisRun.book_id == book_id,
             AnalysisRun.source_content_version_id == run.source_content_version_id,
         ).order_by(
             ReaderLookupEvent.created_at,
             ReaderLookupEvent.id,
-        ).all():
-            canonical_id = knowledge_service.resolve_canonical_lexeme(event.lexeme_id).id  # type: ignore[arg-type]
+        ).all()
+        event_canonical_by_source = knowledge_service.resolve_canonical_lexemes(
+            event.lexeme_id for event in event_rows if event.lexeme_id is not None
+        )
+        grouped_events: dict[int, list[ReaderLookupEvent]] = defaultdict(list)
+        for event in event_rows:
+            if event.lexeme_id is None:
+                continue
+            canonical_id = event_canonical_by_source[event.lexeme_id].id
             if canonical_id in canonical_lexeme_ids:
                 grouped_events[canonical_id].append(event)
 
         if not grouped_events:
             return {}
 
-        occurrences_by_lexeme: dict[int, list[tuple[tuple[Any, ...], LexemeOccurrence]]] = defaultdict(list)
-        rows = self.db.query(LexemeOccurrence, RunLexeme).join(
-            RunLexeme,
-            RunLexeme.id == LexemeOccurrence.run_lexeme_id,
-        ).filter(
-            LexemeOccurrence.analysis_run_id == run.id,
+        run_lexeme_rows = self.db.query(RunLexeme.id, RunLexeme.lexeme_id).filter(
+            RunLexeme.analysis_run_id == run.id,
         ).all()
-        for occurrence, run_lexeme in rows:
-            canonical_id = knowledge_service.resolve_canonical_lexeme(run_lexeme.lexeme_id).id
+        run_lexeme_canonical_by_source = knowledge_service.resolve_canonical_lexemes(
+            lexeme_id for _run_lexeme_id, lexeme_id in run_lexeme_rows
+        )
+        run_lexeme_ids_by_canonical: dict[int, set[int]] = defaultdict(set)
+        for run_lexeme_id, lexeme_id in run_lexeme_rows:
+            canonical_id = run_lexeme_canonical_by_source[lexeme_id].id
             if canonical_id in grouped_events:
-                occurrences_by_lexeme[canonical_id].append((
-                    self._occurrence_location(occurrence),
-                    occurrence,
-                ))
-        for values in occurrences_by_lexeme.values():
-            values.sort(key=lambda value: value[0])
+                run_lexeme_ids_by_canonical[canonical_id].add(run_lexeme_id)
 
         observations: dict[int, dict[str, Any]] = {}
         for canonical_id, events in grouped_events.items():
             first = events[0]
             last = events[-1]
+            occurrences_after_first, occurrences_after_last = (
+                self._count_occurrences_after_locations(
+                    first,
+                    last,
+                    run,
+                    run_lexeme_ids_by_canonical[canonical_id],
+                )
+            )
             observations[canonical_id] = {
                 "lookup_count": len(events),
                 "first_lookup": self._serialize_lookup_position(first),
                 "last_lookup": self._serialize_lookup_position(last),
-                "occurrences_after_first_lookup": self._count_occurrences_after(
-                    first,
-                    run,
-                    occurrences_by_lexeme[canonical_id],
-                ),
-                "occurrences_after_last_lookup": self._count_occurrences_after(
-                    last,
-                    run,
-                    occurrences_by_lexeme[canonical_id],
-                ),
+                "occurrences_after_first_lookup": occurrences_after_first,
+                "occurrences_after_last_lookup": occurrences_after_last,
                 "later_lookup_count_after_first": max(0, len(events) - 1),
             }
         return observations
+
+    def _count_occurrences_after_locations(
+        self,
+        first_event: ReaderLookupEvent,
+        last_event: ReaderLookupEvent,
+        run: AnalysisRun,
+        run_lexeme_ids: set[int],
+    ) -> tuple[Optional[int], Optional[int]]:
+        """Count both observation boundaries with one SQL aggregate query."""
+        if not run_lexeme_ids:
+            return None, None
+
+        first_location = self._event_location_for_run(first_event, run)
+        last_location = self._event_location_for_run(last_event, run)
+        if first_location is None and last_location is None:
+            return None, None
+
+        first_condition = (
+            self._later_than_location(first_location)
+            if first_location is not None
+            else None
+        )
+        last_condition = (
+            self._later_than_location(last_location)
+            if last_location is not None
+            else None
+        )
+        first_count = (
+            func.sum(case((first_condition, 1), else_=0))
+            if first_condition is not None
+            else literal(None)
+        )
+        last_count = (
+            func.sum(case((last_condition, 1), else_=0))
+            if last_condition is not None
+            else literal(None)
+        )
+        row = self.db.query(first_count, last_count).filter(
+            LexemeOccurrence.analysis_run_id == run.id,
+            LexemeOccurrence.run_lexeme_id.in_(run_lexeme_ids),
+        ).one()
+        return (
+            int(row[0]) if row[0] is not None else None,
+            int(row[1]) if row[1] is not None else None,
+        )
+
+    @staticmethod
+    def _later_than_location(location: tuple[Any, ...]):
+        chapter_index, source_document_id, source_start, source_end, source_token_index = location
+        return or_(
+            LexemeOccurrence.chapter_index > chapter_index,
+            and_(
+                LexemeOccurrence.chapter_index == chapter_index,
+                LexemeOccurrence.source_document_id > source_document_id,
+            ),
+            and_(
+                LexemeOccurrence.chapter_index == chapter_index,
+                LexemeOccurrence.source_document_id == source_document_id,
+                LexemeOccurrence.source_start > source_start,
+            ),
+            and_(
+                LexemeOccurrence.chapter_index == chapter_index,
+                LexemeOccurrence.source_document_id == source_document_id,
+                LexemeOccurrence.source_start == source_start,
+                LexemeOccurrence.source_end > source_end,
+            ),
+            and_(
+                LexemeOccurrence.chapter_index == chapter_index,
+                LexemeOccurrence.source_document_id == source_document_id,
+                LexemeOccurrence.source_start == source_start,
+                LexemeOccurrence.source_end == source_end,
+                LexemeOccurrence.source_token_index > source_token_index,
+            ),
+        )
+
+    def _count_occurrences_after_location(
+        self,
+        event: ReaderLookupEvent,
+        run: AnalysisRun,
+        run_lexeme_ids: set[int],
+    ) -> Optional[int]:
+        """Compatibility wrapper for callers outside the learning-map path."""
+        location = self._event_location_for_run(event, run)
+        if location is None or not run_lexeme_ids:
+            return None
+        condition = self._later_than_location(location)
+        return int(self.db.query(func.count(LexemeOccurrence.id)).filter(
+            LexemeOccurrence.analysis_run_id == run.id,
+            LexemeOccurrence.run_lexeme_id.in_(run_lexeme_ids),
+            condition,
+        ).scalar() or 0)
 
     def _active_run(self, book_id: str) -> Optional[AnalysisRun]:
         return self.db.query(AnalysisRun).filter(

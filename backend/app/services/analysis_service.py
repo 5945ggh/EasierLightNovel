@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Any, Callable, Iterable, Optional
 
+from sqlalchemy import func, literal
 from sqlalchemy.orm import Session
 
 from app.config import TOKENIZER_DEFAULT_MODE
@@ -809,33 +811,62 @@ class AnalysisService:
         }
         aggregates: dict[int, dict[str, Any]] = {}
 
-        occurrence_rows = self.db.query(
-            LexemeOccurrence,
+        knowledge_service = UserLexemeKnowledgeService(self.db)
+        map_started_at = time.perf_counter()
+        # Keep the source-order key only for representative selection. The
+        # rows returned here are one row per chapter/run-lexeme group, not one
+        # ORM object per occurrence.
+        first_occurrence_key = (
+            LexemeOccurrence.source_document_id
+            + literal("\x1f")
+            + func.printf("%020d", LexemeOccurrence.source_start)
+            + literal("\x1f")
+            + func.printf("%020d", LexemeOccurrence.source_token_index)
+        )
+        grouped_occurrences = self.db.query(
+            LexemeOccurrence.chapter_index.label("chapter_index"),
+            LexemeOccurrence.run_lexeme_id.label("run_lexeme_id"),
+            func.count(LexemeOccurrence.id).label("occurrence_count"),
+            func.min(first_occurrence_key).label("first_occurrence_key"),
+        ).filter(
+            LexemeOccurrence.analysis_run_id == run.id,
+        ).group_by(
+            LexemeOccurrence.chapter_index,
+            LexemeOccurrence.run_lexeme_id,
+        ).subquery()
+        aggregate_rows = self.db.query(
+            grouped_occurrences.c.chapter_index,
+            grouped_occurrences.c.occurrence_count,
+            grouped_occurrences.c.first_occurrence_key,
             RunLexeme,
             Lexeme,
         ).join(
             RunLexeme,
-            RunLexeme.id == LexemeOccurrence.run_lexeme_id,
+            RunLexeme.id == grouped_occurrences.c.run_lexeme_id,
         ).join(
             Lexeme,
             Lexeme.id == RunLexeme.lexeme_id,
-        ).filter(
-            LexemeOccurrence.analysis_run_id == run.id,
         ).order_by(
-            LexemeOccurrence.chapter_index,
-            LexemeOccurrence.source_document_id,
-            LexemeOccurrence.source_start,
-            LexemeOccurrence.source_token_index,
+            grouped_occurrences.c.chapter_index,
+            grouped_occurrences.c.first_occurrence_key,
         ).all()
+        canonical_by_source = knowledge_service.resolve_canonical_lexemes(
+            row[3].lexeme_id for row in aggregate_rows
+        )
+        logger.debug(
+            "learning_map phase=aggregate groups=%d chapters=%d elapsed_ms=%.2f",
+            len(aggregate_rows),
+            len(chapter_data),
+            (time.perf_counter() - map_started_at) * 1000,
+        )
 
-        knowledge_service = UserLexemeKnowledgeService(self.db)
-        for occurrence, run_lexeme, lexeme in occurrence_rows:
+        for chapter_index_value, occurrence_count, _first_key, run_lexeme, _lexeme in aggregate_rows:
             if not self._occurrence_matches_filter(run_lexeme, filter_spec):
                 continue
-            canonical_lexeme = knowledge_service.resolve_canonical_lexeme(lexeme.id)
-            chapter = chapter_data.setdefault(occurrence.chapter_index, {
-                "chapter_index": occurrence.chapter_index,
-                "title": f"第 {occurrence.chapter_index + 1} 章",
+            canonical_lexeme = canonical_by_source[run_lexeme.lexeme_id]
+            chapter = chapter_data.setdefault(chapter_index_value, {
+                "chapter_index": chapter_index_value,
+                "title": f"第 {chapter_index_value + 1} 章",
                 "eligible_occurrences": 0,
                 "explicit_known_occurrences": None,
                 "unknown_occurrences": None,
@@ -843,7 +874,7 @@ class AnalysisService:
                 "new_lexeme_count": 0,
                 "lexeme_ids": set(),
             })
-            chapter["eligible_occurrences"] += 1
+            chapter["eligible_occurrences"] += occurrence_count
             chapter["lexeme_ids"].add(canonical_lexeme.id)
 
             item = aggregates.setdefault(canonical_lexeme.id, {
@@ -851,7 +882,7 @@ class AnalysisService:
                 "representative": run_lexeme,
                 "book_occurrence_count": 0,
                 "chapter_counts": defaultdict(int),
-                "first_chapter_index": occurrence.chapter_index,
+                "first_chapter_index": chapter_index_value,
                 "excluded_from_learning_target": False,
             })
             if (
@@ -859,21 +890,28 @@ class AnalysisService:
                 and not run_lexeme.is_oov
             ):
                 item["representative"] = run_lexeme
-            item["book_occurrence_count"] += 1
-            item["chapter_counts"][occurrence.chapter_index] += 1
+            item["book_occurrence_count"] += occurrence_count
+            item["chapter_counts"][chapter_index_value] += occurrence_count
             item["first_chapter_index"] = min(
                 item["first_chapter_index"],
-                occurrence.chapter_index,
+                chapter_index_value,
             )
             item["excluded_from_learning_target"] = (
                 item["excluded_from_learning_target"]
                 or self._is_learning_target_excluded(run_lexeme)
             )
 
+        knowledge_started_at = time.perf_counter()
         known_ids, baseline_summary = knowledge_service.effective_known_lexeme_ids(
             book_id,
             run_id=run.id,
-            migrate_legacy=True,
+            migrate_legacy=False,
+        )
+        logger.debug(
+            "learning_map phase=knowledge known=%d scoped=%d elapsed_ms=%.2f",
+            len(known_ids),
+            len(aggregates),
+            (time.perf_counter() - knowledge_started_at) * 1000,
         )
         baseline_ready = bool(known_ids)
         migration_status = baseline_summary["migration_status"]
@@ -950,11 +988,13 @@ class AnalysisService:
                 chapter["unknown_lexeme_count"] = len(lexeme_ids - known_ids)
             chapters.append(chapter)
 
+        effective_state_started_at = time.perf_counter()
         effective_states = knowledge_service.effective_states(set(aggregates))
-        lookup_observations = LookupEventService(self.db).get_learning_map_observations(
-            book_id,
-            run,
-            set(aggregates),
+        logger.debug(
+            "learning_map phase=effective_state scoped=%d resolved=%d elapsed_ms=%.2f",
+            len(aggregates),
+            len(effective_states),
+            (time.perf_counter() - effective_state_started_at) * 1000,
         )
         manageable_lexemes = []
         recommendation_candidates = []
@@ -976,6 +1016,22 @@ class AnalysisService:
                 upcoming_count,
             ))
         recommendation_candidates.sort(key=lambda candidate: candidate[:5])
+        recommendation_lexeme_ids = {
+            candidate[5]["lexeme"].id
+            for candidate in recommendation_candidates[:recommendation_limit]
+        }
+        lookup_started_at = time.perf_counter()
+        lookup_observations = LookupEventService(self.db).get_learning_map_observations(
+            book_id,
+            run,
+            recommendation_lexeme_ids,
+        )
+        logger.debug(
+            "learning_map phase=lookup candidates=%d observed=%d elapsed_ms=%.2f",
+            len(recommendation_lexeme_ids),
+            len(lookup_observations),
+            (time.perf_counter() - lookup_started_at) * 1000,
+        )
         for candidate in recommendation_candidates[:recommendation_limit]:
             item = candidate[5]
             representative = item["representative"]
@@ -1023,6 +1079,12 @@ class AnalysisService:
                     "lookup_observation": lookup_observations.get(item["lexeme"].id),
                 })
 
+        logger.debug(
+            "learning_map phase=total aggregates=%d eligible_occurrences=%d elapsed_ms=%.2f",
+            len(aggregates),
+            eligible_occurrences,
+            (time.perf_counter() - map_started_at) * 1000,
+        )
         return {
             "book_id": book_id,
             "analysis_status": "ready",

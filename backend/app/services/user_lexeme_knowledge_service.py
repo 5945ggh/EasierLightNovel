@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from sqlalchemy.orm import Session
 
@@ -39,25 +39,58 @@ class UserLexemeKnowledgeService:
 
     def __init__(self, db: Session):
         self.db = db
+        self._canonical_cache: dict[int, Lexeme] = {}
 
     def resolve_canonical_lexeme(self, lexeme_id: int) -> Lexeme:
-        lexeme = self.db.get(Lexeme, lexeme_id)
-        if lexeme is None:
-            raise UserLexemeKnowledgeNotFound(f"Lexeme not found: {lexeme_id}")
+        return self.resolve_canonical_lexemes([lexeme_id])[lexeme_id]
 
-        seen: set[int] = set()
-        current = lexeme
-        while current.merged_into_id is not None:
-            if current.id in seen:
-                raise UserLexemeKnowledgeConflict(f"Lexeme merge cycle includes {current.id}")
-            seen.add(current.id)
-            next_lexeme = self.db.get(Lexeme, current.merged_into_id)
-            if next_lexeme is None:
-                raise UserLexemeKnowledgeConflict(
-                    f"Lexeme {current.id} points to missing merge target {current.merged_into_id}"
-                )
-            current = next_lexeme
-        return current
+    def resolve_canonical_lexemes(
+        self,
+        lexeme_ids: Iterable[int],
+        *,
+        refresh_roots: bool = False,
+    ) -> dict[int, Lexeme]:
+        """Resolve merge chains with batched reads and a request-local cache."""
+        requested_ids = set(lexeme_ids)
+        if not requested_ids:
+            return {}
+
+        missing_ids = (
+            requested_ids
+            if refresh_roots
+            else requested_ids - self._canonical_cache.keys()
+        )
+        rows_by_id: dict[int, Lexeme] = {}
+        ids_to_load = set(missing_ids)
+        while ids_to_load:
+            batch = list(ids_to_load)[:500]
+            ids_to_load.difference_update(batch)
+            rows = self.db.query(Lexeme).filter(Lexeme.id.in_(batch)).all()
+            rows_by_id.update({row.id: row for row in rows})
+            missing_loaded = set(batch) - rows_by_id.keys()
+            if missing_loaded:
+                missing_id = min(missing_loaded)
+                raise UserLexemeKnowledgeNotFound(f"Lexeme not found: {missing_id}")
+            for row in rows:
+                if row.merged_into_id is not None and row.merged_into_id not in rows_by_id:
+                    ids_to_load.add(row.merged_into_id)
+
+        for lexeme_id in missing_ids:
+            current = rows_by_id[lexeme_id]
+            seen: set[int] = set()
+            while current.merged_into_id is not None:
+                if current.id in seen:
+                    raise UserLexemeKnowledgeConflict(f"Lexeme merge cycle includes {current.id}")
+                seen.add(current.id)
+                next_lexeme = rows_by_id.get(current.merged_into_id)
+                if next_lexeme is None:
+                    raise UserLexemeKnowledgeConflict(
+                        f"Lexeme {current.id} points to missing merge target {current.merged_into_id}"
+                    )
+                current = next_lexeme
+            self._canonical_cache[lexeme_id] = current
+
+        return {lexeme_id: self._canonical_cache[lexeme_id] for lexeme_id in requested_ids}
 
     def set_manual_state(
         self,
@@ -97,12 +130,16 @@ class UserLexemeKnowledgeService:
         if not lexeme_ids:
             return []
         canonical_by_requested = {
-            lexeme_id: self.resolve_canonical_lexeme(lexeme_id).id
-            for lexeme_id in lexeme_ids
+            lexeme_id: canonical.id
+            for lexeme_id, canonical in self.resolve_canonical_lexemes(
+                lexeme_ids,
+                refresh_roots=True,
+            ).items()
         }
         rows_by_lexeme_id = self._knowledge_rows_by_terminal_id(
             set(canonical_by_requested.values())
         )
+        canonical_rows = self.resolve_canonical_lexemes(canonical_by_requested.values())
         result = []
         for requested_id in lexeme_ids:
             canonical_id = canonical_by_requested[requested_id]
@@ -111,7 +148,7 @@ class UserLexemeKnowledgeService:
                 result.append(self._serialize_row(
                     row,
                     requested_lexeme_id=requested_id,
-                    canonical_lexeme=self.db.get(Lexeme, canonical_id),
+                    canonical_lexeme=canonical_rows[canonical_id],
                 ))
         return result
 
@@ -119,7 +156,13 @@ class UserLexemeKnowledgeService:
         """Return only explicit effective states, keyed by final canonical id."""
         if not lexeme_ids:
             return {}
-        canonical_ids = {self.resolve_canonical_lexeme(lexeme_id).id for lexeme_id in lexeme_ids}
+        canonical_ids = {
+            canonical.id
+            for canonical in self.resolve_canonical_lexemes(
+                lexeme_ids,
+                refresh_roots=True,
+            ).values()
+        }
         by_canonical = self._knowledge_rows_by_terminal_id(canonical_ids)
         return {
             lexeme_id: effective.state
@@ -171,7 +214,8 @@ class UserLexemeKnowledgeService:
         }
         if migrate_legacy and run is not None:
             migration_result = self._migrate_legacy_ids(legacy_mapping["known_ids"])
-            self.db.commit()
+            if migration_result["created_count"] or migration_result["updated_count"]:
+                self.db.commit()
 
         scoped_lexeme_ids = self._run_canonical_lexeme_ids(run.id) if run else set()
         state_counts = {
@@ -185,19 +229,26 @@ class UserLexemeKnowledgeService:
         known_ids: set[int] = set()
         if scoped_lexeme_ids:
             rows_by_lexeme_id = self._knowledge_rows_by_terminal_id(scoped_lexeme_ids)
-            for canonical_id, source_rows in rows_by_lexeme_id.items():
+            for canonical_id in scoped_lexeme_ids:
+                source_rows = rows_by_lexeme_id.get(canonical_id, [])
                 row = self._effective_row(source_rows)
-                if row is None:
+                virtual_legacy = (
+                    canonical_id in legacy_mapping["known_ids"]
+                    and (row is None or row.source == LEGACY_SOURCE)
+                )
+                if row is None and not virtual_legacy:
                     continue
-                if row.source == MANUAL_SOURCE:
+                state = "known" if virtual_legacy else row.state
+                source = LEGACY_SOURCE if virtual_legacy else row.source
+                if row is not None and row.source == MANUAL_SOURCE:
                     manual_count += 1
-                state_counts[row.state] = state_counts.get(row.state, 0) + 1
-                source_distribution[row.source] += 1
-                if row.updated_at is not None and (
+                state_counts[state] = state_counts.get(state, 0) + 1
+                source_distribution[source] += 1
+                if row is not None and row.updated_at is not None and (
                     latest_updated_at is None or row.updated_at > latest_updated_at
                 ):
                     latest_updated_at = row.updated_at
-                if row.state == "known":
+                if state == "known":
                     known_ids.add(canonical_id)
         state_counts["unknown"] = max(
             len(scoped_lexeme_ids)
@@ -251,8 +302,13 @@ class UserLexemeKnowledgeService:
         grouped: dict[int, list[UserLexemeKnowledge]] = defaultdict(list)
         if not terminal_ids:
             return grouped
-        for row in self.db.query(UserLexemeKnowledge).all():
-            terminal_id = self.resolve_canonical_lexeme(row.lexeme_id).id
+        rows = self.db.query(UserLexemeKnowledge).all()
+        canonical_by_source = self.resolve_canonical_lexemes(
+            (row.lexeme_id for row in rows),
+            refresh_roots=True,
+        )
+        for row in rows:
+            terminal_id = canonical_by_source[row.lexeme_id].id
             if terminal_id in terminal_ids:
                 grouped[terminal_id].append(row)
         return grouped
@@ -270,7 +326,10 @@ class UserLexemeKnowledgeService:
                 RunLexeme.analysis_run_id == run_id,
             ).distinct()
         }
-        return {self.resolve_canonical_lexeme(lexeme_id).id for lexeme_id in ids}
+        return {
+            canonical.id
+            for canonical in self.resolve_canonical_lexemes(ids, refresh_roots=True).values()
+        }
 
     def _map_legacy_mastered_rows(self, book_id: str, run_id: int) -> dict[str, Any]:
         legacy_rows = self.db.query(Vocabulary).filter(
@@ -319,7 +378,10 @@ class UserLexemeKnowledgeService:
                     matching_ids.append(lexeme_id)
 
             if len(matching_ids) == 1:
-                known_ids.add(self.resolve_canonical_lexeme(matching_ids[0]).id)
+                known_ids.update(
+                    canonical.id
+                    for canonical in self.resolve_canonical_lexemes(matching_ids).values()
+                )
                 mapped_count += 1
             else:
                 unmapped_count += 1
@@ -344,11 +406,19 @@ class UserLexemeKnowledgeService:
             "updated_count": 0,
             "preserved_manual_count": 0,
         }
-        for lexeme_id in sorted(lexeme_ids):
-            row = self.db.query(UserLexemeKnowledge).filter(
-                UserLexemeKnowledge.lexeme_id == lexeme_id,
+        if not lexeme_ids:
+            return result
+
+        legacy_rows = {
+            row.lexeme_id: row
+            for row in self.db.query(UserLexemeKnowledge).filter(
+                UserLexemeKnowledge.lexeme_id.in_(lexeme_ids),
                 UserLexemeKnowledge.source == LEGACY_SOURCE,
-            ).one_or_none()
+            ).all()
+        }
+        rows_by_terminal_id = self._knowledge_rows_by_terminal_id(lexeme_ids)
+        for lexeme_id in sorted(lexeme_ids):
+            row = legacy_rows.get(lexeme_id)
             if row is None:
                 self.db.add(UserLexemeKnowledge(
                     lexeme_id=lexeme_id,
@@ -361,7 +431,7 @@ class UserLexemeKnowledgeService:
                 result["updated_count"] += 1
             if any(
                 knowledge.source == MANUAL_SOURCE
-                for knowledge in self._knowledge_rows_by_terminal_id({lexeme_id})[lexeme_id]
+                for knowledge in rows_by_terminal_id[lexeme_id]
             ):
                 result["preserved_manual_count"] += 1
         return result

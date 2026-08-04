@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -32,6 +32,13 @@ import {
   getLearningMap,
   putLexemeKnowledgeStatus,
 } from '@/services/learning-map.service';
+import {
+  decrementPendingLexeme,
+  getLearningMapLexemeStatus,
+  incrementPendingLexeme,
+  isLatestLexemeMutation,
+  updateLearningMapLexemeStatus,
+} from '@/services/learning-map-cache';
 import type {
   LexemeKnowledgeStatus,
   LearningMapChapter,
@@ -748,6 +755,12 @@ const PriorityWordsSection: React.FC<{
 }> = ({ bookId, map }) => {
   const queryClient = useQueryClient();
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
+  const [pendingLexemeIds, setPendingLexemeIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const pendingLexemeCountsRef = useRef<Map<number, number>>(new Map());
+  const latestMutationIdsRef = useRef<Map<number, number>>(new Map());
+  const nextMutationIdRef = useRef(0);
   const baselineReady = map.knowledge_baseline_status === 'ready';
 
   // 基线已建立时展示 recommended_lexemes；未建立时展示 manageable_lexemes 用于手动建基线
@@ -758,25 +771,138 @@ const PriorityWordsSection: React.FC<{
   interface StatusMutationVariables {
     lexemeId: number;
     status: LexemeKnowledgeStatus | null;
+    requestId: number;
   }
 
-  const statusMutation = useMutation({
+  interface StatusMutationContext {
+    lexemeId: number;
+    previousStatus?: LexemeKnowledgeStatus | null;
+    requestId: number;
+  }
+
+  const addPendingLexeme = (lexemeId: number) => {
+    pendingLexemeCountsRef.current = incrementPendingLexeme(
+      pendingLexemeCountsRef.current,
+      lexemeId,
+    );
+    setPendingLexemeIds(new Set(pendingLexemeCountsRef.current.keys()));
+  };
+
+  const removePendingLexeme = (lexemeId: number) => {
+    pendingLexemeCountsRef.current = decrementPendingLexeme(
+      pendingLexemeCountsRef.current,
+      lexemeId,
+    );
+    setPendingLexemeIds(new Set(pendingLexemeCountsRef.current.keys()));
+  };
+
+  const statusMutation = useMutation<
+    Awaited<ReturnType<typeof putLexemeKnowledgeStatus>>,
+    Error,
+    StatusMutationVariables,
+    StatusMutationContext
+  >({
     mutationFn: ({ lexemeId, status }: StatusMutationVariables) =>
       status === null
         ? deleteLexemeKnowledgeStatus(lexemeId)
         : putLexemeKnowledgeStatus(lexemeId, status),
-    onMutate: () => {
-      setStatusFeedback(null);
-    },
-    onSuccess: async (response) => {
-      setStatusFeedback(response.message || '词汇状态已更新。');
-      await queryClient.invalidateQueries({
+    onMutate: async ({ lexemeId, status, requestId }) => {
+      await queryClient.cancelQueries({
         queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
         exact: true,
       });
+      const previousMap = queryClient.getQueryData<LearningMapResponse>([
+        LEARNING_MAP_QUERY_KEY,
+        bookId,
+      ]);
+      const previousStatus = previousMap
+        ? getLearningMapLexemeStatus(previousMap, lexemeId)
+        : undefined;
+      if (previousMap) {
+        queryClient.setQueryData<LearningMapResponse>(
+          [LEARNING_MAP_QUERY_KEY, bookId],
+          updateLearningMapLexemeStatus(previousMap, lexemeId, status),
+        );
+      }
+      setStatusFeedback('正在提交...');
+      if (import.meta.env.DEV) {
+        console.debug('learning_map phase=optimistic_status_feedback');
+      }
+      return { lexemeId, previousStatus, requestId };
+    },
+    onError: (error, _variables, context) => {
+      const currentMap = queryClient.getQueryData<LearningMapResponse>([
+        LEARNING_MAP_QUERY_KEY,
+        bookId,
+      ]);
+      const isLatestRequest =
+        context &&
+        isLatestLexemeMutation(
+          latestMutationIdsRef.current,
+          context.lexemeId,
+          context.requestId,
+        );
+      if (
+        currentMap &&
+        isLatestRequest &&
+        context.previousStatus !== undefined
+      ) {
+        queryClient.setQueryData<LearningMapResponse>(
+          [LEARNING_MAP_QUERY_KEY, bookId],
+          updateLearningMapLexemeStatus(
+            currentMap,
+            context.lexemeId,
+            context.previousStatus,
+          ),
+        );
+      }
+      if (isLatestRequest || !context) {
+        setStatusFeedback(`状态更新失败：${getErrorMessage(error)}`);
+        void queryClient.invalidateQueries({
+          queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
+          exact: true,
+        });
+      }
+    },
+    onSuccess: (_response, variables) => {
+      if (
+        isLatestLexemeMutation(
+          latestMutationIdsRef.current,
+          variables.lexemeId,
+          variables.requestId,
+        )
+      ) {
+        setStatusFeedback('词汇状态已更新，统计正在后台同步。');
+        void queryClient.invalidateQueries({
+          queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
+          exact: true,
+        });
+      }
+    },
+    onSettled: (_data, _error, variables) => {
+      removePendingLexeme(variables.lexemeId);
+      if (
+        isLatestLexemeMutation(
+          latestMutationIdsRef.current,
+          variables.lexemeId,
+          variables.requestId,
+        )
+      ) {
+        latestMutationIdsRef.current.delete(variables.lexemeId);
+      }
     },
   });
-  const pendingLexemeId = statusMutation.isPending ? statusMutation.variables?.lexemeId : null;
+
+  const handleStatusChange = (
+    lexemeId: number,
+    status: LexemeKnowledgeStatus | null,
+  ) => {
+    const requestId = nextMutationIdRef.current;
+    nextMutationIdRef.current += 1;
+    latestMutationIdsRef.current.set(lexemeId, requestId);
+    addPendingLexeme(lexemeId);
+    statusMutation.mutate({ lexemeId, status, requestId });
+  };
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -816,12 +942,9 @@ const PriorityWordsSection: React.FC<{
               <RecommendationRow
                 key={lexeme.lexeme_id}
                 lexeme={lexeme}
-                isPending={pendingLexemeId === lexeme.lexeme_id}
+                isPending={pendingLexemeIds.has(lexeme.lexeme_id)}
                 onStatusChange={(status) =>
-                  statusMutation.mutate({
-                    lexemeId: lexeme.lexeme_id,
-                    status,
-                  })
+                  handleStatusChange(lexeme.lexeme_id, status)
                 }
               />
             ))}
