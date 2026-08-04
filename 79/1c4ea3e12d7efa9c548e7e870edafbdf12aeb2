@@ -1,0 +1,46 @@
+backend/tests/test_database_migrations.py
+  s_8008a9d8571153::t_bfffc268bf7be2 25-26,74
+  s_ddb9e268c18c3b::t_b7300a5e42df52 240-244,252,254-256
+  s_8008a9d8571153::t_18f5aff365dadc 174,178
+  s_8008a9d8571153::t_8b3e3e6aab080b 197
+  s_ddb9e268c18c3b::t_7405f77bbbd9e7 200-239,245-251,253,257-293
+  s_8008a9d8571153::t_12f61b40ae72a6 99
+  s_8008a9d8571153::t_010216b851e78c 163-173,175-177,179-196,198-199
+backend/app/database.py
+  s_8008a9d8571153::t_e432f84b4bd825 29
+  s_ddb9e268c18c3b::t_7405f77bbbd9e7 185-235
+  s_8008a9d8571153::t_495ab0eea84802 4-5,30-37,67-91
+backend/dev_docs/READING_PROGRESS_CONTRACT.md
+  s_8008a9d8571153::t_e432f84b4bd825 167-168,231
+  s_ddb9e268c18c3b::t_7405f77bbbd9e7 279-281
+  s_ddb9e268c18c3b::t_5a3ed7bb7714c8 1-2,5,7,9,12,14,17,19,21,23,25,30,94-101,103,226
+  s_ddb9e268c18c3b::t_5e237fb5e81b2a 3-4,6,8,10-11,13,15-16,18,20,22,24,26-29,31-93,102,104-166,169-225,227-230,232-278,282-330
+backend/README.md
+  s_ddb9e268c18c3b::t_7b49f73a674d0d 244-246
+  s_ddb9e268c18c3b::t_5a3ed7bb7714c8 55-56,239-240,247,304-306,311-312
+  s_ddb9e268c18c3b::t_7405f77bbbd9e7 248-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "791c4ea3e12d7efa9c548e7e870edafbdf12aeb2",
+  "prompts": {},
+  "sessions": {
+    "s_8008a9d8571153": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcbfb-cafd-7760-acae-3fdc3d2e714d",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_ddb9e268c18c3b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcbd1-d0ea-76a0-b0d4-3a3cfae53c46",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
