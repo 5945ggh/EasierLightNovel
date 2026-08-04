@@ -22,8 +22,8 @@ def test_apply_sqlite_additive_migrations_adds_missing_columns(tmp_path):
 
     applied_count = apply_sqlite_additive_migrations(engine)
 
-    # One new additive table plus the five legacy columns.
-    assert applied_count == 6
+    # Two additive tables plus the five legacy columns.
+    assert applied_count == 7
 
     with engine.begin() as conn:
         book_columns = {
@@ -71,6 +71,7 @@ def test_legacy_database_gets_source_tables_and_explicit_legacy_status(tmp_path)
         "lexeme_occurrences",
         "chapter_lexeme_stats",
         "reader_lookup_events",
+        "chapter_progress",
     }.issubset(tables)
 
 
@@ -95,7 +96,7 @@ def test_legacy_phase_two_run_lexemes_get_learning_target_column(tmp_path):
     assert "excluded_from_learning_target" in columns
     assert SQLITE_ADDITIVE_MIGRATIONS["run_lexemes"]["excluded_from_learning_target"]
     # The lookup-event table is created alongside the legacy column.
-    assert applied_count == 2
+    assert applied_count == 3
 
 
 def test_full_phase_two_run_lexeme_schema_remains_orm_readable_after_migration(tmp_path):
@@ -159,3 +160,134 @@ def test_full_phase_two_run_lexeme_schema_remains_orm_readable_after_migration(t
     assert row is not None
     assert row.excluded_from_learning_target is False
     session.close()
+
+
+def test_chapter_progress_migration_is_repeatable_and_preserves_rows(tmp_path):
+    db_path = tmp_path / "legacy-chapter-progress.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE books (id VARCHAR(32) PRIMARY KEY, title VARCHAR(255) NOT NULL)"))
+        conn.execute(text(
+            "CREATE TABLE chapters ("
+            "id INTEGER PRIMARY KEY, book_id VARCHAR(32) NOT NULL, "
+            '"index" INTEGER NOT NULL, title VARCHAR(255), content_json JSON NOT NULL)'
+        ))
+        conn.execute(text("INSERT INTO books (id, title) VALUES ('migration-book', 'Migration')"))
+        conn.execute(text(
+            'INSERT INTO chapters (id, book_id, "index", title, content_json) '
+            "VALUES (10, 'migration-book', 0, 'First', '[]')"
+        ))
+
+    first_count = apply_sqlite_additive_migrations(engine)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO chapter_progress "
+            "(book_id, chapter_id, chapter_index, current_segment_index, progress_percentage, state) "
+            "VALUES ('migration-book', 10, 0, 4, 12.5, 'in_progress')"
+        ))
+
+    second_count = apply_sqlite_additive_migrations(engine)
+    with engine.begin() as conn:
+        row = conn.execute(text(
+            "SELECT chapter_index, current_segment_index, progress_percentage "
+            "FROM chapter_progress WHERE book_id = 'migration-book'"
+        )).one()
+
+    assert first_count == 6
+    assert second_count == 0
+    assert tuple(row) == (0, 4, 12.5)
+
+
+def test_legacy_book_progress_backfills_current_chapter_checkpoint(tmp_path):
+    db_path = tmp_path / "legacy-progress-backfill.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE books (id VARCHAR(32) PRIMARY KEY, title VARCHAR(255) NOT NULL)"))
+        conn.execute(text(
+            "CREATE TABLE chapters ("
+            "id INTEGER PRIMARY KEY, book_id VARCHAR(32) NOT NULL, "
+            '"index" INTEGER NOT NULL, title VARCHAR(255), content_json JSON NOT NULL)'
+        ))
+        conn.execute(text(
+            "CREATE TABLE user_progress ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, book_id VARCHAR(32) UNIQUE, "
+            "current_chapter_index INTEGER DEFAULT 0, current_segment_index INTEGER DEFAULT 0, "
+            "progress_percentage FLOAT DEFAULT 0.0, updated_at DATETIME)"
+        ))
+        conn.execute(text("INSERT INTO books (id, title) VALUES ('legacy-book', 'Legacy')"))
+        conn.execute(text(
+            'INSERT INTO chapters (id, book_id, "index", title, content_json) '
+            "VALUES (21, 'legacy-book', 0, 'First', '[]'), "
+            "(22, 'legacy-book', 1, 'Second', '[]')"
+        ))
+        conn.execute(text(
+            "INSERT INTO user_progress "
+            "(book_id, current_chapter_index, current_segment_index, progress_percentage, updated_at) "
+            "VALUES ('legacy-book', 1, 7, 42.5, '2026-01-01 12:00:00')"
+        ))
+
+    first_count = apply_sqlite_additive_migrations(engine)
+    with engine.begin() as conn:
+        row = conn.execute(text(
+            "SELECT book_id, chapter_id, chapter_index, current_segment_index, "
+            "progress_percentage, state FROM chapter_progress"
+        )).one()
+
+    assert tuple(row) == ('legacy-book', 22, 1, 7, 42.5, 'in_progress')
+
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM chapter_progress WHERE book_id = 'legacy-book'"))
+
+    # The table already exists at this point; the data backfill must still run
+    # on a later application startup.
+    second_count = apply_sqlite_additive_migrations(engine)
+    with engine.begin() as conn:
+        count = conn.execute(text(
+            "SELECT COUNT(*) FROM chapter_progress WHERE book_id = 'legacy-book'"
+        )).scalar_one()
+
+    assert first_count == 7
+    assert second_count == 1
+    assert count == 1
+
+    third_count = apply_sqlite_additive_migrations(engine)
+    assert third_count == 0
+
+
+def test_legacy_zero_progress_does_not_create_checkpoint(tmp_path):
+    db_path = tmp_path / "legacy-zero-progress.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE books (id VARCHAR(32) PRIMARY KEY, title VARCHAR(255) NOT NULL)"))
+        conn.execute(text(
+            "CREATE TABLE chapters ("
+            "id INTEGER PRIMARY KEY, book_id VARCHAR(32) NOT NULL, "
+            '"index" INTEGER NOT NULL, title VARCHAR(255), content_json JSON NOT NULL)'
+        ))
+        conn.execute(text(
+            "CREATE TABLE user_progress ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, book_id VARCHAR(32) UNIQUE, "
+            "current_chapter_index INTEGER DEFAULT 0, current_segment_index INTEGER DEFAULT 0, "
+            "progress_percentage FLOAT DEFAULT 0.0, updated_at DATETIME)"
+        ))
+        conn.execute(text("INSERT INTO books (id, title) VALUES ('zero-book', 'Zero')"))
+        conn.execute(text(
+            'INSERT INTO chapters (id, book_id, "index", title, content_json) '
+            "VALUES (31, 'zero-book', 0, 'First', '[]')"
+        ))
+        conn.execute(text(
+            "INSERT INTO user_progress "
+            "(book_id, current_chapter_index, current_segment_index, progress_percentage) "
+            "VALUES ('zero-book', 0, 0, 0.0)"
+        ))
+
+    apply_sqlite_additive_migrations(engine)
+    with engine.begin() as conn:
+        count = conn.execute(text(
+            "SELECT COUNT(*) FROM chapter_progress WHERE book_id = 'zero-book'"
+        )).scalar_one()
+
+    assert count == 0

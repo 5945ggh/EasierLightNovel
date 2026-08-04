@@ -1,7 +1,8 @@
 # database.py
 import os
 import logging
-from sqlalchemy import create_engine, text
+import sqlite3
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 from app.models import Base
@@ -23,6 +24,15 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 logger = logging.getLogger(__name__)
+
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+    """SQLite disables foreign keys by default; enable cascades for app connections."""
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 SQLITE_ADDITIVE_MIGRATIONS: dict[str, dict[str, str]] = {
@@ -54,6 +64,31 @@ SQLITE_ADDITIVE_MIGRATIONS: dict[str, dict[str, str]] = {
 
 
 SQLITE_ADDITIVE_TABLE_MIGRATIONS: dict[str, tuple[str, ...]] = {
+    "chapter_progress": (
+        """
+        CREATE TABLE IF NOT EXISTS chapter_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id VARCHAR(32) NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+            chapter_id INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+            chapter_index INTEGER NOT NULL,
+            current_segment_index INTEGER NOT NULL DEFAULT 0,
+            progress_percentage FLOAT NOT NULL DEFAULT 0.0,
+            state VARCHAR(16) NOT NULL DEFAULT 'in_progress',
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT ck_chapter_progress_segment_nonnegative
+                CHECK (current_segment_index >= 0),
+            CONSTRAINT ck_chapter_progress_percentage_range
+                CHECK (progress_percentage >= 0 AND progress_percentage <= 100),
+            CONSTRAINT ck_chapter_progress_state
+                CHECK (state IN ('in_progress', 'completed')),
+            CONSTRAINT uq_chapter_progress_book_chapter
+                UNIQUE (book_id, chapter_id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_chapter_progress_book_id ON chapter_progress(book_id)",
+        "CREATE INDEX IF NOT EXISTS ix_chapter_progress_chapter_id ON chapter_progress(chapter_id)",
+        "CREATE INDEX IF NOT EXISTS ix_chapter_progress_chapter_index ON chapter_progress(chapter_index)",
+    ),
     # Base.metadata.create_all handles new databases. This explicit CREATE is
     # also needed by upgrade tests and by existing SQLite files initialized
     # before the Phase 5 model was present.
@@ -146,6 +181,57 @@ def apply_sqlite_additive_migrations(target_engine: Engine) -> int:
                 )
                 conn.execute(text(statement))
                 applied_count += 1
+
+        # Legacy versions stored only one book-level resume cursor. Preserve
+        # that cursor in the new chapter view when it contains an actual
+        # reading position. This is intentionally idempotent and excludes
+        # untouched 0% cursors, so migration does not manufacture checkpoints
+        # for every historical chapter.
+        if all(
+            conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name = :table_name"),
+                {"table_name": table_name},
+            ).fetchone()
+            for table_name in ("user_progress", "chapters", "chapter_progress")
+        ):
+            backfilled = conn.execute(
+                text(
+                    """
+                    INSERT INTO chapter_progress (
+                        book_id,
+                        chapter_id,
+                        chapter_index,
+                        current_segment_index,
+                        progress_percentage,
+                        state,
+                        updated_at
+                    )
+                    SELECT
+                        progress.book_id,
+                        chapter.id,
+                        chapter."index",
+                        COALESCE(progress.current_segment_index, 0),
+                        COALESCE(progress.progress_percentage, 0.0),
+                        'in_progress',
+                        COALESCE(progress.updated_at, CURRENT_TIMESTAMP)
+                    FROM user_progress AS progress
+                    JOIN chapters AS chapter
+                      ON chapter.book_id = progress.book_id
+                     AND chapter."index" = progress.current_chapter_index
+                    WHERE (
+                        COALESCE(progress.current_segment_index, 0) > 0
+                        OR COALESCE(progress.progress_percentage, 0.0) > 0
+                    )
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM chapter_progress AS checkpoint
+                        WHERE checkpoint.book_id = progress.book_id
+                          AND checkpoint.chapter_id = chapter.id
+                    )
+                    """
+                )
+            )
+            applied_count += max(backfilled.rowcount or 0, 0)
 
     return applied_count
 
