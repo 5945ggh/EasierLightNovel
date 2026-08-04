@@ -1,10 +1,12 @@
 # app/services/progress_service.py
 import logging
-from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from datetime import datetime, timezone
 
-from app.models import UserProgress, Book
-from app.schemas import UserProgressUpdate
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.models import Book, Chapter, ChapterProgress, UserProgress
+from app.schemas import ChapterProgressUpdate, UserProgressUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -13,103 +15,142 @@ class ProgressService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_progress(self, book_id: str) -> UserProgress:
-        """
-        获取书籍的阅读进度
+    @staticmethod
+    def _now() -> datetime:
+        """Use a client-independent timestamp with sub-second precision."""
+        return datetime.now(timezone.utc)
 
-        如果没有进度记录，创建并返回默认进度（全为 0）
-
-        Args:
-            book_id: 书籍 ID
-
-        Returns:
-            UserProgress: 进度记录
-
-        Raises:
-            HTTPException(404): 书籍不存在
-        """
-        # 1. 验证书籍存在
+    def _get_book_or_404(self, book_id: str) -> Book:
         book = self.db.query(Book).filter(Book.id == book_id).first()
         if not book:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Book not found"
+                detail="Book not found",
             )
+        return book
 
-        # 2. 查找现有进度
-        progress = self.db.query(UserProgress).filter(
-            UserProgress.book_id == book_id
+    def _get_chapter_or_404(self, book_id: str, chapter_index: int) -> Chapter:
+        chapter = self.db.query(Chapter).filter(
+            Chapter.book_id == book_id,
+            Chapter.index == chapter_index,
         ).first()
-
-        # 3. 如果不存在，创建默认进度
-        if not progress:
-            progress = UserProgress(
-                book_id=book_id,
-                current_chapter_index=0,
-                current_segment_index=0,
-                progress_percentage=0.0
+        if not chapter:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Chapter {chapter_index} not found in book {book_id}",
             )
-            self.db.add(progress)
-            self.db.commit()
-            self.db.refresh(progress)
-            logger.info(f"Created default progress for book: {book_id}")
+        return chapter
 
-        return progress
+    def get_progress(self, book_id: str) -> UserProgress:
+        """Return the book cursor without creating a default database row."""
+        self._get_book_or_404(book_id)
+        progress = self.db.query(UserProgress).filter(
+            UserProgress.book_id == book_id,
+        ).first()
+        if progress is not None:
+            return progress
+
+        # FastAPI's response model can serialize this transient object. It is
+        # intentionally never added to the session, so GET remains read-only.
+        return UserProgress(
+            book_id=book_id,
+            current_chapter_index=0,
+            current_segment_index=0,
+            progress_percentage=0.0,
+        )
+
+    def _upsert_chapter_progress(
+        self,
+        book_id: str,
+        chapter: Chapter,
+        data: ChapterProgressUpdate,
+        timestamp: datetime,
+    ) -> ChapterProgress:
+        checkpoint = self.db.query(ChapterProgress).filter(
+            ChapterProgress.book_id == book_id,
+            ChapterProgress.chapter_id == chapter.id,
+        ).first()
+        if checkpoint is None:
+            checkpoint = ChapterProgress(
+                book_id=book_id,
+                chapter_id=chapter.id,
+            )
+            self.db.add(checkpoint)
+
+        checkpoint.chapter_index = chapter.index  # type: ignore
+        checkpoint.current_segment_index = data.current_segment_index  # type: ignore
+        checkpoint.progress_percentage = data.progress_percentage  # type: ignore
+        checkpoint.state = data.state  # type: ignore
+        checkpoint.updated_at = timestamp  # type: ignore
+        return checkpoint
 
     def update_progress(self, book_id: str, data: UserProgressUpdate) -> UserProgress:
-        """
-        更新书籍的阅读进度
+        """Atomically update the book cursor and the current chapter checkpoint."""
+        self._get_book_or_404(book_id)
+        chapter = self._get_chapter_or_404(book_id, data.current_chapter_index)
+        timestamp = self._now()
 
-        如果没有进度记录，创建新记录
-
-        Args:
-            book_id: 书籍 ID
-            data: 更新数据
-
-        Returns:
-            UserProgress: 更新后的进度记录
-
-        Raises:
-            HTTPException(404): 书籍不存在
-        """
-        # 1. 验证书籍存在
-        book = self.db.query(Book).filter(Book.id == book_id).first()
-        if not book:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Book not found"
-            )
-
-        # 2. 查找或创建进度记录
         progress = self.db.query(UserProgress).filter(
-            UserProgress.book_id == book_id
+            UserProgress.book_id == book_id,
         ).first()
-
-        if not progress:
-            # 创建新记录
+        if progress is None:
             progress = UserProgress(book_id=book_id)
             self.db.add(progress)
-            self.db.flush()  # flush 确保 progress 有 ID
-            logger.info(f"Created new progress record for book: {book_id}")
 
-        # 3. 手动更新每个字段（避免 model_dump 的潜在问题）
-        try:
-            progress.current_chapter_index = data.current_chapter_index  # type: ignore
-            progress.current_segment_index = data.current_segment_index  # type: ignore
-            progress.progress_percentage = data.progress_percentage  # type: ignore
-        except Exception as e:
-            logger.error(f"Error setting progress fields: {e}")
-            logger.error(f"data = {data.model_dump()}")
-            raise
+        progress.current_chapter_index = data.current_chapter_index  # type: ignore
+        progress.current_segment_index = data.current_segment_index  # type: ignore
+        progress.progress_percentage = data.progress_percentage  # type: ignore
+        progress.updated_at = timestamp  # type: ignore
+
+        # This is the confirmed-reading path used by the legacy PUT API. Both
+        # records are flushed and committed together.
+        self._upsert_chapter_progress(
+            book_id=book_id,
+            chapter=chapter,
+            data=ChapterProgressUpdate(
+                current_segment_index=data.current_segment_index,
+                progress_percentage=data.progress_percentage,
+                state=data.state,
+            ),
+            timestamp=timestamp,
+        )
 
         self.db.commit()
         self.db.refresh(progress)
-
         logger.debug(
-            f"Updated progress for book {book_id}: "
-            f"chapter={data.current_chapter_index}, "
-            f"segment={data.current_segment_index}, "
-            f"progress={data.progress_percentage}%"
+            "Updated book/chapter progress for %s: chapter=%s segment=%s progress=%s%%",
+            book_id,
+            data.current_chapter_index,
+            data.current_segment_index,
+            data.progress_percentage,
         )
-
         return progress
+
+    def get_chapter_progress(self, book_id: str) -> list[ChapterProgress]:
+        """Return only persisted checkpoints in current chapter order."""
+        self._get_book_or_404(book_id)
+        return self.db.query(ChapterProgress).join(
+            Chapter, Chapter.id == ChapterProgress.chapter_id,
+        ).filter(
+            ChapterProgress.book_id == book_id,
+            Chapter.book_id == book_id,
+        ).order_by(Chapter.index.asc(), ChapterProgress.id.asc()).all()
+
+    def update_chapter_progress(
+        self,
+        book_id: str,
+        chapter_index: int,
+        data: ChapterProgressUpdate,
+    ) -> ChapterProgress:
+        """Upsert one checkpoint without changing UserProgress."""
+        self._get_book_or_404(book_id)
+        chapter = self._get_chapter_or_404(book_id, chapter_index)
+        checkpoint = self._upsert_chapter_progress(
+            book_id=book_id,
+            chapter=chapter,
+            data=data,
+            timestamp=self._now(),
+        )
+        self.db.commit()
+        self.db.refresh(checkpoint)
+        return checkpoint

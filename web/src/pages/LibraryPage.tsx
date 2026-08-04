@@ -240,9 +240,7 @@ export const LibraryPage: React.FC = () => {
       {/* 头部 */}
       <header className='max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
         <div className='flex items-center gap-3'>
-          <div className='p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl text-white shadow-lg shadow-blue-200'>
-            <LibraryIcon size={24} />
-          </div>
+          <LibraryIcon size={32} className='text-blue-600 shrink-0' />
           <div>
             <h1 className='text-2xl font-bold text-gray-800 tracking-tight'>我的书架</h1>
             {books.length > 0 && (
@@ -255,22 +253,22 @@ export const LibraryPage: React.FC = () => {
         </div>
 
         {/* 右侧按钮组 */}
-        <div className='flex items-center gap-3'>
+        <div className='flex items-center gap-2.5'>
           {/* 系统设置入口 */}
           <Link
             to='/settings'
-            className='flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm'
+            className='group flex items-center gap-2 px-3.5 py-2 bg-white/80 hover:bg-white text-gray-700 border border-gray-200/70 hover:border-gray-300 rounded-xl transition-all shadow-xs hover:shadow-sm font-medium text-sm'
           >
-            <Settings size={18} className='text-slate-600' />
+            <Settings size={17} className='text-gray-500 group-hover:text-gray-700 transition-colors' />
             <span>系统设置</span>
           </Link>
 
           {/* 学习中心入口 */}
           <Link
             to='/study'
-            className='flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm'
+            className='group flex items-center gap-2 px-3.5 py-2 bg-white/80 hover:bg-white text-gray-700 border border-gray-200/70 hover:border-gray-300 rounded-xl transition-all shadow-xs hover:shadow-sm font-medium text-sm'
           >
-            <BrainCircuit size={18} className='text-indigo-500' />
+            <BrainCircuit size={17} className='text-gray-500 group-hover:text-gray-700 transition-colors' />
             <span>学习中心</span>
           </Link>
 
@@ -286,16 +284,16 @@ export const LibraryPage: React.FC = () => {
             <button
               disabled={isUploading}
               onClick={() => fileInputRef.current?.click()}
-              className='flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed font-medium text-sm'
+              className='flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl transition-all shadow-sm hover:shadow shadow-blue-500/20 disabled:opacity-60 disabled:cursor-not-allowed font-medium text-sm'
             >
               {isUploading ? (
                 <>
-                  <Loader2 size={18} className='animate-spin' />
+                  <Loader2 size={17} className='animate-spin' />
                   <span>上传中...</span>
                 </>
               ) : (
                 <>
-                  <Plus size={18} />
+                  <Plus size={17} />
                   <span>导入书籍</span>
                 </>
               )}

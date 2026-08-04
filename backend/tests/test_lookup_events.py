@@ -545,7 +545,7 @@ def test_additive_lookup_table_migration_is_idempotent(tmp_path):
     second = apply_sqlite_additive_migrations(engine)
 
     # The legacy books table also receives its four existing additive columns.
-    assert first == 5
+    assert first == 6
     assert second == 0
     with engine.begin() as conn:
         columns = {

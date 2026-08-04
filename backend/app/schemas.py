@@ -539,6 +539,7 @@ class UserProgressBase(BaseModel):
 
 class UserProgressUpdate(UserProgressBase):
     """更新阅读进度请求"""
+    state: Literal["in_progress", "completed"] = Field(default="in_progress")
     pass  # 继承了 UserProgressBase
 
 class UserProgressResponse(UserProgressBase):
@@ -548,6 +549,25 @@ class UserProgressResponse(UserProgressBase):
 
     class Config:
         from_attributes = True
+
+class ChapterProgressUpdate(BaseModel):
+    """章节检查点更新；不会隐式移动书籍级恢复点。"""
+    current_segment_index: int = Field(default=0, ge=0, description="当前章节内的段落索引")
+    progress_percentage: float = Field(default=0.0, ge=0.0, le=100.0, description="章节内滚动百分比")
+    state: Literal["in_progress", "completed"] = Field(default="in_progress")
+
+
+class ChapterProgressResponse(ChapterProgressUpdate):
+    """章节检查点响应。"""
+    id: int
+    book_id: str
+    chapter_id: int
+    chapter_index: int
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 
 # ==================== AI/Analysis 相关 ====================
 

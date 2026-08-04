@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { ReaderPage } from '@/pages/ReaderPage';
+import { BookHomePage } from '@/pages/BookHomePage';
 import StudyPage from '@/pages/StudyPage';
 import SettingsPage from '@/pages/SettingsPage';
 import LearningMapPage from '@/pages/LearningMapPage';
@@ -71,6 +72,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<LibraryPage />} />
+            <Route path="/book/:bookId" element={<BookHomePage />} />
             <Route path="/study" element={<StudyPage />} />
             <Route path="/study/map/:bookId" element={<LearningMapPage />} />
             <Route path="/settings" element={<SettingsPage />} />

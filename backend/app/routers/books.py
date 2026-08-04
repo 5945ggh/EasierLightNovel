@@ -16,6 +16,7 @@ from app.schemas import (
     ChapterListItem, ChapterResponse, ChapterHighlightData,
     VocabularyBaseFormsResponse,
     UserProgressResponse, UserProgressUpdate,
+    ChapterProgressResponse, ChapterProgressUpdate,
     HighlightResponse
 )
 from app.services.book_service import BookService
@@ -234,6 +235,29 @@ def get_vocabularies_base_forms(
 
 
 # ================= 阅读进度接口 =================
+@router.get("/{book_id}/progress/chapters", response_model=List[ChapterProgressResponse])
+def get_chapter_reading_progress(
+    book_id: str,
+    progress_service: ProgressService = Depends(get_progress_service),
+):
+    """获取已保存的章节检查点，不加载正文，也不创建空记录。"""
+    return progress_service.get_chapter_progress(book_id)
+
+
+@router.put(
+    "/{book_id}/progress/chapters/{chapter_index}",
+    response_model=ChapterProgressResponse,
+)
+def update_chapter_reading_progress(
+    book_id: str,
+    chapter_index: int,
+    data: ChapterProgressUpdate,
+    progress_service: ProgressService = Depends(get_progress_service),
+):
+    """只写指定章节检查点，不改变书籍级继续阅读位置。"""
+    return progress_service.update_chapter_progress(book_id, chapter_index, data)
+
+
 @router.get("/{book_id}/progress", response_model=UserProgressResponse)
 def get_reading_progress(
     book_id: str,

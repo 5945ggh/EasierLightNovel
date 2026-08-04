@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Home, List, Settings, X, BookOpen, Sparkles, Bookmark, Highlighter, Map as MapIcon } from 'lucide-react';
+import { Home, ArrowLeft, List, Settings, X, BookOpen, Sparkles, Bookmark, Highlighter, Map as MapIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { SettingsPopover } from './SettingsPopover';
 import { useReaderStore, type SidebarTab } from '@/stores/readerStore';
@@ -85,6 +85,14 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
 
   // 使用 useCallback 稳定回调引用
   const handleNavigateHome = useCallback(() => navigate('/'), [navigate]);
+  const handleNavigateBookHome = useCallback(() => {
+    const targetBookId = routeBookId || storeBookId;
+    if (targetBookId) {
+      navigate(`/book/${targetBookId}`);
+    } else {
+      navigate('/');
+    }
+  }, [routeBookId, storeBookId, navigate]);
   const handleNavigateLearningMap = useCallback(() => {
     const targetBookId = routeBookId || storeBookId;
     if (targetBookId) navigate(`/study/map/${targetBookId}`);
@@ -117,7 +125,8 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
       {/* 桌面端：左侧固定导航栏 */}
       <aside className="hidden md:flex h-screen w-16 flex-shrink-0 flex-col items-center py-6 z-40 select-none border-r border-gray-200 dark:border-gray-700 bg-stone-50 dark:bg-gray-900">
         {/* 顶部导航 */}
-        <div className="space-y-4 flex flex-col items-center">
+        <div className="space-y-3 flex flex-col items-center">
+          <DockButton icon={ArrowLeft} label="返回书籍主页" onClick={handleNavigateBookHome} />
           <DockButton icon={Home} label="返回书架" onClick={handleNavigateHome} />
         </div>
 

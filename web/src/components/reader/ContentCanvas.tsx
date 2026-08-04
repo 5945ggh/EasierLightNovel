@@ -14,10 +14,11 @@ import { useNavigate } from 'react-router-dom';
 import { useReaderStore } from '@/stores/readerStore';
 import { updateReadingProgress } from '@/services/books.service';
 import { SegmentRenderer } from './SegmentRenderer';
-import { ChevronLeft, ChevronRight, Home, Settings, List } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, ArrowLeft, Settings, List } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useScrollProgress } from '@/hooks/useScrollProgress';
 import { saveReadingProgressSnapshot } from '@/utils/readingProgress';
+import type { ReadingProgressState } from '@/utils/readingProgress';
 
 interface ContentCanvasProps {
   // 滚动容器的 ref（从 ReaderPage 传入）
@@ -59,6 +60,9 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   const observerRef = useRef<IntersectionObserver | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const hasConfirmedReadingRef = useRef(false);
+  const segmentSaveTimeoutRef = useRef<number | null>(null);
+  const lastSavedSegmentRef = useRef(currentSegmentIndex);
 
   // 当前缓存的滚动百分比（用于保存进度）
   const cachedPercentageRef = useRef(initialPercentage);
@@ -69,7 +73,10 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   }, [initialPercentage]);
 
   // 保存进度的核心函数（带 localStorage 降级）
-  const saveProgress = useCallback((percentage: number): Promise<void> => {
+  const saveProgress = useCallback((
+    percentage: number,
+    state: ReadingProgressState = 'in_progress'
+  ): Promise<void> => {
     if (!bookId || !chapter || currentSegmentIndex < 0) {
       return Promise.resolve();
     }
@@ -82,14 +89,17 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       current_chapter_index: chapter.index,
       current_segment_index: currentSegmentIndex,
       progress_percentage: percentageForBackend,
+      state,
     };
 
     saveReadingProgressSnapshot(bookId, {
       chapterIndex: chapter.index,
       segmentIndex: currentSegmentIndex,
       percentage,
+      state,
       timestamp: Date.now(),
     });
+    lastSavedSegmentRef.current = currentSegmentIndex;
 
     return updateReadingProgress(bookId, payload)
       .then(() => {
@@ -105,6 +115,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   useScrollProgress(
     scrollContainerRef,
     (percentage) => {
+      hasConfirmedReadingRef.current = true;
       cachedPercentageRef.current = percentage;
       saveProgress(percentage);
     },
@@ -124,7 +135,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   }, [saveProgress, onPrevChapter]);
 
   const handleNextChapter = useCallback(() => {
-    saveProgress(cachedPercentageRef.current).then(() => {
+    saveProgress(cachedPercentageRef.current, 'completed').then(() => {
       onNextChapter?.();
     });
   }, [saveProgress, onNextChapter]);
@@ -168,30 +179,41 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     };
   }, [chapter, bookId, currentSegmentIndex, scrollContainerRef, setCurrentSegmentIndex]);
 
-  // 2. 组件卸载时保存进度（带 localStorage 降级）
+  // 段落索引也属于可恢复坐标；只有确认发生过滚动后才防抖保存，
+  // 避免 IntersectionObserver 的首次布局事件生成 0% 检查点。
   useEffect(() => {
+    if (
+      !chapter ||
+      currentSegmentIndex < 0 ||
+      !hasConfirmedReadingRef.current ||
+      currentSegmentIndex === lastSavedSegmentRef.current
+    ) {
+      return;
+    }
+
+    if (segmentSaveTimeoutRef.current) {
+      window.clearTimeout(segmentSaveTimeoutRef.current);
+    }
+
+    segmentSaveTimeoutRef.current = window.setTimeout(() => {
+      void saveProgress(cachedPercentageRef.current);
+    }, 1000);
+
     return () => {
-      // 组件卸载时保存当前阅读进度
-      if (bookId && chapter && currentSegmentIndex >= 0) {
-        const percentage = cachedPercentageRef.current;
-        const percentageForBackend = Math.round(percentage * 1000) / 10;
-
-        saveReadingProgressSnapshot(bookId, {
-          chapterIndex: chapter.index,
-          segmentIndex: currentSegmentIndex,
-          percentage,
-          timestamp: Date.now(),
-        });
-
-        updateReadingProgress(bookId, {
-          current_chapter_index: chapter.index,
-          current_segment_index: currentSegmentIndex,
-          progress_percentage: percentageForBackend,
-        })
-          .catch(() => undefined);
+      if (segmentSaveTimeoutRef.current) {
+        window.clearTimeout(segmentSaveTimeoutRef.current);
+        segmentSaveTimeoutRef.current = null;
       }
     };
-  }, [bookId, chapter, currentSegmentIndex]);
+  }, [chapter, currentSegmentIndex, saveProgress]);
+
+  useEffect(() => {
+    return () => {
+      if (segmentSaveTimeoutRef.current) {
+        window.clearTimeout(segmentSaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!chapter) {
     return null;
@@ -221,6 +243,17 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
         <div className="sticky top-0 z-10 -mx-6 px-4 md:-mx-12 md:px-12 py-3 bg-stone-50/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm safe-area-top">
           {/* 移动端：左侧按钮组（返回、目录） */}
           <div className="flex md:hidden items-center gap-1">
+            <button
+              onClick={() => {
+                if (bookId) navigate(`/book/${bookId}`);
+                else navigate('/');
+              }}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+              aria-label="返回书籍主页"
+              title="返回书籍主页"
+            >
+              <ArrowLeft size={18} />
+            </button>
             <button
               onClick={() => navigate('/')}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"

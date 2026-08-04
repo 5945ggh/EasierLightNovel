@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Home, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -14,10 +14,10 @@ import {
   getChapterContent,
   getVocabulariesBaseForms,
   getReadingProgress,
+  getChapterProgresses,
   getBookDetail,
   getChapterList,
   getBookHighlights,
-  updateReadingProgress,
 } from '@/services/books.service';
 import { getBookVocabularies } from '@/services/vocabularies.service';
 import { useReaderStore } from '@/stores/readerStore';
@@ -34,13 +34,19 @@ import { ReaderSidebar } from '@/components/reader/ReaderSidebar';
 import { MobileGuide } from '@/components/reader/MobileGuide';
 import {
   isLocalSnapshotNewer,
-  loadReadingProgressSnapshot,
-  saveReadingProgressSnapshot,
+  isLocalChapterSnapshotNewer,
+  loadReadingProgressStore,
+  parseChapterQuery,
+  resolveInitialReaderPosition,
 } from '@/utils/readingProgress';
+import type { ChapterProgressResponse } from '@/types/progress';
+import type { ReadingProgressSnapshot } from '@/utils/readingProgress';
 
 export const ReaderPage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const rawQueryChapter = searchParams.get('chapter');
   const currentBookId = bookId ?? null;
 
   // 滚动容器的 ref（传递给 ContentCanvas 用于进度监听）
@@ -48,6 +54,14 @@ export const ReaderPage: React.FC = () => {
 
   // TOC 模态框状态
   const [isTocOpen, setIsTocOpen] = useState(false);
+  const [explicitChapterRequest, setExplicitChapterRequest] = useState<{
+    bookId: string | null;
+    index: number | null;
+  }>({ bookId: currentBookId, index: null });
+  const explicitChapterIndex =
+    explicitChapterRequest.bookId === currentBookId
+      ? explicitChapterRequest.index
+      : null;
   const [systemPrefersDark, setSystemPrefersDark] = useState(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches
   );
@@ -135,10 +149,21 @@ export const ReaderPage: React.FC = () => {
     retry: false,
   });
 
-  const localProgress = useMemo(
-    () => (bookId ? loadReadingProgressSnapshot(bookId) : null),
+  const {
+    data: chapterProgresses,
+    isLoading: isChapterProgressLoading,
+  } = useQuery({
+    queryKey: ['chapter-progress', bookId],
+    queryFn: () => getChapterProgresses(bookId!),
+    enabled: !!bookId,
+    retry: false,
+  });
+
+  const localStore = useMemo(
+    () => (bookId ? loadReadingProgressStore(bookId) : null),
     [bookId]
   );
+  const localProgress = localStore?.resume ?? null;
 
   const localProgressAsResponse = useMemo(
     () =>
@@ -171,24 +196,39 @@ export const ReaderPage: React.FC = () => {
     return localProgressAsResponse;
   }, [shouldPreferLocalProgress, localProgressAsResponse, progressData]);
 
-  useEffect(() => {
-    if (!bookId || !localProgress || !shouldPreferLocalProgress) {
-      return;
-    }
+  const chapterProgressByIndex = useMemo(() => {
+    const serverByIndex = new Map(
+      (chapterProgresses ?? []).map((progress) => [progress.chapter_index, progress])
+    );
+    const merged = new Map<number, ReadingProgressSnapshot | ChapterProgressResponse>();
 
-    updateReadingProgress(bookId, {
-      current_chapter_index: localProgress.chapterIndex,
-      current_segment_index: localProgress.segmentIndex,
-      progress_percentage: Math.round(localProgress.percentage * 1000) / 10,
-    }).catch((error) => {
-      console.error('[ReaderPage] Failed to resync local reading progress:', error);
+    serverByIndex.forEach((progress, chapterIndex) => {
+      merged.set(chapterIndex, progress);
     });
-  }, [bookId, localProgress, shouldPreferLocalProgress]);
+
+    Object.entries(localStore?.chapters ?? {}).forEach(([chapterIndex, localChapterProgress]) => {
+      const parsedIndex = Number(chapterIndex);
+      const serverChapterProgress = serverByIndex.get(parsedIndex);
+      if (!serverChapterProgress || isLocalChapterSnapshotNewer(localChapterProgress, serverChapterProgress)) {
+        merged.set(parsedIndex, localChapterProgress);
+      }
+    });
+
+    return merged;
+  }, [chapterProgresses, localStore]);
+
+  const parsedQueryChapter = useMemo(
+    () => parseChapterQuery(rawQueryChapter, chapterList?.map((chapter) => chapter.index) ?? []),
+    [chapterList, rawQueryChapter]
+  );
 
   // 进度数据变化时不需要额外处理，仅用于触发后续计算
   // 5. 确定初始章节索引（使用派生状态而非 effect + setState）
   const targetChapterIndex = useMemo(() => {
     if (!chapterList || chapterList.length === 0) return null;
+
+    // 优先读取 URL Query 中的 chapter 参数
+    if (parsedQueryChapter !== null) return parsedQueryChapter;
 
     // 检查进度中的章节索引是否在 TOC 中存在
     const progressIndex = persistedProgress?.current_chapter_index;
@@ -197,12 +237,21 @@ export const ReaderPage: React.FC = () => {
       chapterList.some((ch) => ch.index === progressIndex);
 
     return isValidProgressIndex ? progressIndex : chapterList[0].index;
-  }, [persistedProgress, chapterList]);
+  }, [persistedProgress, chapterList, parsedQueryChapter]);
 
   const scopedChapterIndex = storeBookId === currentBookId ? storeChapterIndex : null;
   const scopedPendingChapterIndex = storeBookId === currentBookId ? pendingChapterIndex : null;
   const currentChapterIndex =
-    scopedChapterIndex ?? scopedPendingChapterIndex ?? targetChapterIndex;
+    explicitChapterIndex ??
+    scopedPendingChapterIndex ??
+    parsedQueryChapter ??
+    scopedChapterIndex ??
+    targetChapterIndex;
+
+  const isExplicitChapterRequest =
+    explicitChapterIndex !== null || scopedPendingChapterIndex !== null;
+  const selectedChapterProgress =
+    currentChapterIndex === null ? null : chapterProgressByIndex.get(currentChapterIndex) ?? null;
 
   // 6. Query: 获取章节内容（只有当 currentChapterIndex 不为 null 时才执行）
   const {
@@ -238,27 +287,24 @@ export const ReaderPage: React.FC = () => {
     enabled: !!bookId,
   });
 
-  // 判断是否为章节切换（必须在 initialPercentage 之前计算）
-  const isChapterSwitch =
-    scopedChapterIndex !== null &&
-    targetChapterIndex !== null &&
-    scopedChapterIndex !== targetChapterIndex;
-
-  // 计算初始滚动百分比（后端返回 progress_percentage 为 0-100，转换为 0-1）
-  // 基于 targetChapterIndex 而非 currentChapterIndex，避免异步 setState 导致的时序问题
-  const initialPercentage = useMemo(() => {
-    // 章节切换时，强制从顶部开始（避免使用可能过时的进度数据）
-    if (isChapterSwitch) {
-      return 0;
-    }
-    if (!persistedProgress || targetChapterIndex === null) return 0;
-    // 只有目标章节与进度记录匹配时才使用百分比
-    if (persistedProgress.current_chapter_index === targetChapterIndex) {
-      return (persistedProgress.progress_percentage ?? 0) / 100;
-    }
-    // 进度记录的章节与目标章节不匹配，从顶部开始
-    return 0;
-  }, [persistedProgress, targetChapterIndex, isChapterSwitch]);
+  // URL 章节和目录切换只读取该章节检查点；无明确章节时才使用书籍级恢复点。
+  const initialPosition = useMemo(
+    () => resolveInitialReaderPosition({
+      targetChapterIndex,
+      isExplicitChapterRequest: parsedQueryChapter !== null || isExplicitChapterRequest,
+      selectedChapterProgress,
+      persistedProgress,
+    }),
+    [
+      isExplicitChapterRequest,
+      parsedQueryChapter,
+      persistedProgress,
+      selectedChapterProgress,
+      targetChapterIndex,
+    ]
+  );
+  const initialPercentage = initialPosition.percentage;
+  const initialSegmentIndex = initialPosition.segmentIndex;
 
   // 8. 同步数据到 Store
   useEffect(() => {
@@ -266,14 +312,9 @@ export const ReaderPage: React.FC = () => {
       // 先设置 chapterIndex，确保 setChapter 能正确过滤 allHighlights
       setChapterIndex(currentChapterIndex);
       setChapter(chapterData);
-      // 如果进度数据中的章节索引匹配，设置段落索引
-      if (persistedProgress?.current_chapter_index === currentChapterIndex) {
-        setCurrentSegmentIndex(persistedProgress.current_segment_index ?? 0);
-      } else {
-        setCurrentSegmentIndex(0);
-      }
+      setCurrentSegmentIndex(initialSegmentIndex);
     }
-  }, [chapterData, persistedProgress, currentChapterIndex, setChapter, setChapterIndex, setCurrentSegmentIndex]);
+  }, [chapterData, currentChapterIndex, initialSegmentIndex, setChapter, setChapterIndex, setCurrentSegmentIndex]);
 
   useEffect(() => {
     if (vocabBaseFormsData) {
@@ -326,30 +367,6 @@ export const ReaderPage: React.FC = () => {
     };
   }, [pendingScrollTarget, chapterData, clearPendingChapter]);
 
-  // 章节切换完成后，立即保存新章节的进度（0%）
-  // 这样即使不滚动就退出，再进入时也会回到新章节而不是旧章节
-  useEffect(() => {
-    // 只在章节真正切换（非首次加载）且章节内容已加载时触发
-    if (isChapterSwitch && chapterData && currentChapterIndex !== null && bookId) {
-      // 立即保存新章节的进度（0% 位置）
-      updateReadingProgress(bookId, {
-        current_chapter_index: currentChapterIndex,
-        current_segment_index: 0,
-        progress_percentage: 0,
-      })
-        .then(() => {/* 新章节进度已保存 */})
-        .catch((err) => {
-          console.error('[ReaderPage] Failed to save new chapter progress:', err);
-          saveReadingProgressSnapshot(bookId, {
-            chapterIndex: currentChapterIndex,
-            segmentIndex: 0,
-            percentage: 0,
-            timestamp: Date.now(),
-          });
-        });
-    }
-  }, [isChapterSwitch, chapterData, currentChapterIndex, bookId]);
-
   // 章节切换函数
   const handlePrevChapter = useCallback(() => {
     if (!chapterList || currentChapterIndex === null) return;
@@ -357,11 +374,12 @@ export const ReaderPage: React.FC = () => {
     // 找到当前章节在 TOC 中的位置
     const currentIndex = chapterList.findIndex((ch) => ch.index === currentChapterIndex);
     if (currentIndex > 0) {
-      // 切换章节时重置为从顶部开始阅读
+      const nextIndex = chapterList[currentIndex - 1].index;
+      setExplicitChapterRequest({ bookId: currentBookId, index: nextIndex });
       setCurrentSegmentIndex(0);
-      setChapterIndex(chapterList[currentIndex - 1].index);
+      setChapterIndex(nextIndex);
     }
-  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setChapterIndex]);
+  }, [chapterList, currentBookId, currentChapterIndex, setCurrentSegmentIndex, setChapterIndex]);
 
   const handleNextChapter = useCallback(() => {
     if (!chapterList || currentChapterIndex === null) return;
@@ -369,17 +387,19 @@ export const ReaderPage: React.FC = () => {
     // 找到当前章节在 TOC 中的位置
     const currentIndex = chapterList.findIndex((ch) => ch.index === currentChapterIndex);
     if (currentIndex >= 0 && currentIndex < chapterList.length - 1) {
-      // 切换章节时重置为从顶部开始阅读
+      const nextIndex = chapterList[currentIndex + 1].index;
+      setExplicitChapterRequest({ bookId: currentBookId, index: nextIndex });
       setCurrentSegmentIndex(0);
-      setChapterIndex(chapterList[currentIndex + 1].index);
+      setChapterIndex(nextIndex);
     }
-  }, [chapterList, currentChapterIndex, setCurrentSegmentIndex, setChapterIndex]);
+  }, [chapterList, currentBookId, currentChapterIndex, setCurrentSegmentIndex, setChapterIndex]);
 
   // 章节选择处理 - 移到所有条件返回之前
   const handleChapterSelect = useCallback((index: number) => {
+    setExplicitChapterRequest({ bookId: currentBookId, index });
     setCurrentSegmentIndex(0);
     setChapterIndex(index);
-  }, [setCurrentSegmentIndex, setChapterIndex]);
+  }, [currentBookId, setCurrentSegmentIndex, setChapterIndex]);
 
   // 判断是否有上一章/下一章
   const hasPrevChapter =
@@ -398,7 +418,7 @@ export const ReaderPage: React.FC = () => {
   // --- 渲染状态处理 ---
 
   // 加载中
-  if (isTocLoading || isProgressLoading) {
+  if (isTocLoading || isProgressLoading || isChapterProgressLoading) {
     return (
       <div className={clsx('flex h-screen w-full items-center justify-center', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
@@ -550,7 +570,7 @@ export const ReaderPage: React.FC = () => {
             hasPrevChapter={hasPrevChapter}
             hasNextChapter={hasNextChapter}
             initialPercentage={initialPercentage}
-            isChapterSwitch={isChapterSwitch}
+            isChapterSwitch={false}
             onToggleToc={() => setIsTocOpen(!isTocOpen)}
             onToggleSettings={() => {
               // 触发 LeftDock 中的设置面板切换

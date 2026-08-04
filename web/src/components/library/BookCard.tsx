@@ -49,7 +49,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
   // 处理点击卡片主体
   const handleCardClick = () => {
     if (book.status === ProcessingStatus.COMPLETED && !isDeleting) {
-      navigate(`/read/${book.id}`);
+      navigate(`/book/${book.id}`);
     }
   };
 

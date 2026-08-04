@@ -35,6 +35,7 @@ class Book(Base):
     # 关联
     chapters = relationship("Chapter", back_populates="book", cascade="all, delete-orphan")
     progress = relationship("UserProgress", back_populates="book", uselist=False, cascade="all, delete-orphan")
+    chapter_progress = relationship("ChapterProgress", back_populates="book", cascade="all, delete-orphan")
     vocabularies = relationship("Vocabulary", back_populates="book", cascade="all, delete-orphan")
     highlights = relationship("UserHighlight", back_populates="book", cascade="all, delete-orphan")
     source_files = relationship("BookSourceFile", back_populates="book", cascade="all, delete-orphan")
@@ -116,6 +117,7 @@ class Chapter(Base):
     lexeme_occurrences = relationship("LexemeOccurrence", back_populates="chapter")
     lexeme_stats = relationship("ChapterLexemeStat", back_populates="chapter")
     lookup_events = relationship("ReaderLookupEvent", back_populates="chapter")
+    progress_records = relationship("ChapterProgress", back_populates="chapter", cascade="all, delete-orphan")
 
 
 class AnalysisRun(Base):
@@ -448,13 +450,46 @@ class ChapterLexemeStat(Base):
     )
 
 
+class ChapterProgress(Base):
+    """章节级阅读检查点，不代表书籍级的继续阅读位置。"""
+    __tablename__ = "chapter_progress"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(String(32), ForeignKey("books.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_index = Column(Integer, nullable=False, index=True)
+    current_segment_index = Column(Integer, nullable=False, default=0)
+    progress_percentage = Column(Float, nullable=False, default=0.0)
+    state = Column(String(16), nullable=False, default="in_progress")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    book = relationship("Book", back_populates="chapter_progress")
+    chapter = relationship("Chapter", back_populates="progress_records")
+
+    __table_args__ = (
+        CheckConstraint(
+            "current_segment_index >= 0",
+            name="ck_chapter_progress_segment_nonnegative",
+        ),
+        CheckConstraint(
+            "progress_percentage >= 0 AND progress_percentage <= 100",
+            name="ck_chapter_progress_percentage_range",
+        ),
+        CheckConstraint(
+            "state IN ('in_progress', 'completed')",
+            name="ck_chapter_progress_state",
+        ),
+        UniqueConstraint("book_id", "chapter_id", name="uq_chapter_progress_book_chapter"),
+    )
+
+
 # 难点预警：React 渲染是异步的。不能在组件 mount 时立刻 scroll。必须等待 DOM 里的 Token 渲染完毕。建议使用 useLayoutEffect 或监听最后一个 Token 的渲染回调，然后再执行 document.querySelector([data-token-index="${offset}"]).scrollIntoView()。
 class UserProgress(Base):
     """记录阅读进度"""
     __tablename__ = "user_progress"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    book_id = Column(String(32), ForeignKey("books.id"), unique=True)
+    book_id = Column(String(32), ForeignKey("books.id", ondelete="CASCADE"), unique=True)
 
     current_chapter_index = Column(Integer, default=0)
     current_segment_index = Column(Integer, default=0)

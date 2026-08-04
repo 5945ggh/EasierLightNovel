@@ -352,5 +352,5 @@ def test_additive_migration_keeps_older_source_scoped_table_readable(tmp_path):
         }
 
     # The new append-only Reader lookup table is also created for a legacy DB.
-    assert applied_count == 2
+    assert applied_count == 3
     assert "note" in columns

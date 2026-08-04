@@ -12,6 +12,8 @@ import type {
   VocabularyBaseFormsResponse,
   UserProgressResponse,
   UserProgressUpdate,
+  ChapterProgressResponse,
+  ChapterProgressUpdate,
   HighlightResponse,
 } from '@/types';
 
@@ -148,6 +150,29 @@ export const updateReadingProgress = async (
   data: UserProgressUpdate
 ): Promise<UserProgressResponse> => {
   return apiClient.put<UserProgressResponse>(`/books/${bookId}/progress`, data);
+};
+
+/**
+ * 获取已保存的章节检查点（不加载章节正文）
+ */
+export const getChapterProgresses = async (
+  bookId: string
+): Promise<ChapterProgressResponse[]> => {
+  return apiClient.get<ChapterProgressResponse[]>(`/books/${bookId}/progress/chapters`);
+};
+
+/**
+ * 只更新一个章节检查点，不改变书籍级继续阅读位置
+ */
+export const updateChapterProgress = async (
+  bookId: string,
+  chapterIndex: number,
+  data: ChapterProgressUpdate
+): Promise<ChapterProgressResponse> => {
+  return apiClient.put<ChapterProgressResponse>(
+    `/books/${bookId}/progress/chapters/${chapterIndex}`,
+    data
+  );
 };
 
 /**
