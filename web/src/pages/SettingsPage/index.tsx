@@ -172,10 +172,10 @@ export const SettingsPage: React.FC = () => {
     const isVisible = visibleFields.has(field.key);
 
     const inputClassName = clsx(
-      'w-full px-3 py-2 border rounded-lg outline-none transition-all',
-      'focus:ring-2 focus:ring-slate-500 focus:border-slate-500',
-      modified && 'border-blue-400 bg-blue-50',
-      !modified && 'border-gray-300 bg-white'
+      'w-full px-3 py-2 border rounded-lg outline-none transition-all dark:bg-slate-800 dark:text-slate-100',
+      'focus:ring-2 focus:ring-slate-blue-500 focus:border-slate-blue-500',
+      modified && 'border-slate-blue-400 bg-slate-blue-50/60 dark:bg-slate-800/90 dark:border-slate-blue-500',
+      !modified && 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'
     );
 
     // 布尔类型 - 开关
@@ -188,7 +188,7 @@ export const SettingsPage: React.FC = () => {
             onChange={(e) => updateFieldValue(field.key, e.target.checked)}
             className="sr-only peer"
           />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-slate-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-600" />
+          <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-slate-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-blue-600" />
         </label>
       );
     }
@@ -212,8 +212,9 @@ export const SettingsPage: React.FC = () => {
 
     // 数组类型 - 文本输入（逗号分隔）
     if (field.type === 'array') {
-      const arrayValue = value as string[] ?? [];
-      const displayValue = Array.isArray(arrayValue) ? arrayValue.join(', ') : '';
+      const rawVal = value ?? field.default;
+      const arrayValue = Array.isArray(rawVal) ? rawVal : [];
+      const displayValue = arrayValue.join(', ');
       return (
         <input
           type="text"
@@ -233,7 +234,7 @@ export const SettingsPage: React.FC = () => {
       return (
         <input
           type="number"
-          value={value as number ?? field.default ?? ''}
+          value={(value as number) ?? (field.default as number) ?? ''}
           onChange={(e) => {
             const num = field.type === 'integer'
               ? parseInt(e.target.value, 10)
@@ -250,7 +251,7 @@ export const SettingsPage: React.FC = () => {
 
     // 字符串类型（敏感字段处理）
     if (isSensitive) {
-      const displayValue = isVisible ? (value as string ?? '') : '****';
+      const displayValue = isVisible ? ((value as string) ?? '') : '****';
       return (
         <div className="flex gap-2">
           <input
@@ -258,12 +259,12 @@ export const SettingsPage: React.FC = () => {
             value={displayValue}
             onChange={(e) => updateFieldValue(field.key, e.target.value)}
             placeholder={field.default as string ?? ''}
-            className={clsx(inputClassName, 'flex-1')}
+            className={inputClassName}
           />
           <button
             type="button"
             onClick={() => toggleFieldVisibility(field.key)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title={isVisible ? '隐藏' : '显示'}
           >
             {isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -276,7 +277,7 @@ export const SettingsPage: React.FC = () => {
     return (
       <input
         type="text"
-        value={value as string ?? field.default ?? ''}
+        value={(value as string) ?? (field.default as string) ?? ''}
         onChange={(e) => updateFieldValue(field.key, e.target.value)}
         placeholder={field.default as string ?? ''}
         className={inputClassName}
@@ -293,8 +294,8 @@ export const SettingsPage: React.FC = () => {
       <div
         key={group.group}
         className={clsx(
-          'bg-white rounded-xl border transition-all',
-          hasModifications ? 'border-blue-400 shadow-md' : 'border-gray-200'
+          'bg-white dark:bg-slate-900 rounded-xl border transition-all',
+          hasModifications ? 'border-slate-blue-400 dark:border-slate-blue-500 shadow-md' : 'border-slate-200 dark:border-slate-800'
         )}
       >
         {/* 分组标题 */}
@@ -304,19 +305,19 @@ export const SettingsPage: React.FC = () => {
         >
           <div className="flex items-center gap-3">
             {hasModifications && (
-              <div className="w-2 h-2 bg-blue-500 rounded-full" />
+              <div className="w-2 h-2 bg-slate-blue-500 rounded-full" />
             )}
-            <h3 className="text-lg font-semibold text-gray-800">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
               {group.label}
             </h3>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-slate-500 dark:text-slate-400">
               ({group.fields.length} 项)
             </span>
           </div>
           {isExpanded ? (
-            <ChevronUp size={20} className="text-gray-400" />
+            <ChevronUp size={20} className="text-slate-400 dark:text-slate-500" />
           ) : (
-            <ChevronDown size={20} className="text-gray-400" />
+            <ChevronDown size={20} className="text-slate-400 dark:text-slate-500" />
           )}
         </button>
 
@@ -324,7 +325,7 @@ export const SettingsPage: React.FC = () => {
         {isExpanded && (
           <div className="px-6 pb-6 space-y-4">
             {group.description && (
-              <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg">
                 {group.description}
               </p>
             )}
@@ -334,19 +335,19 @@ export const SettingsPage: React.FC = () => {
                 key={field.key}
                 className={clsx(
                   'grid grid-cols-1 md:grid-cols-3 gap-4 p-3 rounded-lg',
-                  isFieldModified(field.key) && 'bg-blue-50/50'
+                  isFieldModified(field.key) && 'bg-slate-blue-50/50 dark:bg-slate-800/40'
                 )}
               >
                 {/* 字段标签 */}
                 <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
                     {field.key}
                     {isFieldModified(field.key) && (
-                      <span className="ml-2 text-xs text-blue-600">(已修改)</span>
+                      <span className="ml-2 text-xs text-slate-blue-600 dark:text-slate-blue-400">(已修改)</span>
                     )}
                   </label>
                   {field.description && (
-                    <p className="text-xs text-gray-500">{field.description}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{field.description}</p>
                   )}
                 </div>
 
@@ -364,17 +365,17 @@ export const SettingsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
-        <RotateCw size={32} className="animate-spin text-slate-500" />
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-500">
+        <RotateCw size={32} className="animate-spin text-slate-blue-600 dark:text-slate-blue-400" />
       </div>
     );
   }
 
   if (error && !configData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="text-center text-red-500">
-          <AlertTriangle size={48} className="mx-auto mb-4" />
+          <AlertTriangle size={48} className="mx-auto mb-4" strokeWidth={1.5} />
           <p>{error}</p>
         </div>
       </div>
@@ -384,34 +385,34 @@ export const SettingsPage: React.FC = () => {
   const hasChanges = Object.keys(editedConfig).length > 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4 sm:p-6 md:p-10">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 text-slate-800 dark:text-slate-100 p-4 sm:p-6 md:p-10 transition-colors">
       {/* 重启提示弹窗 */}
       {showRestartModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
             onClick={() => setShowRestartModal(false)}
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-scale-in">
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-scale-in">
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <RotateCw size={32} className="text-amber-600" />
+              <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <RotateCw size={32} className="text-amber-600 dark:text-amber-400" />
               </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">
                 需要重启后端服务
               </h2>
-              <p className="text-gray-600">
+              <p className="text-slate-600 dark:text-slate-400">
                 配置已保存，但某些配置需要重启后端才能生效。
               </p>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <p className="text-sm text-gray-700 mb-2">已修改的配置：</p>
-              <ul className="text-sm text-gray-600 space-y-1">
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 mb-6">
+              <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">已修改的配置：</p>
+              <ul className="text-sm text-slate-600 dark:text-slate-300 space-y-1">
                 {pendingChanges.map((field) => (
                   <li key={field} className="flex items-center gap-2">
-                    <Check size={14} className="text-green-500" />
-                    <code className="text-xs bg-gray-200 px-1.5 py-0.5 rounded">
+                    <Check size={14} className="text-emerald-500" />
+                    <code className="text-xs bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">
                       {field}
                     </code>
                   </li>
@@ -425,7 +426,7 @@ export const SettingsPage: React.FC = () => {
                 setEditedConfig({});
                 loadConfig();
               }}
-              className="w-full px-4 py-3 bg-slate-600 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors"
+              className="w-full px-4 py-3 bg-slate-blue-600 hover:bg-slate-blue-700 text-white rounded-xl font-medium transition-colors"
             >
               我知道了
             </button>
@@ -439,10 +440,10 @@ export const SettingsPage: React.FC = () => {
           <div className="flex items-center gap-4">
             <Link
               to="/"
-              className="p-2.5 bg-white hover:bg-gray-50 rounded-xl text-gray-600 border border-gray-200 transition-all shadow-sm"
+              className="p-2.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 transition-all shadow-sm rounded-xl active:scale-[0.98]"
               title="返回书架"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={20} strokeWidth={1.5} />
             </Link>
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl text-white shadow-lg">

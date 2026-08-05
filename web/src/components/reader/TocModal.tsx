@@ -57,17 +57,17 @@ export const TocModal: React.FC<TocModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[70vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200"
+        className="w-full max-w-md max-h-[70vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 标题栏 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">目次</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">目次</h2>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
           >
-            <X size={20} className="text-gray-500 dark:text-gray-400" />
+            <X size={20} strokeWidth={1.5} className="text-slate-500 dark:text-slate-400" />
           </button>
         </div>
 
@@ -84,12 +84,12 @@ export const TocModal: React.FC<TocModalProps> = ({
                   className={clsx(
                     'w-full text-left px-4 py-3 rounded-xl transition-all text-sm',
                     chapter.index === currentIndex
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      ? 'bg-slate-blue-100 dark:bg-slate-blue-900/30 text-slate-blue-600 dark:text-slate-blue-400 font-medium'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   )}
                 >
                   <span className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400 dark:text-gray-500 w-6 flex-shrink-0">
+                    <span className="text-xs text-slate-400 dark:text-slate-500 w-6 flex-shrink-0">
                       {chapter.index + 1}
                     </span>
                     <span className="line-clamp-1">{chapter.title}</span>
@@ -101,7 +101,7 @@ export const TocModal: React.FC<TocModalProps> = ({
         </div>
 
         {/* 底部统计 */}
-        <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500 text-center">
+        <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500 text-center">
           全 {chapters.length} 章
         </div>
       </div>

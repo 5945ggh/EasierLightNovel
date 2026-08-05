@@ -1254,7 +1254,7 @@ export const ReaderSidebar: React.FC = () => {
         </div>
 
         {/* Tab 切换 */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <div className="flex border-b border-slate-200 dark:border-slate-800">
           {(Object.keys(TAB_CONFIG) as SidebarTab[]).map((tab) => {
             const Icon = TAB_CONFIG[tab].icon;
             return (
@@ -1264,14 +1264,14 @@ export const ReaderSidebar: React.FC = () => {
                 className={clsx(
                   'flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium transition-colors relative',
                   activeTab === tab
-                    ? 'text-blue-600 dark:text-blue-400'
-                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    ? 'text-slate-blue-600 dark:text-slate-blue-400 font-semibold'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                 )}
               >
-                <Icon size={16} />
+                <Icon size={16} strokeWidth={1.5} />
                 <span className="hidden sm:inline">{TAB_CONFIG[tab].label}</span>
                 {activeTab === tab && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-blue-600 dark:bg-slate-blue-400" />
                 )}
               </button>
             );
@@ -1284,16 +1284,16 @@ export const ReaderSidebar: React.FC = () => {
 
       {/* 移动端：底部抽屉（Bottom Sheet，可拖拽调整高度） */}
       <div
-        className="md:hidden fixed left-0 right-0 z-50 flex flex-col bg-white dark:bg-gray-900 shadow-2xl border-t border-gray-200 dark:border-gray-700 animate-in slide-in-from-bottom duration-300 ease-out"
+        className="md:hidden fixed left-0 right-0 z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl border-t border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom duration-300 ease-out"
         style={{
           bottom: isSidebarOpen ? '0' : '4rem',
-          height: drawerHeight ? `${drawerHeight}vh` : '50vh',
-          maxHeight: isSidebarOpen ? '90vh' : 'calc(100vh - 5rem)',
+          height: drawerHeight ? `${drawerHeight}dvh` : '50dvh',
+          maxHeight: isSidebarOpen ? '90dvh' : 'calc(100dvh - 5rem)',
           transition: isSidebarOpen ? 'bottom 0.3s ease-out' : undefined,
         }}
       >
         {/* Tab 切换栏（整合在抽屉顶部） */}
-        <div className="flex items-center justify-between px-2 py-2 border-b border-gray-200 dark:border-gray-700 bg-stone-50 dark:bg-gray-900">
+        <div className="flex items-center justify-between px-2 py-2 border-b border-slate-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900">
           <div className="flex items-center gap-1 flex-1">
             {(Object.keys(TAB_CONFIG) as SidebarTab[]).map((tab) => {
               const Icon = TAB_CONFIG[tab].icon;
@@ -1305,8 +1305,8 @@ export const ReaderSidebar: React.FC = () => {
                   className={clsx(
                     'flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-all min-w-0 flex-1',
                     isActive
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                      ? 'text-slate-blue-600 dark:text-slate-blue-400 font-semibold'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                   )}
                 >
                   <Icon size={20} />

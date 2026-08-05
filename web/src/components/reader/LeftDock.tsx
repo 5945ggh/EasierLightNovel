@@ -45,11 +45,11 @@ const DockButton = memo<DockButtonProps>(({ icon: Icon, label, onClick, active }
     className={clsx(
       'p-3 rounded-xl transition-all duration-200 group relative flex items-center justify-center',
       active
-        ? 'bg-blue-100 text-blue-600'
-        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+        ? 'bg-slate-blue-100 dark:bg-slate-blue-900/40 text-slate-blue-600 dark:text-slate-blue-400 font-medium'
+        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
     )}
   >
-    <Icon size={22} strokeWidth={2} />
+    <Icon size={22} strokeWidth={1.5} />
     <span className="absolute left-full ml-3 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
       {label}
     </span>
@@ -123,7 +123,7 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
   return (
     <>
       {/* 桌面端：左侧固定导航栏 */}
-      <aside className="hidden md:flex h-screen w-16 flex-shrink-0 flex-col items-center py-6 z-40 select-none border-r border-gray-200 dark:border-gray-700 bg-stone-50 dark:bg-gray-900">
+      <aside className="hidden md:flex h-[100dvh] w-16 flex-shrink-0 flex-col items-center py-6 z-40 select-none border-r border-slate-200 dark:border-slate-800 bg-stone-50 dark:bg-slate-900 transition-colors">
         {/* 顶部导航 */}
         <div className="space-y-3 flex flex-col items-center">
           <DockButton icon={ArrowLeft} label="返回书籍主页" onClick={handleNavigateBookHome} />

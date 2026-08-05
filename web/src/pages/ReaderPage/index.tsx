@@ -420,7 +420,7 @@ export const ReaderPage: React.FC = () => {
   // 加载中
   if (isTocLoading || isProgressLoading || isChapterProgressLoading) {
     return (
-      <div className={clsx('flex h-screen w-full items-center justify-center', themeStyles[resolvedTheme])}>
+      <div className={clsx('flex min-h-[100dvh] w-full items-center justify-center', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
           <Loader2 className="h-8 w-8 animate-spin" />
           <p>加载阅读器...</p>
@@ -432,7 +432,7 @@ export const ReaderPage: React.FC = () => {
   // 没有章节
   if (chapterList && chapterList.length === 0) {
     return (
-      <div className={clsx('flex h-screen w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
+      <div className={clsx('flex min-h-[100dvh] w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-orange-500">
           <AlertCircle className="h-12 w-12" />
           <p className="text-lg font-medium">没有可用的章节</p>
@@ -454,7 +454,7 @@ export const ReaderPage: React.FC = () => {
   // 章节加载中
   if (isChapterLoading) {
     return (
-      <div className={clsx('flex h-screen w-full items-center justify-center', themeStyles[resolvedTheme])}>
+      <div className={clsx('flex min-h-[100dvh] w-full items-center justify-center', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
           <Loader2 className="h-8 w-8 animate-spin" />
           <p>加载章节内容...</p>
@@ -475,7 +475,7 @@ export const ReaderPage: React.FC = () => {
     };
 
     return (
-      <div className={clsx('flex h-screen w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
+      <div className={clsx('flex min-h-[100dvh] w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
           <AlertCircle className="h-10 w-10" />
           <p>书籍尚未就绪</p>
@@ -498,7 +498,7 @@ export const ReaderPage: React.FC = () => {
     const errorMsg = (chapterError as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '未知错误';
 
     return (
-      <div className={clsx('flex h-screen w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
+      <div className={clsx('flex min-h-[100dvh] w-full flex-col items-center justify-center px-4', themeStyles[resolvedTheme])}>
         <div className="flex flex-col items-center gap-4 text-red-500">
           <AlertCircle className="h-12 w-12" />
           <p className="text-lg font-medium">章节加载失败</p>
@@ -534,7 +534,7 @@ export const ReaderPage: React.FC = () => {
   return (
     <div
       className={clsx(
-        'flex h-screen w-full overflow-hidden transition-colors duration-300',
+        'flex min-h-[100dvh] h-[100dvh] w-full overflow-hidden transition-colors duration-300',
         themeStyles[resolvedTheme],
         `theme-${resolvedTheme}`,
         resolvedTheme === 'dark' && 'dark'

@@ -222,7 +222,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   return (
     <div
       ref={contentRef}
-      className="min-h-screen"
+      className="min-h-[100dvh]"
       // 使用 CSS 变量控制样式
       style={{
         fontFamily: 'var(--reader-font-family)',
@@ -231,7 +231,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       }}
     >
       {/* 阅读容器：限制最大宽度，居中 */}
-      <div className="max-w-3xl mx-auto px-6 py-12 md:px-12 md:py-16 lg:px-16 lg:py-20 min-h-screen">
+      <div className="max-w-3xl mx-auto px-6 py-12 md:px-12 md:py-16 lg:px-16 lg:py-20 min-h-[100dvh]">
         {/* 进度保存指示器 */}
         {isSaving && (
           <div className="fixed top-4 right-4 text-xs text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-2 py-1 rounded shadow-sm z-10">

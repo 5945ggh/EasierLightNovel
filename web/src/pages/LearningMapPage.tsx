@@ -1175,25 +1175,25 @@ const LearningMapPage: React.FC = () => {
   const bookTitle = bookQuery.data?.title || '书籍学习地图';
 
   return (
-    <div className="min-h-screen bg-gray-50/80 text-gray-900 pb-12">
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-12 transition-colors">
       {/* Section A: 页面头部和当前阅读上下文 */}
-      <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <Link
               to={`/book/${bookId}`}
-              className="flex-shrink-0 rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+              className="flex-shrink-0 rounded-lg p-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               aria-label="返回书籍主页"
               title="返回书籍主页"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={20} strokeWidth={1.5} />
             </Link>
             <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
-                <MapIcon size={14} aria-hidden="true" />
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-blue-600 dark:text-slate-blue-400">
+                <MapIcon size={14} strokeWidth={1.5} aria-hidden="true" />
                 词汇阅读准备度与学习优先级
               </p>
-              <h1 className="truncate text-base font-bold text-gray-900 sm:text-lg" title={bookTitle}>
+              <h1 className="truncate text-base font-bold text-slate-900 dark:text-slate-100 sm:text-lg" title={bookTitle}>
                 {bookTitle}
               </h1>
             </div>
@@ -1202,9 +1202,9 @@ const LearningMapPage: React.FC = () => {
             <Link
               to={`/read/${bookId}?chapter=${map.reading_anchor_chapter_index}`}
               aria-label={`继续阅读第 ${map.reading_anchor_chapter_index + 1} 章`}
-              className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 hover:text-indigo-800"
+              className="flex flex-shrink-0 items-center gap-2 rounded-xl border border-slate-blue-200 dark:border-slate-800 bg-slate-blue-50 dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-blue-700 dark:text-slate-blue-300 transition-colors hover:bg-slate-blue-100 dark:hover:bg-slate-700"
             >
-              <BookOpen size={15} aria-hidden="true" />
+              <BookOpen size={15} strokeWidth={1.5} aria-hidden="true" />
               <span>继续阅读 (第 {map.reading_anchor_chapter_index + 1} 章)</span>
             </Link>
           </div>
@@ -1213,12 +1213,12 @@ const LearningMapPage: React.FC = () => {
 
       <main className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6">
         {map.analysis_status === 'needs_analysis' ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900 sm:p-6">
+          <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 p-5 text-amber-900 dark:text-amber-200 sm:p-6">
             <div className="flex items-start gap-3">
-              <RefreshCw size={20} className="mt-0.5 flex-shrink-0 text-amber-700" aria-hidden="true" />
+              <RefreshCw size={20} className="mt-0.5 flex-shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
               <div>
                 <h2 className="font-semibold text-base">需要重新分析这本书</h2>
-                <p className="mt-2 text-xs leading-6 text-amber-800">
+                <p className="mt-2 text-xs leading-6 text-amber-800 dark:text-amber-300">
                   当前书籍缺少 active AnalysisRun。请在书籍主页点击重新分析。重新分析完成后，
                   系统将呈现准确的章节未知词负担和推荐词优先级。
                 </p>
@@ -1246,14 +1246,14 @@ const PageMessage: React.FC<{
   backTo = '/',
   backLabel = '返回书架',
 }) => (
-  <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-    <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-      <div className="mx-auto mb-3 flex w-fit items-center justify-center text-gray-400">{icon}</div>
-      <h1 className="text-base font-semibold text-gray-800">{title}</h1>
-      <p className="mt-2 text-xs leading-6 text-gray-500">{message}</p>
+  <div className="flex min-h-[100dvh] items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4">
+    <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center shadow-sm">
+      <div className="mx-auto mb-3 flex w-fit items-center justify-center text-slate-400 dark:text-slate-500">{icon}</div>
+      <h1 className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h1>
+      <p className="mt-2 text-xs leading-6 text-slate-500 dark:text-slate-400">{message}</p>
       <Link
         to={backTo}
-        className="mt-5 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
       >
         <ArrowLeft size={16} aria-hidden="true" />
         {backLabel}
