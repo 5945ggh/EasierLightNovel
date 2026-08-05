@@ -1,0 +1,26 @@
+web/src/components/reader/ContentCanvas.tsx
+  h_c735ec7f46d14b 225,234
+web/src/components/reader/LeftDock.tsx
+  h_c735ec7f46d14b 48-49,52,126
+web/src/components/reader/ReaderSidebar.tsx
+  h_c735ec7f46d14b 1257,1267-1268,1271,1274,1287,1290-1291,1296,1308-1309
+web/src/components/reader/TocModal.tsx
+  h_c735ec7f46d14b 60,64-65,68,70,87-88,92,104
+web/src/pages/LearningMapPage.tsx
+  h_c735ec7f46d14b 1178,1180,1185,1189,1192-1193,1196,1205,1207,1216,1218,1221,1249-1253,1256
+web/src/pages/ReaderPage/index.tsx
+  h_c735ec7f46d14b 423,435,457,478,501,537
+web/src/pages/SettingsPage/index.tsx
+  h_c735ec7f46d14b 175-178,191,215-217,237,254,262,267,280,297-298,308,310,313,318,320,328,338,343,346,350,368-369,376,378,388,393,396,398-399,401,404,409-411,414-415,429,443,446
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "d8217d32c3c33c7b875f8b60fe5c9312158f0803",
+  "prompts": {},
+  "humans": {
+    "h_c735ec7f46d14b": {
+      "author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
