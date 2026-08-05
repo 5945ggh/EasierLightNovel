@@ -46,6 +46,7 @@ import type { ReadingProgressSnapshot } from '@/utils/readingProgress';
 
 // Components
 import { EditBookModal } from '@/components/library/EditBookModal';
+import { ConfirmModal } from '@/components/common/ConfirmModal';
 
 export const BookHomePage: React.FC = () => {
   const { bookId } = useParams<{ bookId: string }>();
@@ -54,7 +55,9 @@ export const BookHomePage: React.FC = () => {
 
   const [imgError, setImgError] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
   // 1. 书籍详情
@@ -209,22 +212,32 @@ export const BookHomePage: React.FC = () => {
     };
   }, [chapterList, activeProgress]);
 
-  // 处理删除书籍
-  const handleDeleteBook = async () => {
+  // 处理确认删除书籍
+  const handleConfirmDelete = async () => {
     if (!bookId) return;
-    if (confirm('确定要删除这本书吗？阅读记录和生词本也将被清除。')) {
-      try {
-        setIsDeleting(true);
-        await deleteBook(bookId);
-        clearReadingProgressSnapshot(bookId);
-        navigate('/');
-      } catch (err) {
-        console.error('Failed to delete book:', err);
-        alert('删除失败，请重试');
-      } finally {
-        setIsDeleting(false);
-      }
+    setDeleteError(null);
+    try {
+      setIsDeleting(true);
+      await deleteBook(bookId);
+      clearReadingProgressSnapshot(bookId);
+      setIsConfirmDeleteOpen(false);
+      navigate('/');
+    } catch (err) {
+      console.error('Failed to delete book:', err);
+      setDeleteError('删除失败，请检查连接后重试。');
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const handleOpenDeleteModal = () => {
+    setDeleteError(null);
+    setIsConfirmDeleteOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteError(null);
+    setIsConfirmDeleteOpen(false);
   };
 
   // 处理保存元数据
@@ -251,10 +264,10 @@ export const BookHomePage: React.FC = () => {
 
   if (!bookId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <AlertCircle size={40} className="text-red-500 mb-2" />
-        <h2 className="text-lg font-semibold text-gray-800">缺少书籍 ID</h2>
-        <Link to="/" className="mt-4 text-sm text-blue-600 hover:underline">
+      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
+        <AlertCircle size={40} className="text-red-500 mb-2" strokeWidth={1.5} />
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">缺少书籍 ID</h2>
+        <Link to="/" className="mt-4 text-sm text-slate-blue-600 dark:text-slate-blue-400 hover:underline">
           返回书架
         </Link>
       </div>
@@ -265,9 +278,9 @@ export const BookHomePage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <Loader2 size={36} className="animate-spin text-blue-600 mb-3" />
-        <p className="text-sm font-medium text-gray-500">正在载入书籍工作台...</p>
+      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
+        <Loader2 size={36} className="animate-spin text-slate-blue-600 dark:text-slate-blue-400 mb-3" />
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">正在载入书籍工作台...</p>
       </div>
     );
   }
@@ -275,20 +288,20 @@ export const BookHomePage: React.FC = () => {
   if (isBookError || !book) {
     const errorMsg = (bookError as { message?: string })?.message || '书籍不存在或已被删除';
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 text-center">
-        <AlertCircle size={48} className="text-red-500 mb-3" />
-        <h2 className="text-xl font-bold text-gray-800 mb-1">无法获取书籍信息</h2>
-        <p className="text-sm text-gray-500 max-w-md mb-6">{errorMsg}</p>
+      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 text-center">
+        <AlertCircle size={48} className="text-red-500 mb-3" strokeWidth={1.5} />
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">无法获取书籍信息</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mb-6">{errorMsg}</p>
         <div className="flex gap-3">
           <button
             onClick={() => refetchBook()}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-slate-blue-600 text-white text-sm font-medium rounded-xl hover:bg-slate-blue-700 transition-colors"
           >
             重试
           </button>
           <Link
             to="/"
-            className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
           >
             返回书架
           </Link>
@@ -304,10 +317,10 @@ export const BookHomePage: React.FC = () => {
       '目录或阅读进度暂时无法加载，请重试。';
 
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 text-center">
-        <AlertCircle size={48} className="text-red-500 mb-3" />
-        <h2 className="text-xl font-bold text-gray-800 mb-1">书籍工作台加载失败</h2>
-        <p className="text-sm text-gray-500 max-w-md mb-6">{errorMsg}</p>
+      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 text-center">
+        <AlertCircle size={48} className="text-red-500 mb-3" strokeWidth={1.5} />
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">书籍工作台加载失败</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mb-6">{errorMsg}</p>
         <div className="flex gap-3">
           <button
             onClick={() => {
@@ -317,13 +330,13 @@ export const BookHomePage: React.FC = () => {
                 void queryClient.invalidateQueries({ queryKey: ['chapter-progress', bookId] });
               }
             }}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-slate-blue-600 text-white text-sm font-medium rounded-xl hover:bg-slate-blue-700 transition-colors"
           >
             重试
           </button>
           <Link
             to="/"
-            className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
           >
             返回书架
           </Link>
@@ -338,19 +351,33 @@ export const BookHomePage: React.FC = () => {
     const isFailed = book.status === ProcessingStatus.FAILED;
 
     return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white border-b border-gray-200 px-4 py-3 sm:px-6">
+      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+        {/* 确认删除 Modal */}
+        <ConfirmModal
+          isOpen={isConfirmDeleteOpen}
+          title="确认删除书籍？"
+          message="确定要删除这本书吗？相应的阅读记录和生词本数据也将同步清除。"
+          confirmText="彻底删除"
+          cancelText="取消"
+          isDanger={true}
+          isLoading={isDeleting}
+          error={deleteError}
+          onConfirm={handleConfirmDelete}
+          onClose={handleCloseDeleteModal}
+        />
+
+        <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-4 py-3 sm:px-6">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <Link to="/" className="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900">
-              <ArrowLeft size={18} className="mr-1.5" />
+            <Link to="/" className="flex items-center text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
+              <ArrowLeft size={18} strokeWidth={1.5} className="mr-1.5" />
               返回书架
             </Link>
-            <span className="text-xs text-gray-400">书籍 ID: {book.id.slice(0, 8)}</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">书籍 ID: {book.id.slice(0, 8)}</span>
           </div>
         </header>
 
         <main className="max-w-3xl mx-auto px-4 py-12 text-center">
-          <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm flex flex-col items-center">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center">
             {/* 封面 preview */}
             <div className="w-32 aspect-[2/3] bg-gray-100 rounded-lg overflow-hidden shadow-inner mb-6 relative">
               {book.cover_url && !imgError ? (
@@ -392,7 +419,7 @@ export const BookHomePage: React.FC = () => {
                   {book.error_message || '文件格式不支持或内容损坏，请重新上传。'}
                 </p>
                 <button
-                  onClick={handleDeleteBook}
+                  onClick={handleOpenDeleteModal}
                   disabled={isDeleting}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
                 >
@@ -420,19 +447,33 @@ export const BookHomePage: React.FC = () => {
   const toc = chapterList ?? [];
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 overflow-x-hidden">
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-x-hidden transition-colors">
+      {/* 确认删除 Modal */}
+      <ConfirmModal
+        isOpen={isConfirmDeleteOpen}
+        title="确认删除书籍？"
+        message="确定要删除这本书吗？相应的阅读记录和生词本数据也将同步清除。"
+        confirmText="彻底删除"
+        cancelText="取消"
+        isDanger={true}
+        isLoading={isDeleting}
+        error={deleteError}
+        onConfirm={handleConfirmDelete}
+        onClose={handleCloseDeleteModal}
+      />
+
       {/* 顶部导航 */}
-      <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-gray-200/80">
+      <header className="sticky top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
           <Link
             to="/"
-            className="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors shrink-0"
+            className="flex items-center text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors shrink-0"
           >
-            <ArrowLeft size={18} className="mr-1.5" />
+            <ArrowLeft size={18} strokeWidth={1.5} className="mr-1.5" />
             <span>返回书架</span>
           </Link>
 
-          <h1 className="text-sm sm:text-base font-semibold text-gray-800 truncate text-center flex-1 max-w-xl">
+          <h1 className="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-100 truncate text-center flex-1 max-w-xl">
             {book.title}
           </h1>
 
@@ -440,31 +481,31 @@ export const BookHomePage: React.FC = () => {
             {/* 学习地图快捷入口 */}
             <Link
               to={`/study/map/${book.id}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-blue-700 dark:text-slate-blue-300 bg-slate-blue-50 dark:bg-slate-800 hover:bg-slate-blue-100 dark:hover:bg-slate-700 rounded-xl transition-colors border border-slate-blue-100 dark:border-slate-700"
             >
-              <MapIcon size={14} className="text-indigo-600" />
+              <MapIcon size={14} strokeWidth={1.5} className="text-slate-blue-600 dark:text-slate-blue-400" />
               <span className="hidden sm:inline">学习地图</span>
             </Link>
 
             {/* 编辑按钮 */}
             <button
               onClick={() => setIsEditModalOpen(true)}
-              className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
               title="编辑元数据"
               aria-label="编辑元数据"
             >
-              <Edit size={16} />
+              <Edit size={16} strokeWidth={1.5} />
             </button>
 
             {/* 删除按钮 */}
             <button
-              onClick={handleDeleteBook}
+              onClick={handleOpenDeleteModal}
               disabled={isDeleting}
-              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-xl transition-colors"
               title="删除书籍"
               aria-label="删除书籍"
             >
-              <Trash2 size={16} />
+              <Trash2 size={16} strokeWidth={1.5} />
             </button>
           </div>
         </div>
@@ -484,7 +525,7 @@ export const BookHomePage: React.FC = () => {
       {/* 主体工作台内容 */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 顶部 Hero 区域：书籍信息 + 阅读进度 */}
-        <section className="bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-7 shadow-xs">
+        <section className="bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-7 shadow-sm">
           <div className="flex flex-col md:flex-row gap-6 items-start">
             {/* 左侧：封面 */}
             <div className="w-28 sm:w-36 aspect-[2/3] shrink-0 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl overflow-hidden shadow-md border border-gray-100 relative self-center md:self-start">
@@ -585,7 +626,7 @@ export const BookHomePage: React.FC = () => {
         {/* 下方双栏布局：章节目录 + 学习工作台入口 */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* 左侧/中栏：章节目录 (8 cols) */}
-          <section className="lg:col-span-8 bg-white rounded-2xl border border-gray-200/90 p-5 shadow-xs flex flex-col">
+          <section className="lg:col-span-8 bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm flex flex-col">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <BarChart3 size={18} className="text-blue-600" />
@@ -629,7 +670,7 @@ export const BookHomePage: React.FC = () => {
                       className={clsx(
                         'w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between group border',
                         isCurrent
-                          ? 'bg-blue-50/80 border-blue-200 text-blue-900 font-medium shadow-xs'
+                          ? 'bg-blue-50/80 border-blue-200 text-blue-900 font-medium shadow-sm'
                           : 'bg-white hover:bg-gray-50/80 border-transparent hover:border-gray-200/60 text-gray-700'
                       )}
                     >
@@ -677,10 +718,10 @@ export const BookHomePage: React.FC = () => {
           {/* 右侧：学习地图与学习中心入口 (4 cols) */}
           <aside className="lg:col-span-4 space-y-4">
             {/* 学习地图入口 */}
-            <div className="bg-gradient-to-br from-indigo-50/70 to-blue-50/40 rounded-2xl border border-indigo-100 p-5 shadow-xs flex flex-col justify-between">
+            <div className="bg-gradient-to-br from-indigo-50/70 to-blue-50/40 rounded-2xl border border-indigo-100 p-5 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2.5 text-indigo-900 font-semibold text-base mb-2">
-                  <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs">
+                  <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-sm">
                     <MapIcon size={18} />
                   </div>
                   <span>书籍学习地图</span>
@@ -694,7 +735,7 @@ export const BookHomePage: React.FC = () => {
 
               <Link
                 to={`/study/map/${book.id}`}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl text-center transition-all shadow-xs flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl text-center transition-all shadow-sm flex items-center justify-center gap-1.5"
               >
                 <Sparkles size={14} />
                 <span>进入学习地图</span>
@@ -702,7 +743,7 @@ export const BookHomePage: React.FC = () => {
             </div>
 
             {/* 学习中心入口 */}
-            <div className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-xs">
+            <div className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm">
               <div className="flex items-center gap-2.5 text-gray-900 font-semibold text-sm mb-2">
                 <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
                   <BrainCircuit size={18} />

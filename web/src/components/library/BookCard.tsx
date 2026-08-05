@@ -6,14 +6,14 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MoreVertical, Trash2, BookOpen, AlertCircle, Loader2, ImageOff, Edit, Map as MapIcon } from 'lucide-react';
+import { MoreVertical, Trash2, BookOpen, AlertCircle, Loader2, Edit, Map as MapIcon } from 'lucide-react';
 import clsx from 'clsx';
 import { ProcessingStatus } from '@/types/common';
 import type { BookDetail } from '@/types/book';
 
 interface BookCardProps {
   book: BookDetail;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, returnFocusElement?: HTMLElement | null) => void;
   onEdit?: (book: BookDetail) => void;
   isDeleting?: boolean;
 }
@@ -23,6 +23,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [imgError, setImgError] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const menuButtonRef = React.useRef<HTMLButtonElement>(null);
 
   // 图片加载状态重置（当 book.cover_url 变化时）
   React.useEffect(() => {
@@ -81,46 +82,52 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
   return (
     <div
       className={clsx(
-        'group relative flex flex-col w-full bg-white rounded-xl shadow-sm',
-        'hover:shadow-lg hover:-translate-y-1',
-        'transition-all duration-300 ease-out',
-        'border border-gray-100 overflow-hidden',
+        'group relative flex flex-col w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm',
+        'hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98]',
+        'transition-all duration-200 ease-out',
+        'border border-slate-200/80 dark:border-slate-800 overflow-hidden',
         isDeleting && 'opacity-50 pointer-events-none'
       )}
     >
-      {/* 封面区域 (保持 2:3 比例) */}
+      {/* 封面区域 (固定比例 2:3) */}
       <div
         onClick={handleCardClick}
         className={clsx(
-          'relative w-full aspect-[2/3] bg-gradient-to-br from-gray-50 to-gray-100',
-          'overflow-hidden',
-          isProcessing || isFailed ? 'cursor-default' : 'cursor-pointer'
+          'relative w-full aspect-[2/3] overflow-hidden bg-slate-100 dark:bg-slate-800 rounded-t-xl',
+          !isProcessing && !isFailed && 'cursor-pointer'
         )}
       >
-        {/* 封面图片 */}
         {book.cover_url && !imgError ? (
           <img
             src={book.cover_url}
             alt={book.title}
-            className='w-full h-full object-cover transition-transform duration-500 group-hover:scale-105'
-            loading='lazy'
+            className='w-full h-full object-cover transition-transform duration-300 group-hover:scale-105'
             onError={() => setImgError(true)}
+            loading='lazy'
           />
         ) : (
-          <div className='w-full h-full flex items-center justify-center text-gray-300'>
-            {imgError ? (
-              // 图片加载失败时显示
-              <ImageOff size={48} strokeWidth={1} />
-            ) : (
-              <BookOpen size={48} strokeWidth={1} />
-            )}
+          <div className='w-full h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 p-4 text-center'>
+            <BookOpen size={40} strokeWidth={1} />
           </div>
         )}
 
-        {/* 状态遮罩层: 处理中 */}
+        {/* 删除防护防误触按钮 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(book.id, e.currentTarget);
+          }}
+          className='absolute top-2 right-2 p-1.5 bg-slate-900/60 hover:bg-red-600 text-white rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200'
+          title='删除书籍'
+          aria-label='删除书籍'
+        >
+          <Trash2 size={14} strokeWidth={1.5} />
+        </button>
+
+        {/* 失败覆盖层 */}
         {isProcessing && (
-          <div className='absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white'>
-            <Loader2 className='animate-spin mb-3' size={28} />
+          <div className='absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center text-white'>
+            <Loader2 className='animate-spin mb-3 text-blue-400' size={28} />
             <span className='text-sm font-medium tracking-wide'>处理中...</span>
             <span className='text-[10px] mt-1 opacity-70'>
               {pdfProgressMessage || '正在解析'}
@@ -130,8 +137,8 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
 
         {/* 状态遮罩层: 失败 */}
         {isFailed && (
-          <div className='absolute inset-0 bg-red-500/90 flex flex-col items-center justify-center text-white px-4 text-center'>
-            <AlertCircle className='mb-2' size={24} />
+          <div className='absolute inset-0 bg-red-600/90 flex flex-col items-center justify-center text-white px-4 text-center'>
+            <AlertCircle className='mb-2' size={24} strokeWidth={1.5} />
             <span className='text-sm font-medium'>解析失败</span>
             {book.error_message && (
               <span className='text-[10px] mt-1.5 opacity-90 line-clamp-2 max-w-full'>
@@ -145,18 +152,18 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
       {/* 信息区域 */}
       <div className='p-3 flex-1 flex flex-col' ref={menuRef}>
         <h3
-          className='font-bold text-gray-800 line-clamp-2 text-sm leading-tight mb-1'
+          className='font-bold text-slate-800 dark:text-slate-100 line-clamp-2 text-sm leading-tight mb-1'
           title={book.title}
         >
           {book.title}
         </h3>
-        <p className='text-xs text-gray-500 line-clamp-1'>
+        <p className='text-xs text-slate-500 dark:text-slate-400 line-clamp-1'>
           {book.author || '佚名'}
         </p>
 
         {/* 底部元数据 */}
-        <div className='mt-auto pt-3 flex items-center justify-between text-[10px] text-gray-400'>
-          <span className={clsx(isProcessing && 'text-amber-500')}>
+        <div className='mt-auto pt-3 flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500'>
+          <span className={clsx(isProcessing && 'text-amber-500 font-medium')}>
             {isProcessing
               ? '处理中'
               : book.total_chapters > 0
@@ -166,29 +173,30 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
 
           {/* 更多操作按钮 */}
           <button
+            ref={menuButtonRef}
             onClick={(e) => {
               e.stopPropagation();
               setMenuOpen(!menuOpen);
             }}
-            className='p-1.5 hover:bg-gray-100 rounded-full transition-colors'
+            className='p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full transition-colors'
             aria-label='更多操作'
           >
-            <MoreVertical size={14} />
+            <MoreVertical size={14} strokeWidth={1.5} />
           </button>
         </div>
 
         {/* 下拉菜单 */}
         {menuOpen && (
-          <div className='absolute right-2 bottom-12 z-20 w-32 bg-white rounded-lg shadow-xl border border-gray-100 py-1.5 animate-fade-in'>
+          <div className='absolute right-2 bottom-12 z-20 w-32 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1.5 animate-fade-in'>
             {/* 学习地图入口 */}
             <button
               onClick={() => {
                 navigate(`/study/map/${book.id}`);
                 setMenuOpen(false);
               }}
-              className='w-full flex items-center px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors border-b border-gray-100'
+              className='w-full flex items-center px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors border-b border-slate-100 dark:border-slate-800'
             >
-              <MapIcon size={13} className='mr-2 flex-shrink-0 text-indigo-500' />
+              <MapIcon size={13} strokeWidth={1.5} className='mr-2 flex-shrink-0 text-slate-blue-600 dark:text-slate-blue-400' />
               学习地图
             </button>
             {/* 编辑按钮 */}
@@ -198,21 +206,21 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
                   onEdit(book);
                   setMenuOpen(false);
                 }}
-                className='w-full flex items-center px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 text-left transition-colors border-b border-gray-100'
+                className='w-full flex items-center px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors border-b border-slate-100 dark:border-slate-800'
               >
-                <Edit size={13} className='mr-2 flex-shrink-0' />
+                <Edit size={13} strokeWidth={1.5} className='mr-2 flex-shrink-0' />
                 编辑信息
               </button>
             )}
             {/* 删除按钮 */}
             <button
               onClick={() => {
-                onDelete(book.id);
+                onDelete(book.id, menuButtonRef.current);
                 setMenuOpen(false);
               }}
-              className='w-full flex items-center px-3 py-2 text-xs text-red-600 hover:bg-red-50 text-left transition-colors'
+              className='w-full flex items-center px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 text-left transition-colors'
             >
-              <Trash2 size={13} className='mr-2 flex-shrink-0' />
+              <Trash2 size={13} strokeWidth={1.5} className='mr-2 flex-shrink-0' />
               删除书籍
             </button>
           </div>

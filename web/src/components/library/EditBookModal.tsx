@@ -105,19 +105,19 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
         role='dialog'
         aria-modal='true'
         aria-labelledby='edit-book-modal-title'
-        className='relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in overflow-hidden'
+        className='relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md animate-fade-in overflow-hidden text-slate-800 dark:text-slate-100'
       >
         {/* 头部 */}
-        <div className='flex items-center justify-between px-6 py-4 border-b border-gray-100'>
-          <h2 id='edit-book-modal-title' className='text-lg font-bold text-gray-800'>
+        <div className='flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800'>
+          <h2 id='edit-book-modal-title' className='text-lg font-bold text-slate-800 dark:text-slate-100'>
             编辑书籍信息
           </h2>
           <button
             onClick={onClose}
-            className='p-1 hover:bg-gray-100 rounded-full transition-colors'
+            className='p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors'
             disabled={isSaving}
           >
-            <X size={20} className='text-gray-500' />
+            <X size={20} strokeWidth={1.5} className='text-slate-500 dark:text-slate-400' />
           </button>
         </div>
 
@@ -126,7 +126,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
           {/* 封面预览与上传 */}
           <div className='flex gap-4'>
             {/* 封面预览 */}
-            <div className='flex-shrink-0 w-24 h-36 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg overflow-hidden border border-gray-200 relative'>
+            <div className='flex-shrink-0 w-24 h-36 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 relative'>
               {previewUrl ? (
                 <>
                   <img
@@ -136,12 +136,12 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
                   />
                   {/* 新封面标记 */}
                   {hasNewCover && (
-                    <div className='absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full' />
+                    <div className='absolute top-1 right-1 w-2 h-2 bg-slate-blue-500 rounded-full' />
                   )}
                 </>
               ) : (
-                <div className='w-full h-full flex items-center justify-center text-gray-300'>
-                  <ImageIcon size={32} strokeWidth={1} />
+                <div className='w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-600'>
+                  <ImageIcon size={32} strokeWidth={1.5} />
                 </div>
               )}
             </div>
@@ -149,14 +149,14 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
             {/* 封面上传按钮 */}
             <div className='flex-1 flex flex-col justify-between'>
               <div>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                <label className='block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1'>
                   封面图片
                 </label>
-                <p className='text-xs text-gray-500 mb-3'>
+                <p className='text-xs text-slate-500 dark:text-slate-400 mb-3'>
                   支持 JPG、PNG 格式，建议比例 2:3
                 </p>
                 {hasNewCover && (
-                  <p className='text-xs text-blue-600 mb-2'>
+                  <p className='text-xs text-slate-blue-600 dark:text-slate-blue-400 mb-2'>
                     新封面将在保存后上传
                   </p>
                 )}
@@ -173,9 +173,9 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
                 type='button'
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isSaving}
-                className='flex items-center justify-center gap-2 w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                className='flex items-center justify-center gap-2 w-full px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                <Upload size={16} />
+                <Upload size={16} strokeWidth={1.5} />
                 <span>{hasNewCover ? '更换图片' : '选择图片'}</span>
               </button>
             </div>
@@ -183,7 +183,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
 
           {/* 书名输入 */}
           <div>
-            <label htmlFor='title' className='block text-sm font-medium text-gray-700 mb-1.5'>
+            <label htmlFor='title' className='block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5'>
               书名 <span className='text-red-500'>*</span>
             </label>
             <input
@@ -192,7 +192,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder='输入书名'
-              className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all'
+              className='w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-lg focus:ring-2 focus:ring-slate-blue-500 focus:border-slate-blue-500 outline-none transition-all'
               disabled={isSaving}
               maxLength={200}
             />
@@ -200,7 +200,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
 
           {/* 作者输入 */}
           <div>
-            <label htmlFor='author' className='block text-sm font-medium text-gray-700 mb-1.5'>
+            <label htmlFor='author' className='block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5'>
               作者
             </label>
             <input
@@ -209,7 +209,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
               placeholder='输入作者名'
-              className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all'
+              className='w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-lg focus:ring-2 focus:ring-slate-blue-500 focus:border-slate-blue-500 outline-none transition-all'
               disabled={isSaving}
               maxLength={100}
             />
@@ -221,7 +221,7 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
               type='button'
               onClick={onClose}
               disabled={isSaving}
-              className='flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50'
+              className='flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50'
             >
               取消
             </button>
@@ -229,10 +229,10 @@ export const EditBookModal: React.FC<EditBookModalProps> = ({
               type='submit'
               disabled={isSaving}
               className={clsx(
-                'flex-1 px-4 py-2.5 rounded-lg font-medium text-white transition-colors flex items-center justify-center gap-2',
+                'flex-1 px-4 py-2.5 rounded-lg font-medium text-white transition-colors flex items-center justify-center gap-2 active:scale-[0.98]',
                 isSaving
-                  ? 'bg-blue-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700'
+                  ? 'bg-slate-blue-400 cursor-not-allowed'
+                  : 'bg-slate-blue-600 hover:bg-slate-blue-700'
               )}
             >
               {isSaving ? (
