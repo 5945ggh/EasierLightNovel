@@ -14,6 +14,8 @@ import StudyPage from '@/pages/StudyPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { initConfig } from '@/services/config.service';
 
+import { useThemeSync } from '@/hooks/useThemeSync';
+
 const LearningMapPage = lazy(() => import('@/pages/LearningMapPage'));
 
 // 创建 React Query 客户端
@@ -47,14 +49,7 @@ function ConfigInitializer({ children }: { children: React.ReactNode }) {
 
   if (!isReady) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '1.2rem',
-        color: '#666',
-      }}>
+      <div className="flex min-h-[100dvh] w-full items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 text-sm font-medium">
         正在初始化配置...
       </div>
     );
@@ -68,32 +63,40 @@ function ConfigInitializer({ children }: { children: React.ReactNode }) {
 }
 
 const PageLoader = () => (
-  <div className="flex h-screen w-full items-center justify-center bg-gray-50">
-    <Loader2 className="animate-spin text-blue-600" size={32} />
+  <div className="flex min-h-[100dvh] w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
+    <Loader2 className="animate-spin text-slate-blue-600 dark:text-slate-blue-400" size={32} />
   </div>
 );
+
+function AppRoutes() {
+  useThemeSync();
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LibraryPage />} />
+        <Route path="/book/:bookId" element={<BookHomePage />} />
+        <Route path="/study" element={<StudyPage />} />
+        <Route
+          path="/study/map/:bookId"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <LearningMapPage />
+            </Suspense>
+          }
+        />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/read/:bookId" element={<ReaderPage />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigInitializer>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<LibraryPage />} />
-            <Route path="/book/:bookId" element={<BookHomePage />} />
-            <Route path="/study" element={<StudyPage />} />
-            <Route
-              path="/study/map/:bookId"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <LearningMapPage />
-                </Suspense>
-              }
-            />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/read/:bookId" element={<ReaderPage />} />
-          </Routes>
-        </BrowserRouter>
+        <AppRoutes />
       </ConfigInitializer>
     </QueryClientProvider>
   );
