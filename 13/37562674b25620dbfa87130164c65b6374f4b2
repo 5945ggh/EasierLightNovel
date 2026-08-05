@@ -1,0 +1,21 @@
+web/src/components/common/ConfirmModal.tsx
+  s_d6e56e9711e6cb::t_a081d9326dec50 17-72,105-122,152-165
+  s_d6e56e9711e6cb::t_4e8e3e74dd1f9d 80-84,90,93,95,127-129
+  s_d6e56e9711e6cb::t_f7b9727e60f94c 1-16,73-79,85-89,91-92,94,96-104,123-126,130-151,166-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "1337562674b25620dbfa87130164c65b6374f4b2",
+  "prompts": {},
+  "sessions": {
+    "s_d6e56e9711e6cb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcd71-958b-7863-8bac-807dc9c35e5d",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
