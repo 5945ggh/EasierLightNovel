@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getAllVocabularies, deleteVocabulary } from '@/services/vocabularies.service';
 import { Loader2, Trash2, Search, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { ConfirmModal } from '@/components/common/ConfirmModal';
 import type { VocabularyResponse } from '@/types';
 
 type VocabularyListItem = VocabularyResponse & { book_title: string };
@@ -79,6 +80,10 @@ const parseDefinition = (def: string | undefined): string[] => {
 
 const VocabularyTab: React.FC = () => {
   const queryClient = useQueryClient();
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const { data: vocabularies, isLoading } = useQuery({
     queryKey: ['vocabularies', 'all'],
     queryFn: getAllVocabularies,
@@ -98,36 +103,55 @@ const VocabularyTab: React.FC = () => {
     );
   }, [vocabularies, filter]);
 
-  const handleDelete = async (id: number) => {
-    if (confirm('确定要删除这个生词吗？')) {
-      await deleteVocabulary(id);
-      queryClient.invalidateQueries({ queryKey: ['vocabularies'] });
+  const handleConfirmDelete = async () => {
+    if (deleteTargetId === null) return;
+    setDeleteError(null);
+    setIsDeleting(true);
+    try {
+      await deleteVocabulary(deleteTargetId);
+      await queryClient.invalidateQueries({ queryKey: ['vocabularies'] });
+      setDeleteTargetId(null);
+    } catch (error) {
+      console.error('Failed to delete vocabulary:', error);
+      setDeleteError('删除失败，请检查连接后重试。');
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const handleDeleteRequest = (id: number) => {
+    setDeleteError(null);
+    setDeleteTargetId(id);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteError(null);
+    setDeleteTargetId(null);
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400">
+      <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500">
         <Loader2 className="animate-spin mr-2" size={20} /> 加载生词中...
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
       {/* 工具栏 */}
-      <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
         <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} strokeWidth={1.5} />
           <input
             type="text"
             placeholder="搜索单词、读音或书名..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-blue-500 transition-all"
             value={filter}
             onChange={e => setFilter(e.target.value)}
           />
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-slate-500 dark:text-slate-400">
           共 {filteredData.length} 个生词
         </div>
       </div>
@@ -135,18 +159,32 @@ const VocabularyTab: React.FC = () => {
       {/* 列表区域 */}
       <div className="flex-1 overflow-y-auto">
         {filteredData.length > 0 ? (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {filteredData.map(vocab => (
-              <VocabItem key={vocab.id} vocab={vocab} onDelete={handleDelete} />
+              <VocabItem key={vocab.id} vocab={vocab} onDelete={handleDeleteRequest} />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
-            <BookOpen size={48} className="mb-4 opacity-50" />
+          <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-12">
+            <BookOpen size={48} strokeWidth={1.5} className="mb-4 opacity-50" />
             <p>{vocabularies?.length === 0 ? '还没有生词，去阅读时添加吧！' : '没有找到匹配的生词'}</p>
           </div>
         )}
       </div>
+
+      {/* 确认删除对话框 */}
+      <ConfirmModal
+        isOpen={deleteTargetId !== null}
+        title="确认删除生词？"
+        message="确定要删除这个生词吗？此操作无法撤销。"
+        confirmText="彻底删除"
+        cancelText="取消"
+        isDanger={true}
+        isLoading={isDeleting}
+        error={deleteError}
+        onConfirm={handleConfirmDelete}
+        onClose={handleCloseDeleteModal}
+      />
     </div>
   );
 };
@@ -161,38 +199,38 @@ const VocabItem: React.FC<{
   const hasDefinition = definitions.length > 0;
 
   return (
-    <div className="bg-white hover:bg-gray-50 transition-colors">
+    <div className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
       {/* 主行（默认显示） */}
       <div className="flex items-center gap-4 px-4 py-3">
         {/* 单词信息 */}
         <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
           {/* 表层形 */}
           <div className="col-span-3">
-            <span className="font-medium text-gray-800 truncate block">{vocab.word}</span>
+            <span className="font-medium text-slate-800 dark:text-slate-100 truncate block">{vocab.word}</span>
           </div>
 
           {/* 读音 */}
           <div className="col-span-3">
-            <span className="text-indigo-600 text-sm truncate block">{vocab.reading || '—'}</span>
+            <span className="text-slate-blue-600 dark:text-slate-blue-400 text-sm truncate block font-medium">{vocab.reading || '—'}</span>
           </div>
 
           {/* 原型 */}
           <div className="col-span-2">
-            <span className="text-gray-500 text-sm truncate block">
+            <span className="text-slate-500 dark:text-slate-400 text-sm truncate block">
               {vocab.base_form && vocab.base_form !== vocab.word ? vocab.base_form : '—'}
             </span>
           </div>
 
           {/* 词性 */}
           <div className="col-span-2">
-            <span className="text-gray-400 text-xs truncate block">
+            <span className="text-slate-400 dark:text-slate-500 text-xs truncate block">
               {vocab.part_of_speech || '—'}
             </span>
           </div>
 
           {/* 书名 */}
           <div className="col-span-2">
-            <span className="text-gray-400 text-xs truncate block" title={vocab.book_title}>
+            <span className="text-slate-400 dark:text-slate-500 text-xs truncate block" title={vocab.book_title}>
               {vocab.book_title || '未知书籍'}
             </span>
           </div>
@@ -203,18 +241,18 @@ const VocabItem: React.FC<{
           {hasDefinition && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
               title={expanded ? '收起释义' : '查看释义'}
             >
-              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              {expanded ? <ChevronUp size={16} strokeWidth={1.5} /> : <ChevronDown size={16} strokeWidth={1.5} />}
             </button>
           )}
           <button
             onClick={() => onDelete(vocab.id)}
-            className="p-1 hover:bg-red-50 hover:text-red-500 rounded text-gray-400 transition-colors"
+            className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 rounded-lg text-slate-400 transition-colors"
             title="删除生词"
           >
-            <Trash2 size={14} />
+            <Trash2 size={14} strokeWidth={1.5} />
           </button>
         </div>
       </div>
@@ -222,11 +260,11 @@ const VocabItem: React.FC<{
       {/* 展开的释义 */}
       {expanded && hasDefinition && (
         <div className="px-4 pb-3 pl-16">
-          <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+          <div className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/80 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
             <ul className="space-y-1">
               {definitions.map((def, idx) => (
                 <li key={idx} className="flex items-start gap-2">
-                  <span className="text-gray-400 flex-shrink-0">{idx + 1}.</span>
+                  <span className="text-slate-400 dark:text-slate-500 flex-shrink-0">{idx + 1}.</span>
                   <span>{def}</span>
                 </li>
               ))}

@@ -16,24 +16,24 @@ const StudyPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('vocabulary');
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
+    <div className="min-h-[100dvh] flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden transition-colors">
       {/* 顶部导航栏 */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Link
             to="/"
-            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700 transition-colors"
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
             title="返回书架"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={20} strokeWidth={1.5} />
           </Link>
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
-              <BrainCircuit size={24} />
+            <div className="p-2 bg-slate-blue-50 dark:bg-slate-800 rounded-xl text-slate-blue-600 dark:text-slate-blue-400">
+              <BrainCircuit size={24} strokeWidth={1.5} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">学习中心</h1>
-              <p className="text-sm text-gray-500">积累词汇，回顾高亮与 AI 解析</p>
+              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">学习中心</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400">积累词汇，回顾高亮与 AI 解析</p>
             </div>
           </div>
         </div>
@@ -41,17 +41,17 @@ const StudyPage: React.FC = () => {
 
       {/* Tab 切换器 */}
       <div className="px-6 py-4 flex-shrink-0">
-        <div className="flex gap-4 border-b border-gray-200">
+        <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800">
           <TabButton
             active={activeTab === 'vocabulary'}
             onClick={() => setActiveTab('vocabulary')}
-            icon={<BookOpen size={18} />}
+            icon={<BookOpen size={18} strokeWidth={1.5} />}
             label="生词本"
           />
           <TabButton
             active={activeTab === 'highlights'}
             onClick={() => setActiveTab('highlights')}
-            icon={<Highlighter size={18} />}
+            icon={<Highlighter size={18} strokeWidth={1.5} />}
             label="积累与高亮"
           />
         </div>
@@ -59,7 +59,7 @@ const StudyPage: React.FC = () => {
 
       {/* 内容区域 */}
       <div className="flex-1 overflow-hidden px-6 pb-6">
-        <div className="h-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+        <div className="h-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden relative">
           {activeTab === 'vocabulary' ? <VocabularyTab /> : <HighlightTab />}
         </div>
       </div>
@@ -78,8 +78,8 @@ const TabButton: React.FC<{
     className={clsx(
       'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2',
       active
-        ? 'border-indigo-600 text-indigo-600'
-        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        ? 'border-slate-blue-600 text-slate-blue-600 dark:border-slate-blue-400 dark:text-slate-blue-400 font-semibold'
+        : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700'
     )}
   >
     {icon}
