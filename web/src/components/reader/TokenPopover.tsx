@@ -1,10 +1,11 @@
 /**
  * TokenPopover - Token 点击弹窗
  * 当用户点击单个 Token 时显示悬浮弹窗
- * 功能：显示词典信息、添加生词本、查看详情、AI 分析（仅高亮句中显示）
+ * 功能：显示词典信息、添加词汇收藏、查看详情、AI 解析（仅高亮句中显示）
  */
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   useFloating,
   autoUpdate,
@@ -22,81 +23,9 @@ import { addVocabulary as addVocabularyService, deleteVocabulary } from '@/servi
 import { searchDictionary } from '@/services/dictionary.service';
 import { speak } from '@/utils/tts';
 import type { DictResult } from '@/types/dictionary';
+import { extractSentenceFromSegment } from '@/utils/sentence';
 import { clsx } from 'clsx';
 
-// 例句最大长度限制
-const MAX_CONTEXT_SENTENCE_LENGTH = 100;
-
-/**
- * 从段落中截取包含指定 Token 的句子
- * 按日语标点（。！？」）分割句子，限制最大长度
- */
-const extractSentenceFromSegment = (
-  segmentIndex: number,
-  tokenIndex: number,
-  segments?: import('@/types').ContentSegment[]
-): string | null => {
-  if (!segments) return null;
-
-  const segment = segments[segmentIndex];
-  if (segment?.type !== 'text' || !segment.tokens) return null;
-
-  // 构建段落文本
-  let segmentText = '';
-  const tokenPositions: number[] = [];  // 记录每个 token 在段落文本中的起始位置
-  let currentPos = 0;
-
-  for (const t of segment.tokens) {
-    const prefix = (t.gap && currentPos > 0) ? ' ' : '';
-    if (prefix) currentPos += 1;
-    tokenPositions.push(currentPos);
-    segmentText += prefix + t.s;
-    currentPos += t.s.length;
-  }
-
-  // 找到当前 token 在段落文本中的位置
-  const tokenStartPos = tokenPositions[tokenIndex] ?? 0;
-  const tokenEndPos = tokenStartPos + (segment.tokens[tokenIndex]?.s?.length ?? 0);
-
-  // 按日语标点分割句子
-  const sentenceEndMarks = ['。', '！', '？', '」', '』', '）', '(', '「', '『'];
-  let sentenceStart = 0;
-  let sentenceEnd = segmentText.length;
-
-  // 向前找句子起点
-  for (let i = tokenStartPos - 1; i >= 0; i--) {
-    if (sentenceEndMarks.includes(segmentText[i])) {
-      sentenceStart = i + 1;
-      break;
-    }
-  }
-
-  // 向后找句子终点
-  for (let i = tokenEndPos; i < segmentText.length; i++) {
-    if (sentenceEndMarks.includes(segmentText[i])) {
-      sentenceEnd = i + 1;
-      break;
-    }
-  }
-
-  let sentence = segmentText.slice(sentenceStart, sentenceEnd).trim();
-
-  // 长度限制：如果超过限制，以 token 为中心截取
-  if (sentence.length > MAX_CONTEXT_SENTENCE_LENGTH) {
-    const halfLength = Math.floor(MAX_CONTEXT_SENTENCE_LENGTH / 2);
-    const tokenCenterInSentence = tokenStartPos - sentenceStart + Math.floor((tokenEndPos - tokenStartPos) / 2);
-
-    const newStart = Math.max(0, tokenCenterInSentence - halfLength);
-    const newEnd = Math.min(sentence.length, tokenCenterInSentence + halfLength);
-
-    sentence = sentence.slice(newStart, newEnd).trim();
-    // 添加省略号
-    if (newStart > 0) sentence = '...' + sentence;
-    if (newEnd < segmentText.length) sentence = sentence + '...';
-  }
-
-  return sentence.length > 0 ? sentence : null;
-};
 
 export const TokenPopover: React.FC = () => {
   const selectedToken = useReaderStore((s) => s.selectedToken);
@@ -117,11 +46,6 @@ export const TokenPopover: React.FC = () => {
   const isHighlightAnalyzed = useReaderStore((s) => s.isHighlightAnalyzed);
   const isAnalyzing = useReaderStore((s) => s.isAnalyzing);
 
-  // 词典查询结果状态
-  const [dictResult, setDictResult] = useState<DictResult | null>(null);
-  const [isDictLoading, setIsDictLoading] = useState(false);
-  const [dictError, setDictError] = useState<string | null>(null);
-
   // Popover 只在侧边栏关闭时显示
   const isOpen = !!selectedToken && !isSidebarOpen;
   const arrowRef = React.useRef<HTMLDivElement>(null);
@@ -137,8 +61,6 @@ export const TokenPopover: React.FC = () => {
     onOpenChange: (open) => {
       if (!open) {
         setSelectedToken(null);
-        setDictResult(null);
-        setDictError(null);
       }
     },
     middleware: [
@@ -158,21 +80,18 @@ export const TokenPopover: React.FC = () => {
   const dismiss = useDismiss(context);
   const { getFloatingProps } = useInteractions([dismiss]);
 
-  // 查询词典
-  const fetchDictionary = useCallback(async (word: string) => {
-    setIsDictLoading(true);
-    setDictError(null);
-
-    try {
-      const result = await searchDictionary(word);
-      setDictResult(result);
-    } catch (err) {
-      console.error('Dictionary query failed:', err);
-      setDictError('查询失败');
-    } finally {
-      setIsDictLoading(false);
-    }
-  }, []);
+  const queryWord = selectedToken?.token.b || selectedToken?.token.s || null;
+  const {
+    data: dictResult,
+    isLoading: isDictLoading,
+    isError: hasDictionaryError,
+  } = useQuery<DictResult>({
+    queryKey: ['dictionary', queryWord],
+    queryFn: () => searchDictionary(queryWord ?? ''),
+    enabled: Boolean(isOpen && queryWord),
+    staleTime: 5 * 60 * 1000,
+  });
+  const dictError = hasDictionaryError ? '查询失败' : null;
 
   // 当 selectedToken 变化时，重新定位到对应的 DOM 元素并查询词典
   useEffect(() => {
@@ -184,14 +103,9 @@ export const TokenPopover: React.FC = () => {
         refs.setReference(element);
       }
 
-      // 查询词典（优先使用原型，其次使用表层形）
-      const queryWord = selectedToken.token.b || selectedToken.token.s;
-      fetchDictionary(queryWord);
-    } else {
-      setDictResult(null);
-      setDictError(null);
+      // 词典查询由 React Query 根据 selectedToken 的查询词驱动。
     }
-  }, [selectedToken, refs, fetchDictionary]);
+  }, [selectedToken, refs]);
 
   // 获取当前 token 所在高亮的 ID
   const currentHighlightId = React.useMemo((): number | null => {
@@ -309,8 +223,8 @@ export const TokenPopover: React.FC = () => {
   }, [selectedToken, setActiveTab, setIsSidebarOpen]);
 
   /**
-   * 打开 AI 分析侧边栏
-   * 触发 AI 分析：找到当前 token 所在的高亮句 ID，然后触发分析
+   * 打开 AI 解析侧边栏
+   * 触发 AI 解析：找到当前 token 所在的高亮句 ID，然后触发解析
    */
   const handleAIAnalyze = useCallback(() => {
     if (!selectedToken) return;
@@ -527,7 +441,7 @@ export const TokenPopover: React.FC = () => {
                 )}
               >
                 {isVocab ? <Trash2 size={16} /> : <Plus size={16} />}
-                {isVocab ? '移除生词' : '添加生词本'}
+                {isVocab ? '移除词汇收藏' : '加入词汇收藏'}
               </button>
               <button
                 onClick={handleViewDetails}
@@ -538,7 +452,7 @@ export const TokenPopover: React.FC = () => {
               </button>
             </div>
 
-            {/* AI 分析按钮 - 仅在高亮句中显示 */}
+            {/* AI 解析按钮 - 仅在高亮句中显示 */}
             {isInHighlight && (
               <button
                 onClick={handleAIAnalyze}
@@ -548,7 +462,7 @@ export const TokenPopover: React.FC = () => {
                 {isThisHighlightAnalyzing ? (
                   <>
                     <Loader2 className="animate-spin" size={16} />
-                    分析中...
+                    解析中...
                   </>
                 ) : (
                   <>

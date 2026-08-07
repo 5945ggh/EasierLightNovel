@@ -76,6 +76,9 @@ export const SelectionMenu: React.FC = () => {
 
   const dismiss = useDismiss(context);
   const { getFloatingProps } = useInteractions([dismiss]);
+  const setFloatingRef = useCallback((node: HTMLDivElement | null) => {
+    refs.setFloating(node);
+  }, [refs]);
 
   /**
    * 从 DOM 节点向上查找，找到包含 data-segment-index 和 data-token-index 的元素
@@ -403,7 +406,7 @@ export const SelectionMenu: React.FC = () => {
   return (
     <FloatingPortal>
       <div
-        ref={refs.setFloating}
+        ref={setFloatingRef}
         style={floatingStyles}
         {...getFloatingProps()}
         className="z-[60] flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"

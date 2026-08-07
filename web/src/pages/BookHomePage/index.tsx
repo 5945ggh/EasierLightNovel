@@ -356,7 +356,7 @@ export const BookHomePage: React.FC = () => {
         <ConfirmModal
           isOpen={isConfirmDeleteOpen}
           title="确认删除书籍？"
-          message="确定要删除这本书吗？相应的阅读记录和生词本数据也将同步清除。"
+        message="确定要删除这本书吗？相应的阅读记录和已收藏词汇数据也将同步清除。"
           confirmText="彻底删除"
           cancelText="取消"
           isDanger={true}
@@ -452,7 +452,7 @@ export const BookHomePage: React.FC = () => {
       <ConfirmModal
         isOpen={isConfirmDeleteOpen}
         title="确认删除书籍？"
-        message="确定要删除这本书吗？相应的阅读记录和生词本数据也将同步清除。"
+        message="确定要删除这本书吗？相应的阅读记录和已收藏词汇数据也将同步清除。"
         confirmText="彻底删除"
         cancelText="取消"
         isDanger={true}
@@ -715,7 +715,7 @@ export const BookHomePage: React.FC = () => {
             )}
           </section>
 
-          {/* 右侧：学习地图与学习中心入口 (4 cols) */}
+          {/* 右侧：学习地图与词汇与摘录入口 (4 cols) */}
           <aside className="lg:col-span-4 space-y-4">
             {/* 学习地图入口 */}
             <div className="bg-gradient-to-br from-indigo-50/70 to-blue-50/40 rounded-2xl border border-indigo-100 p-5 shadow-sm flex flex-col justify-between">
@@ -728,7 +728,7 @@ export const BookHomePage: React.FC = () => {
                 </div>
 
                 <p className="text-xs text-gray-600 leading-relaxed mb-4">
-                  全书词汇难易度分布、已知/未知词分布与各章节推荐学习词汇。
+                  全书词汇负担、章节路线与书内高频词元覆盖曲线。
                 </p>
 
               </div>
@@ -742,22 +742,22 @@ export const BookHomePage: React.FC = () => {
               </Link>
             </div>
 
-            {/* 学习中心入口 */}
+            {/* 词汇与摘录入口 */}
             <div className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm">
               <div className="flex items-center gap-2.5 text-gray-900 font-semibold text-sm mb-2">
                 <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
                   <BrainCircuit size={18} />
                 </div>
-                <span>生词与复习</span>
+                <span>词汇与摘录</span>
               </div>
               <p className="text-xs text-gray-500 leading-relaxed mb-4">
-                查看整本书积累的生词本、复习笔记与全局学习统计。
+                跨书查看阅读中收藏的词汇、摘录与 AI 解析。
               </p>
               <Link
                 to="/study"
                 className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-xl text-center transition-colors flex items-center justify-center gap-1"
               >
-                <span>前往学习中心</span>
+                <span>查看词汇与摘录</span>
                 <ChevronRight size={14} />
               </Link>
             </div>

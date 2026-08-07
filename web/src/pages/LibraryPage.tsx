@@ -65,7 +65,7 @@ export const LibraryPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingBookId, setDeletingBookId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const deleteReturnFocusRef = useRef<HTMLElement | null>(null);
+  const [deleteReturnFocusElement, setDeleteReturnFocusElement] = useState<HTMLElement | null>(null);
 
   // Toast 自动关闭逻辑
   useEffect(() => {
@@ -134,9 +134,10 @@ export const LibraryPage: React.FC = () => {
   };
 
   const handleDeleteRequest = (id: string, returnFocusElement?: HTMLElement | null) => {
-    deleteReturnFocusRef.current =
+    setDeleteReturnFocusElement(
       returnFocusElement ??
-      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null),
+    );
     setDeleteError(null);
     setDeletingBookId(id);
   };
@@ -144,6 +145,7 @@ export const LibraryPage: React.FC = () => {
   const handleCloseDeleteModal = () => {
     setDeleteError(null);
     setDeletingBookId(null);
+    setDeleteReturnFocusElement(null);
   };
 
   const handleConfirmDelete = async () => {
@@ -236,7 +238,7 @@ export const LibraryPage: React.FC = () => {
       <ConfirmModal
         isOpen={!!deletingBookId}
         title="确认删除书籍？"
-        message="确定要删除这本书吗？相应的阅读记录和生词本数据也将同步清除。"
+        message="确定要删除这本书吗？相应的阅读记录和已收藏词汇数据也将同步清除。"
         confirmText="彻底删除"
         cancelText="取消"
         isDanger={true}
@@ -244,7 +246,7 @@ export const LibraryPage: React.FC = () => {
         error={deleteError}
         onConfirm={handleConfirmDelete}
         onClose={handleCloseDeleteModal}
-        returnFocusElement={deleteReturnFocusRef.current}
+        returnFocusElement={deleteReturnFocusElement}
       />
 
       {/* 头部 */}
@@ -273,13 +275,13 @@ export const LibraryPage: React.FC = () => {
             <span>系统设置</span>
           </Link>
 
-          {/* 学习中心入口 */}
+          {/* 词汇与摘录入口 */}
           <Link
             to='/study'
             className='group flex items-center gap-2 px-3.5 py-2 bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200/70 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-xl transition-all shadow-sm hover:shadow-sm font-medium text-sm active:scale-[0.98]'
           >
             <BrainCircuit size={17} strokeWidth={1.5} className='text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors' />
-            <span>学习中心</span>
+            <span>词汇与摘录</span>
           </Link>
 
           {/* 上传按钮 */}

@@ -42,6 +42,44 @@ def test_apply_sqlite_additive_migrations_adds_missing_columns(tmp_path):
     assert "progress_percentage" in progress_columns
 
 
+def test_anki_evidence_columns_are_added_to_existing_import_items(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-anki-import.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE external_knowledge_import_items ("
+            "id INTEGER PRIMARY KEY, import_id INTEGER NOT NULL, lexeme_id INTEGER NOT NULL, "
+            "source_entry_id VARCHAR(255) NOT NULL, normalized_form VARCHAR(255) NOT NULL, "
+            "canonical_reading_kana VARCHAR(255) NOT NULL, metadata_json JSON NOT NULL, "
+            "status VARCHAR(32) NOT NULL)"
+        ))
+
+    apply_sqlite_additive_migrations(engine)
+
+    with engine.begin() as conn:
+        columns = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info('external_knowledge_import_items')")).fetchall()
+        }
+
+    assert {
+        "card_id",
+        "note_id",
+        "deck_name",
+        "model_name",
+        "template_ord",
+        "anki_state",
+        "anki_underlying_state",
+        "anki_queue",
+        "anki_type",
+        "interval",
+        "reps",
+        "lapses",
+        "buried",
+        "suspended",
+        "snapshot_at",
+    }.issubset(columns)
+
+
 def test_legacy_database_gets_source_tables_and_explicit_legacy_status(tmp_path):
     db_path = tmp_path / "legacy-with-content.db"
     engine = create_engine(f"sqlite:///{db_path}")

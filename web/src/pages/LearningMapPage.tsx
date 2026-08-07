@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -9,15 +9,17 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Info,
   Loader2,
   Map as MapIcon,
   RefreshCw,
   Table,
+  TrendingUp,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
   ComposedChart,
+  AreaChart,
+  Area,
   Bar,
   Line,
   XAxis,
@@ -27,24 +29,9 @@ import {
   Cell,
 } from 'recharts';
 import { getBookDetail } from '@/services/books.service';
-import {
-  deleteLexemeKnowledgeStatus,
-  getLearningMap,
-  putLexemeKnowledgeStatus,
-} from '@/services/learning-map.service';
-import {
-  decrementPendingLexeme,
-  getLearningMapLexemeStatus,
-  incrementPendingLexeme,
-  isLatestLexemeMutation,
-  updateLearningMapLexemeStatus,
-} from '@/services/learning-map-cache';
+import { getLearningMap } from '@/services/learning-map.service';
 import type {
-  LexemeKnowledgeStatus,
   LearningMapChapter,
-  LearningMapLookupObservation,
-  LearningMapManageableLexeme,
-  LearningMapRecommendedLexeme,
   LearningMapResponse,
 } from '@/types';
 
@@ -63,17 +50,6 @@ const POS_LABELS: Record<string, string> = {
 
 const LEARNING_MAP_QUERY_KEY = 'learning-map';
 
-const MANUAL_STATUS_OPTIONS: Array<{
-  value: LexemeKnowledgeStatus | 'unset';
-  label: string;
-  description: string;
-}> = [
-  { value: 'unset', label: '未设置', description: '不覆盖当前基线判断' },
-  { value: 'learning', label: '学习中', description: '标记为正在学习' },
-  { value: 'known', label: '已掌握', description: '计入明确掌握基线' },
-  { value: 'ignored', label: '暂不学习', description: '从学习目标中排除' },
-];
-
 const formatFilterScope = (map: LearningMapResponse): string => {
   const { filter_spec: filterSpec } = map;
   const partOfSpeech = filterSpec.pos_allowlist
@@ -83,9 +59,9 @@ const formatFilterScope = (map: LearningMapResponse): string => {
     ? '专有名词不计入覆盖率统计'
     : '专有名词保留在覆盖率统计中';
   const oov = filterSpec.exclude_oov
-    ? 'OOV 不计入覆盖率分母，也不会列入推荐学习词'
-    : 'OOV 计入覆盖率分母，但不会列入推荐学习词';
-  return `统计词性：${partOfSpeech || '未指定'}。${properNouns}。${oov}。`;
+    ? '词表外未收录词 (Out of Vocabulary, i.e. OOV) 不计入覆盖率分母'
+    : '词表外未收录词 (Out of Vocabulary, i.e. OOV) 计入覆盖率分母';
+  return `仅统计具有实际含义的词汇（包含${partOfSpeech || '名词、动词、形容词、副词'}），自动排除“は/が/です/ます”等纯语法虚词。${properNouns}。${oov}。`;
 };
 
 const getErrorMessage = (error: unknown): string => {
@@ -96,46 +72,7 @@ const getErrorMessage = (error: unknown): string => {
   return '学习地图暂时无法加载，请稍后重试。';
 };
 
-const formatLookupTime = (value: string): string => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
-};
 
-/**
- * 查词事实观察展示
- */
-const LookupObservation: React.FC<{ observation?: LearningMapLookupObservation | null }> = ({
-  observation,
-}) => {
-  if (!observation) return null;
-
-  const laterLookupText =
-    observation.later_lookup_count_after_first === 0
-      ? '之后没有再次查询'
-      : `之后又查询 ${observation.later_lookup_count_after_first} 次`;
-  const afterFirstText =
-    observation.occurrences_after_first_lookup === null
-      ? `${laterLookupText}。`
-      : `首次查询后又出现 ${observation.occurrences_after_first_lookup} 次，${laterLookupText}。`;
-  const afterLastText =
-    observation.occurrences_after_last_lookup === null
-      ? ''
-      : `最近一次查询后又出现 ${observation.occurrences_after_last_lookup} 次。`;
-  const lastLookupText =
-    observation.lookup_count > 1
-      ? `最近一次查询在第 ${observation.last_lookup.chapter_index + 1} 章，${formatLookupTime(observation.last_lookup.created_at)}。`
-      : '';
-
-  return (
-    <div className="col-span-full min-w-0 rounded-md bg-indigo-50/70 px-3 py-2 text-xs leading-5 text-indigo-800">
-      <p className="break-words">
-        <strong className="font-medium text-indigo-900">阅读行为事实：</strong>
-        本书中查过 {observation.lookup_count} 次；首次查询在第 {observation.first_lookup.chapter_index + 1} 章，
-        {formatLookupTime(observation.first_lookup.created_at)}。{afterFirstText}{lastLookupText}{afterLastText}
-      </p>
-    </div>
-  );
-};
 
 /**
  * Section B: 首要结论 - 阅读准备度
@@ -148,116 +85,164 @@ const ReadingReadinessSection: React.FC<{ map: LearningMapResponse }> = ({ map }
   const [showDetails, setShowDetails] = useState(false);
   const coverage = map.coverage;
   const baselineReady = map.knowledge_baseline_status === 'ready';
+  const curve = map.coverage_curve;
+
+  const uncoveredOccurrences = coverage
+    ? coverage.eligible_occurrences - coverage.known_occurrences
+    : null;
+  const uncoveredBurdenPer1k =
+    coverage && coverage.eligible_occurrences > 0 && uncoveredOccurrences !== null
+      ? Math.round((uncoveredOccurrences / coverage.eligible_occurrences) * 1000)
+      : null;
+
+  // 动态寻找高于当前覆盖率的下一个收益目标点
+  const currentCoverageRatio = coverage?.explicit_known_coverage ?? 0;
+  const nextYieldPoint = curve?.find(
+    (point) => point.target_coverage > currentCoverageRatio + 0.001
+  );
 
   return (
     <section className="space-y-3">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        {/* 主要卡片：明确掌握覆盖率 / 三态逻辑 */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                首要结论 · 阅读准备度
-              </p>
-              <h2 className="mt-1 text-base font-semibold text-gray-900">
-                {coverage
-                  ? '明确掌握覆盖率'
-                  : baselineReady
+      {/* 统一顶栏 KPI 卡片 */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">
+          <div>
+            <p className="text-[11px] font-bold tracking-wider text-indigo-600 dark:text-indigo-400 uppercase">
+              个人词汇阅读准备度诊断
+            </p>
+            <h2 className="mt-0.5 text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100">
+              {coverage
+                ? '全书词汇阻力与已知覆盖概览'
+                : baselineReady
                   ? '当前范围无可统计词元'
-                  : '词汇基线未建立'}
-              </h2>
-            </div>
+                  : '个人词汇基线未建立'}
+            </h2>
           </div>
-
-          {coverage ? (
-            <div className="mt-4">
-              <div className="flex items-baseline gap-3">
-                <span className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl tabular-nums">
-                  {formatCoverage(coverage.explicit_known_coverage)}
-                </span>
-                <span className="text-xs text-gray-500">(基于已标记“已掌握”词汇)</span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-gray-600">
-                已明确掌握{' '}
-                <strong className="font-semibold text-gray-900 tabular-nums">
-                  {coverage.known_occurrences.toLocaleString('zh-CN')}
-                </strong>{' '}
-                次出现，统计分母共{' '}
-                <span className="font-medium text-gray-800 tabular-nums">
-                  {coverage.eligible_occurrences.toLocaleString('zh-CN')}
-                </span>{' '}
-                次（按全书词汇出现次数计算）。
-              </p>
-            </div>
-          ) : baselineReady ? (
-            <div className="mt-3">
-              <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-3.5 text-xs leading-5 text-blue-900">
-                <p className="font-semibold text-blue-950">当前范围没有可统计词元</p>
-                <p className="mt-1">
-                  已建立个人词汇基线，但当前过滤口径下没有产生符合统计条件的词元。
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3">
-              <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3.5 text-xs leading-5 text-amber-900">
-                <p className="font-semibold text-amber-950">尚未建立个人词汇基线</p>
-                <p className="mt-1">
-                  系统默认不会将“未设置”状态的词误认为未知。只有在您手动标记已掌握词汇或导入已有词汇后，才会计算明确掌握覆盖率和章节未知负担。
-                </p>
-              </div>
-            </div>
-          )}
-
-          <p className="mt-4 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">
-            {map.knowledge_baseline_message}
-          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 dark:text-slate-400">阅读锚点：</span>
+            <span className="inline-flex items-center rounded-lg bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/50">
+              第 {map.reading_anchor_chapter_index + 1} 章
+            </span>
+          </div>
         </div>
 
-        {/* 辅助卡片：阅读锚点与统计口径概要 */}
-        <div className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-              <Info size={18} className="text-indigo-600" aria-hidden="true" />
-              当前阅读位置与统计范围
-            </div>
-            <div className="mt-3 space-y-2 text-sm text-gray-600">
-              <p className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">阅读锚点：</span>
-                <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">
-                  第 {map.reading_anchor_chapter_index + 1} 章
+        {coverage ? (
+          <div className="grid gap-5 lg:grid-cols-[1fr_auto] items-center">
+            {/* 左侧：主要指标与卡片网格 */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+              {/* 明确掌握覆盖率 */}
+              <div className="space-y-1 sm:border-r border-slate-100 dark:border-slate-800 sm:pr-4">
+                <span className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl tabular-nums block">
+                  {formatCoverage(coverage.explicit_known_coverage)}
                 </span>
-              </p>
-              <p className="text-xs leading-5 text-gray-500">
-                分析运行版本：#{map.analysis_run_id ?? '无'}
-              </p>
-            </div>
-          </div>
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">
+                  明确掌握覆盖率 (已标记“会”)
+                </span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums block">
+                  已知 {coverage.known_occurrences.toLocaleString('zh-CN')} 次 / 共 {coverage.eligible_occurrences.toLocaleString('zh-CN')} 次
+                </span>
+              </div>
 
-          <div className="mt-4 border-t border-gray-100 pt-3">
-            <button
-              type="button"
-              onClick={() => setShowDetails(!showDetails)}
-              className="flex w-full items-center justify-between py-1 text-xs font-medium text-gray-600 hover:text-indigo-600 focus:outline-none"
-              aria-expanded={showDetails}
-            >
-              <span>查看完整统计口径与规则</span>
-              {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
+              {/* 每千词未覆盖负担 */}
+              <div className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 p-3.5 border border-amber-200/80 dark:border-amber-900/40 space-y-1">
+                <span className="text-xs font-semibold text-amber-900 dark:text-amber-300 block">
+                  每千词未覆盖阻力
+                </span>
+                <span className="text-2xl font-black text-amber-900 dark:text-amber-200 tabular-nums block">
+                  {uncoveredBurdenPer1k ?? '-'} <span className="text-xs font-normal text-amber-700 dark:text-amber-400">次/千词</span>
+                </span>
+                <span className="text-[10px] text-amber-700/90 dark:text-amber-400 block">
+                  预估每千词未掌握实词频次
+                </span>
+              </div>
+
+              {/* 未明确掌握实词总频次 */}
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3.5 border border-slate-200/60 dark:border-slate-800 space-y-1">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400 block">
+                  未明确掌握实词频次
+                </span>
+                <span className="text-xl font-bold text-slate-800 dark:text-slate-200 tabular-nums block">
+                  {uncoveredOccurrences?.toLocaleString('zh-CN')} 次
+                </span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 block">
+                  全书需攻坚或确认的实词出现
+                </span>
+              </div>
+            </div>
+
+            {/* 右侧：学习投效预测微卡片 */}
+            {nextYieldPoint ? (
+              <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/50 bg-gradient-to-br from-indigo-50/70 to-slate-50 dark:from-indigo-950/30 dark:to-slate-900/40 p-4 min-w-[240px]">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                  <TrendingUp size={15} />
+                  <span>高频覆盖率展望</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                  若前 <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{nextYieldPoint.required_lexeme_count}</strong> 个核心词汇均已掌握，
+                  全书明确掌握覆盖率可达到 <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCoverage(nextYieldPoint.target_coverage)}</strong>。
+                </p>
+                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  这是书内词频结构的数学估算，不构成学习任务或复习安排
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-emerald-100 dark:border-emerald-900/50 bg-gradient-to-br from-emerald-50/70 to-slate-50 dark:from-emerald-950/30 dark:to-slate-900/40 p-4 min-w-[240px]">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 size={15} />
+                  <span>高覆盖率里程碑</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                  已知覆盖率已达 <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCoverage(coverage.explicit_known_coverage)}</strong>，
+                  高于主要预设曲线目标点。
+                </p>
+                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  已具备极高顺畅阅读基础
+                </p>
+              </div>
+            )}
           </div>
+        ) : baselineReady ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-3.5 text-xs leading-5 text-blue-900">
+            <p className="font-semibold text-blue-950">当前范围没有可统计词元</p>
+            <p className="mt-1">
+              已建立个人词汇基线，但当前筛选条件（如词性过滤）下没有产生符合条件的实词。
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3.5 text-xs leading-5 text-amber-900">
+            <p className="font-semibold text-amber-950">尚未建立个人词汇基线</p>
+            <p className="mt-1">
+              系统不会将没有个人基线的词强行判定为不认识。导入个人词汇基线后，才会显示个人覆盖率与阅读负担。
+            </p>
+          </div>
+        )}
+
+        {/* 底部说明与规则展开 */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 pt-3 text-xs text-slate-500 dark:text-slate-400">
+          <p className="italic text-[11px] text-slate-400 dark:text-slate-500">
+            注：“阻力”限定为词汇层面的个人阅读负担，不代表句法复杂度和文学综合难度。
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setShowDetails(!showDetails)}
+            className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none transition-colors"
+            aria-expanded={showDetails}
+          >
+            <span>查看词汇筛选规则</span>
+            {showDetails ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
         </div>
       </div>
 
-      {/* 可折叠统计口径说明 */}
+      {/* 可折叠词汇筛选规则说明 */}
       {showDetails && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs leading-6 text-gray-600 transition-all">
-          <p className="font-semibold text-gray-800">统计口径与规则：</p>
-          <p className="mt-1">{formatFilterScope(map)}</p>
-          <ul className="mt-2 space-y-1 text-gray-500 list-disc pl-4">
-            <li><strong className="text-gray-700">已掌握（known）：</strong>唯一计入“明确掌握覆盖率”的词汇状态。</li>
-            <li><strong className="text-gray-700">学习中 / 暂不学习：</strong>显式声明的状态，但不会增加覆盖率。</li>
-            <li><strong className="text-gray-700">未设置：</strong>表示未声明，系统不会将其误假定为未知词。</li>
-            <li><strong className="text-gray-700">查词事实：</strong>Reader 中查词事件只作为上下文事实显示，不改变掌握状态，也不进入覆盖率计算。</li>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-4 text-xs leading-6 text-slate-600 dark:text-slate-400 transition-all space-y-2">
+          <p className="font-semibold text-slate-800 dark:text-slate-200">本页词汇筛选规则：</p>
+          <p className="text-slate-700 dark:text-slate-300">{formatFilterScope(map)}</p>
+          <ul className="space-y-1 text-slate-500 dark:text-slate-400 list-disc pl-4">
+            <li><strong className="text-slate-700 dark:text-slate-300">明确掌握：</strong>由已导入的个人词汇基线确认，并计入明确掌握覆盖率。</li>
+            <li><strong className="text-slate-700 dark:text-slate-300">未明确掌握：</strong>表示当前没有明确掌握证据，不等同于系统认定“不会”。</li>
           </ul>
         </div>
       )}
@@ -312,22 +297,22 @@ const CustomChartTooltip: React.FC<CustomTooltipProps> = ({
         </p>
         <div className="space-y-1 pt-1 text-gray-700">
           <p className="font-semibold text-amber-700">
-            未知出现率：
+            未明确掌握出现率：
             {hasStats
               ? `${data.unknownRate}%`
               : baselineReady
-              ? '无可统计词元'
-              : '待建立基线'}
+                ? '无可统计词元'
+                : '待建立基线'}
           </p>
           <p className="text-gray-600">
-            未知词负担：
+            未明确掌握词汇负担：
             {hasStats
               ? `${data.unknownLexemeCount} 词元 (${data.unknownOccurrences} 次出现)`
               : baselineReady
-              ? '无可统计词元'
-              : '待建立基线'}
+                ? '无可统计词元'
+                : '待建立基线'}
           </p>
-          <p className="text-gray-600">符合口径出现：{data.eligibleOccurrences} 次</p>
+          <p className="text-gray-600">实词出现：{data.eligibleOccurrences} 次</p>
           <p className="text-indigo-600">本书首次出现：{data.newLexemeCount} 词元</p>
         </div>
       </div>
@@ -338,19 +323,21 @@ const CustomChartTooltip: React.FC<CustomTooltipProps> = ({
 
 /**
  * 基于 Recharts 的详细图表视图模式组件
- * 平均未知率修改为按词汇出现次数加权统计，确保与全书主覆盖率指标 1 - explicit_known_coverage 保持一致
+ * 平均未明确掌握出现率按词汇出现次数加权统计，确保与全书主覆盖率指标 1 - explicit_known_coverage 保持一致。
  */
 const ChapterRouteChartView: React.FC<{
   bookId: string;
   chapters: LearningMapChapter[];
   anchorIndex: number;
   baselineReady: boolean;
-}> = ({ bookId, chapters, anchorIndex, baselineReady }) => {
-  const [selectedChapterIndex, setSelectedChapterIndex] = useState<number>(
-    anchorIndex < chapters.length ? anchorIndex : 0,
-  );
+  selectedChapterIndex: number | null;
+  onSelectChapter: (index: number | null) => void;
+}> = ({ bookId, chapters, anchorIndex, baselineReady, selectedChapterIndex, onSelectChapter }) => {
+  const activeChapterIndex = selectedChapterIndex !== null
+    ? selectedChapterIndex
+    : (anchorIndex < chapters.length ? anchorIndex : 0);
 
-  const activeChapter = chapters[selectedChapterIndex] || chapters[0];
+  const activeChapter = chapters[activeChapterIndex] || chapters[0];
   const isAnchor = activeChapter?.chapter_index === anchorIndex;
   const activeUnknownRate =
     baselineReady && activeChapter?.unknown_occurrences !== null && activeChapter?.eligible_occurrences > 0
@@ -377,7 +364,7 @@ const ChapterRouteChartView: React.FC<{
     };
   });
 
-  // 加权平均计算：全书总未知出现次数 / 全书总符合口径出现次数
+  // 加权平均计算：全书总未明确掌握出现次数 / 全书总符合口径出现次数。
   const totalEligibleOccurrences = chapters.reduce(
     (sum, ch) => sum + ch.eligible_occurrences,
     0,
@@ -399,7 +386,7 @@ const ChapterRouteChartView: React.FC<{
           <div className="flex flex-wrap items-center gap-4 text-gray-600 font-medium">
             <span className="flex items-center gap-1.5">
               <span className="h-3 w-3 rounded-sm bg-amber-500 inline-block" />
-              未知出现率 (%)
+              未明确掌握出现率 (%)
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-0.5 w-3 bg-indigo-500 inline-block" />
@@ -408,7 +395,7 @@ const ChapterRouteChartView: React.FC<{
             {baselineReady && weightedAverageRate > 0 && (
               <span className="flex items-center gap-1 text-amber-700">
                 <span className="h-0.5 w-3 border-b border-dashed border-amber-600 inline-block" />
-                全书平均未知率 ({weightedAverageRate.toFixed(1)}%)
+                全书平均未明确掌握出现率 ({weightedAverageRate.toFixed(1)}%)
               </span>
             )}
             <span className="flex items-center gap-1.5 text-indigo-700 font-semibold">
@@ -429,7 +416,12 @@ const ChapterRouteChartView: React.FC<{
               margin={{ top: 15, right: 15, left: -10, bottom: 5 }}
               onClick={(state) => {
                 if (state && typeof state.activeTooltipIndex === 'number') {
-                  setSelectedChapterIndex(state.activeTooltipIndex);
+                  const clickedIndex = state.activeTooltipIndex;
+                  if (selectedChapterIndex === clickedIndex) {
+                    onSelectChapter(null);
+                  } else {
+                    onSelectChapter(clickedIndex);
+                  }
                 }
               }}
             >
@@ -467,7 +459,7 @@ const ChapterRouteChartView: React.FC<{
               <Bar
                 yAxisId="rate"
                 dataKey="unknownRate"
-                name="未知出现率"
+                name="未明确掌握出现率"
                 radius={[4, 4, 0, 0]}
                 cursor="pointer"
               >
@@ -478,10 +470,10 @@ const ChapterRouteChartView: React.FC<{
                       entry.chapterIndex === selectedChapterIndex
                         ? '#b45309'
                         : entry.isAnchor
-                        ? '#4f46e5'
-                        : baselineReady
-                        ? '#f59e0b'
-                        : '#60a5fa'
+                          ? '#4f46e5'
+                          : baselineReady
+                            ? '#f59e0b'
+                            : '#60a5fa'
                     }
                   />
                 ))}
@@ -519,7 +511,7 @@ const ChapterRouteChartView: React.FC<{
             </div>
             <Link
               to={`/read/${bookId}?chapter=${activeChapter.chapter_index}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition-colors"
             >
               <BookOpen size={14} aria-hidden="true" />
               <span>阅读本章</span>
@@ -528,13 +520,13 @@ const ChapterRouteChartView: React.FC<{
 
           <div className="grid grid-cols-2 gap-4 pt-3.5 sm:grid-cols-4">
             <div>
-              <p className="text-xs text-gray-500">未知出现率 / 负担</p>
+              <p className="text-xs text-gray-500">未明确掌握出现率 / 负担</p>
               <p className="mt-1 text-lg font-extrabold text-amber-700 tabular-nums">
                 {activeUnknownRate !== null
                   ? `${(activeUnknownRate * 100).toFixed(1)}%`
                   : baselineReady
-                  ? '无可统计词元'
-                  : '待建立基线'}
+                    ? '无可统计词元'
+                    : '待建立基线'}
               </p>
               {activeUnknownRate !== null && activeChapter.unknown_occurrences !== null && (
                 <p className="text-[11px] text-gray-500 tabular-nums">
@@ -548,7 +540,7 @@ const ChapterRouteChartView: React.FC<{
               <p className="mt-1 text-lg font-bold text-gray-900 tabular-nums">
                 {formatCount(activeChapter.eligible_occurrences)} 次
               </p>
-              <p className="text-[11px] text-gray-500">符合口径词元</p>
+              <p className="text-[11px] text-gray-500">纳入统计的实词</p>
             </div>
 
             <div>
@@ -575,32 +567,36 @@ const ChapterRouteChartView: React.FC<{
 /**
  * Section C: 章节阅读路线
  */
-const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }> = ({ bookId, map }) => {
+const ChapterRouteSection: React.FC<{
+  bookId: string;
+  map: LearningMapResponse;
+  selectedChapterIndex: number | null;
+  onSelectChapter: (index: number | null) => void;
+}> = ({ bookId, map, selectedChapterIndex, onSelectChapter }) => {
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
   const baselineReady = map.knowledge_baseline_status === 'ready';
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+    <section className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-800 px-5 py-4 sm:px-6">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">章节阅读路线与词汇负担</h2>
-          <p className="mt-1 text-xs text-gray-500">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">章节阅读路线与词汇负担</h2>
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
             {baselineReady
-              ? '通过图形或表格呈现各章节未知出现率与词汇负担，安排最佳阅读节奏。'
-              : '尚未建立基线时仅展示统计出现与本书首次出现词元，建立基线后将显示未知负担。'}
+              ? '点击图中柱形或表格行，右侧将协同展现对应章节的焦点词汇。'
+              : '尚未建立基线时仅展示统计出现与本书首次出现词元。'}
           </p>
         </div>
 
         {/* 视图切换 Segmented Switch */}
-        <div className="inline-flex rounded-lg bg-gray-100 p-1 text-xs font-medium text-gray-600">
+        <div className="inline-flex rounded-lg bg-gray-100 dark:bg-slate-800 p-1 text-xs font-medium text-gray-600 dark:text-slate-300">
           <button
             type="button"
             onClick={() => setViewMode('chart')}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
-              viewMode === 'chart'
-                ? 'bg-white font-semibold text-indigo-700 shadow-sm'
-                : 'hover:text-gray-900'
-            }`}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${viewMode === 'chart'
+              ? 'bg-white dark:bg-slate-700 font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm'
+              : 'hover:text-gray-900 dark:hover:text-slate-100'
+              }`}
           >
             <BarChart2 size={14} aria-hidden="true" />
             图表视图
@@ -608,11 +604,10 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
           <button
             type="button"
             onClick={() => setViewMode('table')}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
-              viewMode === 'table'
-                ? 'bg-white font-semibold text-indigo-700 shadow-sm'
-                : 'hover:text-gray-900'
-            }`}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${viewMode === 'table'
+              ? 'bg-white dark:bg-slate-700 font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm'
+              : 'hover:text-gray-900 dark:hover:text-slate-100'
+              }`}
           >
             <Table size={14} aria-hidden="true" />
             表格视图
@@ -627,6 +622,8 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
             chapters={map.chapters}
             anchorIndex={map.reading_anchor_chapter_index}
             baselineReady={baselineReady}
+            selectedChapterIndex={selectedChapterIndex}
+            onSelectChapter={onSelectChapter}
           />
         ) : (
           <div className="divide-y divide-gray-100">
@@ -634,7 +631,7 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
             <div className="hidden grid-cols-[minmax(0,1.8fr)_100px_minmax(140px,1.4fr)_130px_90px] gap-4 bg-gray-50/70 px-6 py-2.5 text-xs font-medium text-gray-500 sm:grid">
               <span>章节</span>
               <span className="text-right">统计出现</span>
-              <span>未知出现率 / 负担</span>
+              <span>未明确掌握出现率 / 负担</span>
               <span className="text-right">本书首次出现词元</span>
               <span className="text-right">操作</span>
             </div>
@@ -650,9 +647,8 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
                 <div
                   id={`chapter-row-${chapter.chapter_index}`}
                   key={chapter.chapter_index}
-                  className={`grid grid-cols-1 gap-2 p-4 transition-colors hover:bg-gray-50/50 sm:grid-cols-[minmax(0,1.8fr)_100px_minmax(140px,1.4fr)_130px_90px] sm:items-center sm:gap-4 sm:px-6 sm:py-3.5 ${
-                    isAnchor ? 'bg-indigo-50/40' : ''
-                  }`}
+                  className={`grid grid-cols-1 gap-2 p-4 transition-colors hover:bg-gray-50/50 sm:grid-cols-[minmax(0,1.8fr)_100px_minmax(140px,1.4fr)_130px_90px] sm:items-center sm:gap-4 sm:px-6 sm:py-3.5 ${isAnchor ? 'bg-indigo-50/40' : ''
+                    }`}
                 >
                   {/* 章节标题与当前锚点 */}
                   <div className="min-w-0">
@@ -679,14 +675,14 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
                     </span>
                   </div>
 
-                  {/* 未知出现率与对比柱状条 */}
+                  {/* 未明确掌握出现率与对比柱状条 */}
                   <div className="flex items-center justify-between sm:block">
-                    <span className="text-xs text-gray-400 sm:hidden">未知负担</span>
+                    <span className="text-xs text-gray-400 sm:hidden">未明确掌握负担</span>
                     {unknownRate !== null ? (
                       <div className="w-full max-w-[200px]">
                         <div className="flex items-center justify-between text-xs mb-1">
                           <span className="font-semibold tabular-nums text-amber-700">
-                            {(unknownRate * 100).toFixed(1)}% 未知
+                            {(unknownRate * 100).toFixed(1)}% 未明确掌握
                           </span>
                           <span className="text-[11px] text-gray-500 tabular-nums">
                             {chapter.unknown_lexeme_count ?? 0} 词元 ({chapter.unknown_occurrences} 次)
@@ -698,7 +694,7 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
                           aria-valuenow={Math.round(unknownRate * 100)}
                           aria-valuemin={0}
                           aria-valuemax={100}
-                          aria-label={`第 ${chapter.chapter_index + 1} 章未知出现率 ${(unknownRate * 100).toFixed(1)}%`}
+                          aria-label={`第 ${chapter.chapter_index + 1} 章未明确掌握出现率 ${(unknownRate * 100).toFixed(1)}%`}
                         >
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all"
@@ -728,7 +724,7 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
                   <div className="flex justify-end pt-1 sm:pt-0">
                     <Link
                       to={`/read/${bookId}?chapter=${chapter.chapter_index}`}
-                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                     >
                       <BookOpen size={13} aria-hidden="true" />
                       <span>阅读本章</span>
@@ -747,345 +743,174 @@ const ChapterRouteSection: React.FC<{ bookId: string; map: LearningMapResponse }
 };
 
 /**
- * Section D: 下一步优先词
+ * Section D: 学习投入与书内覆盖收益
  */
-const PriorityWordsSection: React.FC<{
-  bookId: string;
-  map: LearningMapResponse;
-}> = ({ bookId, map }) => {
-  const queryClient = useQueryClient();
-  const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
-  const [pendingLexemeIds, setPendingLexemeIds] = useState<Set<number>>(
-    () => new Set(),
-  );
-  const pendingLexemeCountsRef = useRef<Map<number, number>>(new Map());
-  const latestMutationIdsRef = useRef<Map<number, number>>(new Map());
-  const nextMutationIdRef = useRef(0);
-  const baselineReady = map.knowledge_baseline_status === 'ready';
+interface CurveChartPoint {
+  coveragePct: string;
+  targetCoverage: number;
+  requiredLexemes: number;
+  coveredOccurrences: number;
+  marginalCoveragePct: number;
+  marginalLexemes: number;
+}
 
-  // 基线已建立时展示 recommended_lexemes；未建立时展示 manageable_lexemes 用于手动建基线
-  const lexemesToShow = baselineReady
-    ? map.recommended_lexemes
-    : (map.manageable_lexemes ?? map.recommended_lexemes);
-
-  interface StatusMutationVariables {
-    lexemeId: number;
-    status: LexemeKnowledgeStatus | null;
-    requestId: number;
-  }
-
-  interface StatusMutationContext {
-    lexemeId: number;
-    previousStatus?: LexemeKnowledgeStatus | null;
-    requestId: number;
-  }
-
-  const addPendingLexeme = (lexemeId: number) => {
-    pendingLexemeCountsRef.current = incrementPendingLexeme(
-      pendingLexemeCountsRef.current,
-      lexemeId,
-    );
-    setPendingLexemeIds(new Set(pendingLexemeCountsRef.current.keys()));
-  };
-
-  const removePendingLexeme = (lexemeId: number) => {
-    pendingLexemeCountsRef.current = decrementPendingLexeme(
-      pendingLexemeCountsRef.current,
-      lexemeId,
-    );
-    setPendingLexemeIds(new Set(pendingLexemeCountsRef.current.keys()));
-  };
-
-  const statusMutation = useMutation<
-    Awaited<ReturnType<typeof putLexemeKnowledgeStatus>>,
-    Error,
-    StatusMutationVariables,
-    StatusMutationContext
-  >({
-    mutationFn: ({ lexemeId, status }: StatusMutationVariables) =>
-      status === null
-        ? deleteLexemeKnowledgeStatus(lexemeId)
-        : putLexemeKnowledgeStatus(lexemeId, status),
-    onMutate: async ({ lexemeId, status, requestId }) => {
-      await queryClient.cancelQueries({
-        queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
-        exact: true,
-      });
-      const previousMap = queryClient.getQueryData<LearningMapResponse>([
-        LEARNING_MAP_QUERY_KEY,
-        bookId,
-      ]);
-      const previousStatus = previousMap
-        ? getLearningMapLexemeStatus(previousMap, lexemeId)
-        : undefined;
-      if (previousMap) {
-        queryClient.setQueryData<LearningMapResponse>(
-          [LEARNING_MAP_QUERY_KEY, bookId],
-          updateLearningMapLexemeStatus(previousMap, lexemeId, status),
-        );
-      }
-      setStatusFeedback('正在提交...');
-      if (import.meta.env.DEV) {
-        console.debug('learning_map phase=optimistic_status_feedback');
-      }
-      return { lexemeId, previousStatus, requestId };
-    },
-    onError: (error, _variables, context) => {
-      const currentMap = queryClient.getQueryData<LearningMapResponse>([
-        LEARNING_MAP_QUERY_KEY,
-        bookId,
-      ]);
-      const isLatestRequest =
-        context &&
-        isLatestLexemeMutation(
-          latestMutationIdsRef.current,
-          context.lexemeId,
-          context.requestId,
-        );
-      if (
-        currentMap &&
-        isLatestRequest &&
-        context.previousStatus !== undefined
-      ) {
-        queryClient.setQueryData<LearningMapResponse>(
-          [LEARNING_MAP_QUERY_KEY, bookId],
-          updateLearningMapLexemeStatus(
-            currentMap,
-            context.lexemeId,
-            context.previousStatus,
-          ),
-        );
-      }
-      if (isLatestRequest || !context) {
-        setStatusFeedback(`状态更新失败：${getErrorMessage(error)}`);
-        void queryClient.invalidateQueries({
-          queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
-          exact: true,
-        });
-      }
-    },
-    onSuccess: (_response, variables) => {
-      if (
-        isLatestLexemeMutation(
-          latestMutationIdsRef.current,
-          variables.lexemeId,
-          variables.requestId,
-        )
-      ) {
-        setStatusFeedback('词汇状态已更新，统计正在后台同步。');
-        void queryClient.invalidateQueries({
-          queryKey: [LEARNING_MAP_QUERY_KEY, bookId],
-          exact: true,
-        });
-      }
-    },
-    onSettled: (_data, _error, variables) => {
-      removePendingLexeme(variables.lexemeId);
-      if (
-        isLatestLexemeMutation(
-          latestMutationIdsRef.current,
-          variables.lexemeId,
-          variables.requestId,
-        )
-      ) {
-        latestMutationIdsRef.current.delete(variables.lexemeId);
-      }
-    },
-  });
-
-  const handleStatusChange = (
-    lexemeId: number,
-    status: LexemeKnowledgeStatus | null,
-  ) => {
-    const requestId = nextMutationIdRef.current;
-    nextMutationIdRef.current += 1;
-    latestMutationIdsRef.current.set(lexemeId, requestId);
-    addPendingLexeme(lexemeId);
-    statusMutation.mutate({ lexemeId, status, requestId });
-  };
-
-  return (
-    <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-gray-100 px-5 py-4 sm:px-6">
-        <h2 className="text-base font-semibold text-gray-900">
-          {baselineReady ? '下一步优先词' : '建立个人词汇基线'}
-        </h2>
-        <p className="mt-1 text-xs text-gray-500">
-          {baselineReady
-            ? `按第 ${map.reading_anchor_chapter_index + 1} 章及之后的出现频次排序，优先处理后续出现最多的生词。`
-            : '未建立个人基线时，请仅标注您真正确定已掌握的词（标记为“已掌握”）；其他词保持未设置。'}
+const CoverageYieldTooltip: React.FC<{
+  active?: boolean;
+  payload?: Array<{ payload: CurveChartPoint }>;
+}> = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="rounded-lg border border-gray-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-3 shadow-md text-xs space-y-1 backdrop-blur-sm max-w-xs z-30">
+        <p className="font-bold text-gray-900 dark:text-slate-100 border-b border-gray-100 dark:border-slate-800 pb-1">
+          目标覆盖率：{data.coveragePct}
         </p>
-      </div>
-
-      {!baselineReady && (
-        <div className="mx-5 my-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900 sm:mx-6">
-          <p className="font-semibold text-amber-950">提示：诚实建立基线</p>
-          <p className="mt-1">
-            请只将您真正已经掌握的词标注为“已掌握”。未标注的词保持“未设置”，系统不会把未设置强行假定为已知或未知。
+        <p className="text-indigo-700 dark:text-indigo-300 font-semibold pt-0.5">
+          需要高频词元：{data.requiredLexemes} 词
+        </p>
+        <p className="text-gray-600 dark:text-slate-300 tabular-nums">
+          对应全书出现：{data.coveredOccurrences.toLocaleString('zh-CN')} 次
+        </p>
+        {data.marginalLexemes > 0 && (
+          <p className="text-emerald-700 dark:text-emerald-400 text-[11px]">
+            边际收益：+{data.marginalCoveragePct.toFixed(0)}% 覆盖率需额外 +{data.marginalLexemes} 词
           </p>
-        </div>
-      )}
-
-      {lexemesToShow.length === 0 ? (
-        <p className="p-6 text-center text-sm text-gray-500">
-          {baselineReady
-            ? map.coverage
-              ? '当前后续章节没有符合条件的推荐生词。'
-              : '当前过滤范围内没有符合统计条件的词元。'
-            : '当前没有可手动标注的词元。'}
-        </p>
-      ) : (
-        <>
-          <StatusFeedback error={statusMutation.error} message={statusFeedback} />
-          <ul className="divide-y divide-gray-100">
-            {lexemesToShow.map((lexeme) => (
-              <RecommendationRow
-                key={lexeme.lexeme_id}
-                lexeme={lexeme}
-                isPending={pendingLexemeIds.has(lexeme.lexeme_id)}
-                onStatusChange={(status) =>
-                  handleStatusChange(lexeme.lexeme_id, status)
-                }
-              />
-            ))}
-          </ul>
-        </>
-      )}
-    </section>
-  );
+        )}
+      </div>
+    );
+  }
+  return null;
 };
 
-const RecommendationRow: React.FC<{
-  lexeme: LearningMapRecommendedLexeme | LearningMapManageableLexeme;
-  isPending: boolean;
-  onStatusChange: (status: LexemeKnowledgeStatus | null) => void;
-}> = ({ lexeme, isPending, onStatusChange }) => {
-  const currentStatus = lexeme.knowledge_status ?? lexeme.state ?? 'unset';
-  const isRecommended = !('is_recommended' in lexeme) || lexeme.is_recommended;
-
-  return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-5 py-3.5 transition-colors hover:bg-gray-50/50 sm:grid-cols-[minmax(0,1.2fr)_120px_100px_100px_136px] sm:items-center sm:gap-4 sm:px-6">
-      {/* 单词表记与读音/词性 */}
-      <div className="min-w-0">
-        <p className="truncate font-bold text-gray-900 text-base" title={lexeme.display_form}>
-          {lexeme.display_form}
-        </p>
-        <p className="truncate text-xs text-gray-500 mt-0.5">
-          {lexeme.reading || '读音待确认'} · {POS_LABELS[lexeme.part_of_speech] || lexeme.part_of_speech || '词性待确认'}
-          {!isRecommended && <span className="ml-1 text-amber-600">(从推荐中排除)</span>}
-        </p>
-      </div>
-
-      {/* 从阅读位置起的后续出现 */}
-      <div className="text-right sm:text-right">
-        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold tabular-nums text-blue-700">
-          {lexeme.upcoming_chapter_occurrence_count} 次后续出现
-        </span>
-      </div>
-
-      {/* 全书出现 */}
-      <span className="hidden text-right text-xs tabular-nums text-gray-600 sm:block">
-        全书 {lexeme.book_occurrence_count} 次
-      </span>
-
-      {/* 首次出现章节 */}
-      <span className="hidden text-right text-xs text-gray-500 sm:block">
-        首见第 {lexeme.first_chapter_index + 1} 章
-      </span>
-
-      {/* 状态设置下拉框 */}
-      <label className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:justify-end">
-        <span className="text-xs text-gray-500 sm:hidden">知识状态</span>
-        <span className="relative inline-flex min-w-[128px] items-center">
-          {isPending && (
-            <Loader2
-              size={14}
-              className="pointer-events-none absolute left-2.5 z-10 animate-spin text-blue-600"
-              aria-hidden="true"
-            />
-          )}
-          <select
-            aria-label={`设置 ${lexeme.display_form} 的掌握状态`}
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-gray-700 transition-colors hover:border-blue-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:bg-gray-50 disabled:text-gray-400"
-            value={currentStatus}
-            disabled={isPending}
-            onChange={(event) => {
-              const nextValue = event.target.value as LexemeKnowledgeStatus | 'unset';
-              onStatusChange(nextValue === 'unset' ? null : nextValue);
-            }}
-          >
-            {MANUAL_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value} title={option.description}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </span>
-      </label>
-
-      {/* 查词事实观察 */}
-      <LookupObservation observation={lexeme.lookup_observation} />
-    </li>
-  );
-};
-
-/**
- * Section E: 学习投入与书内覆盖收益
- */
 const CoverageYieldSection: React.FC<{ map: LearningMapResponse }> = ({ map }) => {
   const curve = map.coverage_curve;
   if (!curve || curve.length === 0) return null;
 
+  const currentCoveragePct = map.coverage
+    ? Number((map.coverage.explicit_known_coverage * 100).toFixed(1))
+    : null;
+
+  const chartData: CurveChartPoint[] = curve.map((point, index) => {
+    const prevPoint = index > 0 ? curve[index - 1] : null;
+    const lexemeDiff = prevPoint
+      ? point.required_lexeme_count - prevPoint.required_lexeme_count
+      : point.required_lexeme_count;
+    const coverageDiff = prevPoint
+      ? (point.target_coverage - prevPoint.target_coverage) * 100
+      : point.target_coverage * 100;
+
+    return {
+      coveragePct: formatCoverage(point.target_coverage),
+      targetCoverage: Math.round(point.target_coverage * 100),
+      requiredLexemes: point.required_lexeme_count,
+      coveredOccurrences: point.covered_occurrences,
+      marginalCoveragePct: coverageDiff,
+      marginalLexemes: lexemeDiff,
+    };
+  });
+
+  const targetCoverageValues = chartData.map((point) => point.targetCoverage);
+  const minX = Math.min(...targetCoverageValues);
+  const maxX = Math.max(...targetCoverageValues);
+  const showCurrentReference = currentCoveragePct !== null
+    && currentCoveragePct >= minX
+    && currentCoveragePct <= maxX;
+
   return (
-    <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-gray-100 px-5 py-4 sm:px-6">
-        <h2 className="text-base font-semibold text-gray-900">学习投入与书内覆盖收益</h2>
-        <p className="mt-1 text-xs text-gray-500">
-          按书内词频降序统计：展示掌握最高频的前 N 个词元时对全书出现次数的边际覆盖比例。
+    <section className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      <div className="border-b border-gray-100 dark:border-slate-800 px-4 py-3.5 sm:px-5">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">学习投入与书内覆盖收益</h2>
+        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+          水平折线图展示掌握高频词汇数量与全书出现次数累积覆盖率的边际收益关系。
         </p>
       </div>
 
-      <div className="p-5 sm:p-6">
-        {/* CSS 边际收益柱状/阶梯可视化 */}
-        <div className="space-y-3">
-          {curve.map((point, index) => {
-            const prevPoint = index > 0 ? curve[index - 1] : null;
-            const lexemeDiff = prevPoint ? point.required_lexeme_count - prevPoint.required_lexeme_count : point.required_lexeme_count;
-            const coverageDiff = prevPoint ? (point.target_coverage - prevPoint.target_coverage) * 100 : point.target_coverage * 100;
+      <div className="p-4 sm:p-5 space-y-3">
+        <div className="rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-800/40 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 mb-2 text-xs">
+            <div className="flex items-center gap-3 text-gray-600 dark:text-slate-300 font-medium">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-indigo-600 dark:bg-indigo-400 inline-block" />
+                所需高频词元数
+              </span>
+              <span className="text-gray-400 dark:text-slate-500">目标覆盖率</span>
+            </div>
+            {currentCoveragePct !== null && (
+              <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
+                <span className={showCurrentReference
+                  ? 'h-0.5 w-3 border-b border-dashed border-emerald-600 dark:border-emerald-400 inline-block'
+                  : 'h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-400 inline-block'}
+                />
+                当前掌握 {currentCoveragePct}%
+                {!showCurrentReference && (
+                  <span className="font-normal text-emerald-600/70 dark:text-emerald-400/70">
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
 
-            return (
-              <div key={point.target_coverage} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-gray-800">
-                    覆盖率 {formatCoverage(point.target_coverage)}
-                  </span>
-                  <span className="text-gray-600 tabular-nums">
-                    需要 <strong className="font-semibold text-gray-900">{point.required_lexeme_count}</strong> 词
-                    ({point.covered_occurrences.toLocaleString('zh-CN')} 次出现)
-                    {index > 0 && (
-                      <span className="ml-2 text-indigo-600">
-                        (增量: +{coverageDiff.toFixed(0)}% 需 +{lexemeDiff} 词)
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div className="h-3.5 w-full overflow-hidden rounded-full bg-gray-100 p-0.5">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all"
-                    style={{ width: `${Math.min(100, Math.max(4, point.target_coverage * 100))}%` }}
-                    role="progressbar"
-                    aria-valuenow={Math.round(point.target_coverage * 100)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`目标覆盖率 ${formatCoverage(point.target_coverage)} 需要 ${point.required_lexeme_count} 词元`}
+          <div className="h-48 w-full sm:h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chartData}
+                margin={{ top: 8, right: 10, left: -10, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="coverageGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="targetCoverage"
+                  type="number"
+                  domain={[minX, maxX]}
+                  ticks={targetCoverageValues}
+                  tickFormatter={(val: number) => `${val}%`}
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#475569' }}
+                />
+                <YAxis
+                  unit=" 词"
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  tickLine={false}
+                  axisLine={false}
+                  domain={[0, 'auto']}
+                />
+                <RechartsTooltip content={<CoverageYieldTooltip />} />
+                {showCurrentReference && currentCoveragePct !== null && (
+                  <ReferenceLine
+                    x={currentCoveragePct}
+                    stroke="#10b981"
+                    strokeDasharray="3 3"
+                    label={{
+                      value: `当前 (${currentCoveragePct}%)`,
+                      position: 'top',
+                      fill: '#10b981',
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
                   />
-                </div>
-              </div>
-            );
-          })}
+                )}
+                <Area
+                  type="monotone"
+                  dataKey="requiredLexemes"
+                  name="所需词元数"
+                  stroke="#6366f1"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#coverageGradient)"
+                  dot={{ r: 3.5, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 1.5 }}
+                  activeDot={{ r: 5, fill: '#6366f1' }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <p className="mt-4 border-t border-gray-100 pt-3 text-[11px] leading-5 text-gray-500">
+        <p className="border-t border-gray-100 dark:border-slate-800 pt-3 text-[11px] leading-5 text-gray-500 dark:text-slate-400">
           注：此收益仅反映“书内词汇出现次数”的数学累积覆盖比例。高覆盖率代表阅读时碰到的词汇大部分处于已知范围，不等于阅读理解能力保证、JLPT 考试等级或通用词汇量。
         </p>
       </div>
@@ -1093,39 +918,25 @@ const CoverageYieldSection: React.FC<{ map: LearningMapResponse }> = ({ map }) =
   );
 };
 
-const StatusFeedback: React.FC<{ error: unknown; message: string | null }> = ({ error, message }) => {
-  if (error) {
-    return (
-      <div className="mx-5 my-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 sm:mx-6">
-        <AlertCircle size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
-        <span>{getErrorMessage(error)}</span>
-      </div>
-    );
-  }
-
-  if (!message) return null;
-
-  return (
-    <div className="mx-5 my-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 sm:mx-6">
-      <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
-      <span>{message}</span>
-    </div>
-  );
-};
-
 const LearningMapReady: React.FC<{ bookId: string; map: LearningMapResponse }> = ({ bookId, map }) => {
+  const [selectedChapterIndex, setSelectedChapterIndex] = useState<number | null>(
+    map.reading_anchor_chapter_index < map.chapters.length ? map.reading_anchor_chapter_index : null
+  );
+
   return (
-    <div className="space-y-5">
-      {/* Section B: 首要结论 - 阅读准备度 */}
+    <div className="space-y-6">
+      {/* 顶部: 个人词汇阅读准备度与收益诊断 KPI */}
       <ReadingReadinessSection map={map} />
 
-      {/* Section C: 章节阅读路线与词汇负担 */}
-      <ChapterRouteSection bookId={bookId} map={map} />
+      {/* 章节路线与阻力地图 */}
+      <ChapterRouteSection
+        bookId={bookId}
+        map={map}
+        selectedChapterIndex={selectedChapterIndex}
+        onSelectChapter={setSelectedChapterIndex}
+      />
 
-      {/* Section D: 下一步优先词 / 建立个人词汇基线 */}
-      <PriorityWordsSection bookId={bookId} map={map} />
-
-      {/* Section E: 学习投入与书内覆盖收益 */}
+      {/* 底部: 学习投入与书内覆盖收益曲线 */}
       <CoverageYieldSection map={map} />
     </div>
   );
@@ -1191,7 +1002,7 @@ const LearningMapPage: React.FC = () => {
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-blue-600 dark:text-slate-blue-400">
                 <MapIcon size={14} strokeWidth={1.5} aria-hidden="true" />
-                词汇阅读准备度与学习优先级
+                词汇阅读准备度与章节路线
               </p>
               <h1 className="truncate text-base font-bold text-slate-900 dark:text-slate-100 sm:text-lg" title={bookTitle}>
                 {bookTitle}
@@ -1220,7 +1031,7 @@ const LearningMapPage: React.FC = () => {
                 <h2 className="font-semibold text-base">需要重新分析这本书</h2>
                 <p className="mt-2 text-xs leading-6 text-amber-800 dark:text-amber-300">
                   当前书籍缺少 active AnalysisRun。请在书籍主页点击重新分析。重新分析完成后，
-                  系统将呈现准确的章节未知词负担和推荐词优先级。
+                  系统将呈现准确的章节词汇负担与书内覆盖曲线。
                 </p>
               </div>
             </div>
@@ -1246,19 +1057,19 @@ const PageMessage: React.FC<{
   backTo = '/',
   backLabel = '返回书架',
 }) => (
-  <div className="flex min-h-[100dvh] items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4">
-    <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center shadow-sm">
-      <div className="mx-auto mb-3 flex w-fit items-center justify-center text-slate-400 dark:text-slate-500">{icon}</div>
-      <h1 className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h1>
-      <p className="mt-2 text-xs leading-6 text-slate-500 dark:text-slate-400">{message}</p>
-      <Link
-        to={backTo}
-        className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      >
-        <ArrowLeft size={16} aria-hidden="true" />
-        {backLabel}
-      </Link>
+    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center shadow-sm">
+        <div className="mx-auto mb-3 flex w-fit items-center justify-center text-slate-400 dark:text-slate-500">{icon}</div>
+        <h1 className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h1>
+        <p className="mt-2 text-xs leading-6 text-slate-500 dark:text-slate-400">{message}</p>
+        <Link
+          to={backTo}
+          className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <ArrowLeft size={16} aria-hidden="true" />
+          {backLabel}
+        </Link>
+      </div>
     </div>
-  </div>
-);
+  );
 export default LearningMapPage;

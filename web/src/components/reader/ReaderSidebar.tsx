@@ -1,15 +1,17 @@
 /**
  * ReaderSidebar - 阅读器侧边栏
- * 包含：词典、AI分析、生词本、高亮列表四个 Tab
+ * 包含：词典、AI 解析、词汇收藏、摘录列表四个 Tab
  */
 
 import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, BookOpen, Sparkles, Bookmark, Highlighter, Loader2, ChevronRight, ChevronDown, ChevronUp, Volume2, Trash2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { X, BookOpen, Sparkles, Bookmark, Highlighter, Loader2, ChevronRight, ChevronDown, ChevronUp, Volume2, Trash2, Plus } from 'lucide-react';
 import { useReaderStore, type SidebarTab } from '@/stores/readerStore';
 import { analyzeAI } from '@/services/ai.service';
 import { saveAIAnalysis as saveAIAnalysisService, getArchiveItem } from '@/services/highlights.service';
 import { searchDictionary } from '@/services/dictionary.service';
+import { addVocabulary as addVocabularyService, deleteVocabulary } from '@/services/vocabularies.service';
+import { extractSentenceFromSegment } from '@/utils/sentence';
 import { speak } from '@/utils/tts';
 import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
 import type { DictResult } from '@/types/dictionary';
@@ -135,20 +137,22 @@ const buildContextFromSentences = (
 // Tab 图标和标签配置
 const TAB_CONFIG = {
   dictionary: { icon: BookOpen, label: '词典' },
-  ai: { icon: Sparkles, label: 'AI分析' },
-  vocabulary: { icon: Bookmark, label: '生词本' },
-  highlights: { icon: Highlighter, label: '高亮列表' },
+  ai: { icon: Sparkles, label: 'AI 解析' },
+  vocabulary: { icon: Bookmark, label: '词汇收藏' },
+  highlights: { icon: Highlighter, label: '摘录列表' },
 } as const;
 
 // 词典 Tab 内容
 const DictionaryTab: React.FC = () => {
   const selectedToken = useReaderStore((s) => s.selectedToken);
   const dictionaryQuery = useReaderStore((s) => s.dictionaryQuery);
-  const setDictionaryQuery = useReaderStore((s) => s.setDictionaryQuery);
-
-  const [dictResult, setDictResult] = useState<DictResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const bookId = useReaderStore((s) => s.bookId);
+  const chapter = useReaderStore((s) => s.chapter);
+  const vocabularySet = useReaderStore((s) => s.vocabularySet);
+  const addVocabularyOpt = useReaderStore((s) => s.addVocabulary);
+  const removeVocabularyOpt = useReaderStore((s) => s.removeVocabulary);
+  const addVocabularyRecord = useReaderStore((s) => s.addVocabularyRecord);
+  const getVocabularyId = useReaderStore((s) => s.getVocabularyId);
 
   // 获取当前要查询的词：优先使用 dictionaryQuery，其次使用 selectedToken
   const currentQueryWord = React.useMemo(() => {
@@ -157,47 +161,23 @@ const DictionaryTab: React.FC = () => {
     return null;
   }, [dictionaryQuery, selectedToken]);
 
-  // 当查询词变化时，查询词典
-  useEffect(() => {
-    if (currentQueryWord) {
-      fetchDictionary(currentQueryWord);
-      // 查询完成后清除 dictionaryQuery，避免重复查询
-      if (dictionaryQuery) {
-        setDictionaryQuery(null);
-      }
-    } else {
-      setDictResult(null);
-      setError(null);
-    }
-  }, [currentQueryWord, dictionaryQuery, setDictionaryQuery]);
+  const {
+    data: dictResult,
+    isLoading,
+    isError: hasDictionaryError,
+  } = useQuery<DictResult>({
+    queryKey: ['dictionary', currentQueryWord],
+    queryFn: () => searchDictionary(currentQueryWord ?? ''),
+    enabled: Boolean(currentQueryWord),
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const fetchDictionary = async (word: string) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const result = await searchDictionary(word);
-      setDictResult(result);
-    } catch (err) {
-      console.error('Dictionary query failed:', err);
-      setError('查询失败');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const error = hasDictionaryError ? '查询失败' : null;
 
   const handleTTS = useCallback(() => {
     const textToSpeak = selectedToken?.text || currentQueryWord || '';
     if (textToSpeak) speak(textToSpeak);
   }, [selectedToken, currentQueryWord]);
-
-  if (!currentQueryWord) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-gray-400">
-        <p>请点击文本中的单词查看释义</p>
-      </div>
-    );
-  }
 
   // 优先使用 selectedToken 的详细信息，否则使用查询词
   const displayForm = selectedToken?.token ? (selectedToken.token.b || selectedToken.token.s) : currentQueryWord;
@@ -212,10 +192,89 @@ const DictionaryTab: React.FC = () => {
     || (dictResult?.found && dictResult.entries[0]?.senses[0]?.pos?.[0])
     || '';
 
+  const baseForm = selectedToken?.token ? (selectedToken.token.b || selectedToken.text) : (currentQueryWord || '');
+  const isVocab = baseForm ? vocabularySet.has(baseForm) : false;
+
+  /**
+   * 添加或移除生词
+   */
+  const handleToggleVocab = useCallback(async () => {
+    if (!baseForm || !bookId) return;
+
+    if (isVocab) {
+      // 删除生词
+      const vocabId = getVocabularyId(baseForm);
+      if (vocabId) {
+        removeVocabularyOpt(baseForm);
+        try {
+          await deleteVocabulary(vocabId);
+        } catch (err) {
+          console.error('Failed to delete vocabulary:', err);
+          addVocabularyOpt(baseForm);
+        }
+      }
+    } else {
+      // 添加生词
+      addVocabularyOpt(baseForm);
+      try {
+        let definitionJson: string | undefined;
+        if (dictResult && dictResult.found && dictResult.entries.length > 0) {
+          definitionJson = JSON.stringify(dictResult.entries);
+        }
+
+        const contextSentence = selectedToken
+          ? extractSentenceFromSegment(
+              selectedToken.segmentIndex,
+              selectedToken.tokenIndex,
+              chapter?.segments
+            )
+          : undefined;
+
+        const wordToSave = selectedToken?.text || displayForm || baseForm;
+
+        const result = await addVocabularyService({
+          book_id: bookId,
+          word: wordToSave,
+          base_form: baseForm,
+          reading: reading || undefined,
+          part_of_speech: partOfSpeech || undefined,
+          definition: definitionJson,
+          context_sentences: contextSentence ? [contextSentence] : undefined,
+        });
+        addVocabularyRecord(result);
+      } catch (err) {
+        console.error('Failed to add vocabulary:', err);
+        removeVocabularyOpt(baseForm);
+      }
+    }
+  }, [
+    baseForm,
+    bookId,
+    isVocab,
+    getVocabularyId,
+    removeVocabularyOpt,
+    addVocabularyOpt,
+    dictResult,
+    selectedToken,
+    chapter,
+    displayForm,
+    reading,
+    partOfSpeech,
+    addVocabularyRecord,
+  ]);
+
+  if (!currentQueryWord) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-gray-400">
+        <p>请点击文本中的单词查看释义</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       {/* 单词头部 */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">
             {displayForm}
@@ -232,13 +291,28 @@ const DictionaryTab: React.FC = () => {
             )}
           </div>
         </div>
-        <button
-          onClick={handleTTS}
-          className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-          title="朗读"
-        >
-          <Volume2 size={18} />
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={handleTTS}
+            className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            title="朗读"
+          >
+            <Volume2 size={18} />
+          </button>
+          <button
+            onClick={handleToggleVocab}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors',
+              isVocab
+                ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400'
+                : 'text-white bg-indigo-600 hover:bg-indigo-700 font-semibold'
+            )}
+            title={isVocab ? '移除词汇收藏' : '加入词汇收藏'}
+          >
+            {isVocab ? <Trash2 size={14} /> : <Plus size={14} />}
+            <span>{isVocab ? '已收藏' : '收藏'}</span>
+          </button>
+        </div>
       </div>
 
       {/* 词典释义 */}
@@ -309,7 +383,7 @@ const DictionaryTab: React.FC = () => {
   );
 };
 
-// AI 分析 Tab 内容
+// AI 解析 Tab 内容
 const AITab: React.FC = () => {
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -317,6 +391,7 @@ const AITab: React.FC = () => {
 
   // 使用 ref 来同步跟踪是否正在请求（避免 setState 异步导致的竞态条件）
   const isRequestingRef = React.useRef(false);
+  const savedAnalysisRequestRef = React.useRef(0);
 
   // 获取 store 中的数据（合并订阅以减少重渲染）
   const selectedToken = useReaderStore((s) => s.selectedToken);
@@ -503,7 +578,7 @@ const AITab: React.FC = () => {
     };
   }, [chapter, highlights]);
 
-  // 执行 AI 分析
+  // 执行 AI 解析
   const performAIAnalysis = useCallback(async (highlightId: number) => {
     if (!bookId || chapterIndex === null) return;
 
@@ -522,19 +597,19 @@ const AITab: React.FC = () => {
     startAnalyzing(highlightId);
 
     try {
-      // 先检查积累本是否已有分析结果
+      // 先检查摘录资料是否已有解析结果
       try {
         const archiveItem = await getArchiveItem(highlightId);
 
         if (archiveItem.ai_analysis) {
-          // 积累本已有分析，解析并显示
+          // 摘录资料已有解析，解析并显示
           const savedResult = JSON.parse(archiveItem.ai_analysis) as AIAnalysisResult;
           setAiResult(savedResult);
           markHighlightAnalyzed(highlightId);
         }
       } catch {
-        // 积累本没有记录或出错，继续调用 AI
-        // 调用 AI 分析
+        // 摘录资料没有记录或出错，继续调用 AI
+        // 调用 AI 解析
         const { targetText, contextText } = collectHighlightText(highlightId);
 
         if (!targetText) {
@@ -552,16 +627,16 @@ const AITab: React.FC = () => {
         setAiResult(result);
         markHighlightAnalyzed(highlightId);
 
-        // 自动保存到积累本
+        // 自动保存到摘录资料
         try {
           await saveAIAnalysisService(highlightId, result);
         } catch (saveErr) {
-          console.error('[AI] 保存到积累本失败:', saveErr);
+          console.error('[AI] 保存到摘录资料失败:', saveErr);
         }
       }
     } catch (err) {
-      console.error('[AI] 分析失败:', err);
-      setError('AI 分析失败，请稍后重试');
+      console.error('[AI] 解析失败:', err);
+      setError('AI 解析失败，请稍后重试');
     } finally {
       setIsLoading(false);
       isRequestingRef.current = false;  // 清除标志
@@ -575,41 +650,53 @@ const AITab: React.FC = () => {
     // 只有在 AI tab 激活时才响应
     if (activeTab !== 'ai') return;
     if (activeHighlightId === null) {
-      // 清空 AI 解析结果
-      setAiResult(null);
       return;
     }
 
-    // 如果有 AI 分析触发信号，说明是点击"AI解析"按钮触发的，跳过自动加载
+    // 如果有 AI 解析触发信号，说明是点击"AI解析"按钮触发的，跳过自动加载
     if (aiAnalysisTrigger !== null) return;
 
     // 防止重复请求
     if (isRequestingRef.current) return;
 
     // 静默检查并加载已有的 AI 解析
+    const requestId = ++savedAnalysisRequestRef.current;
+    isRequestingRef.current = true;
     (async () => {
-      isRequestingRef.current = true;
       try {
         const archiveItem = await getArchiveItem(activeHighlightId);
+        if (savedAnalysisRequestRef.current !== requestId) return;
+
         if (archiveItem.ai_analysis) {
           // 有已保存的分析，加载并显示
           const savedResult = JSON.parse(archiveItem.ai_analysis) as AIAnalysisResult;
           setAiResult(savedResult);
           markHighlightAnalyzed(activeHighlightId);
         } else {
-          // 没有已保存的分析，清空之前的 AI 解析结果
+          // 没有已保存的解析，清空之前的 AI 解析结果
           setAiResult(null);
         }
       } catch {
-        // 积累本没有记录，清空之前的 AI 解析结果
-        setAiResult(null);
+        // 摘录资料没有记录，清空之前的 AI 解析结果
+        if (savedAnalysisRequestRef.current === requestId) {
+          setAiResult(null);
+        }
       } finally {
-        isRequestingRef.current = false;
+        if (savedAnalysisRequestRef.current === requestId) {
+          isRequestingRef.current = false;
+        }
       }
     })();
+
+    return () => {
+      if (savedAnalysisRequestRef.current === requestId) {
+        savedAnalysisRequestRef.current += 1;
+        isRequestingRef.current = false;
+      }
+    };
   }, [activeHighlightId, activeTab, aiAnalysisTrigger, markHighlightAnalyzed]);
 
-  // 当收到 AI 分析触发信号时，执行分析（点击"AI解析"按钮时触发）
+  // 当收到 AI 解析触发信号时，执行解析（点击"AI解析"按钮时触发）
   useEffect(() => {
     // 防止重复执行：如果正在请求或没有触发信号，直接返回
     if (isRequestingRef.current || aiAnalysisTrigger === null || activeTab !== 'ai') {
@@ -628,7 +715,7 @@ const AITab: React.FC = () => {
   // 检查当前高亮是否已分析或正在分析（需要在早期返回前定义）
   const isThisAnalyzing = activeHighlightId !== null ? isAnalyzing(activeHighlightId) : false;
 
-  // 处理 AI 分析按钮点击（需要在早期返回前定义，避免 Hooks 条件调用）
+  // 处理 AI 解析按钮点击（需要在早期返回前定义，避免 Hooks 条件调用）
   const handleAnalyzeClick = useCallback(() => {
     if (activeHighlightId !== null && !isThisAnalyzing) {
       performAIAnalysis(activeHighlightId);
@@ -638,7 +725,7 @@ const AITab: React.FC = () => {
   if (activeHighlightId === null) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
-        <p>请点击高亮句中的单词，然后切换到此页面查看 AI 分析</p>
+        <p>请点击高亮句中的单词，然后切换到此页面查看 AI 解析</p>
       </div>
     );
   }
@@ -665,7 +752,7 @@ const AITab: React.FC = () => {
       {isLoading && (
         <div className="flex items-center justify-center py-8 text-gray-400">
           <Loader2 className="animate-spin mr-2" size={18} />
-          <span>AI 分析中...</span>
+          <span>AI 解析中...</span>
         </div>
       )}
 
@@ -676,13 +763,13 @@ const AITab: React.FC = () => {
         </div>
       )}
 
-      {/* AI 分析按钮 - 当有高亮但没有分析结果时显示 */}
+      {/* AI 解析按钮 - 当有高亮但没有解析结果时显示 */}
       {!hasAnalysis && !isLoading && !error && (
         <div className="flex flex-col items-center justify-center py-8 space-y-4">
           <div className="text-center">
             <Sparkles className="mx-auto mb-3 text-indigo-400" size={32} />
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-              {isAnalyzed ? '该高亮已有分析记录，但未能加载' : '暂无 AI 分析'}
+              {isAnalyzed ? '该高亮已有解析记录，但未能加载' : '暂无 AI 解析'}
             </p>
           </div>
           <button
@@ -698,14 +785,14 @@ const AITab: React.FC = () => {
             ) : (
               <>
                 <Sparkles size={16} />
-                <span>开始 AI 分析</span>
+                <span>开始 AI 解析</span>
               </>
             )}
           </button>
         </div>
       )}
 
-      {/* AI 分析结果 */}
+      {/* AI 解析结果 */}
       {aiResult && !isLoading && (
         <div className="space-y-4">
           {/* 翻译 */}
@@ -787,14 +874,14 @@ const AITab: React.FC = () => {
   );
 };
 
-// 生词本 Tab 内容
+// 词汇收藏 Tab 内容
 const VocabularyTab: React.FC = () => {
   const vocabularies = useReaderStore((s) => s.vocabularies);
 
   if (vocabularies.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
-        <p>暂无生词</p>
+        <p>暂无收藏词汇</p>
       </div>
     );
   }
@@ -810,10 +897,16 @@ const VocabularyTab: React.FC = () => {
   );
 };
 
-// 单个生词卡片（可展开查看词典释义）
+// 单个词汇收藏卡片（可展开查看阅读上下文和词典释义）
 const VocabItem: React.FC<{ vocab: VocabularyResponse }> = ({ vocab }) => {
   const [expanded, setExpanded] = useState(false);
-  const queryClient = useQueryClient();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const removeVocabulary = useReaderStore((s) => s.removeVocabulary);
+  const addVocabularyRecord = useReaderStore((s) => s.addVocabularyRecord);
+  const contextSentences = (vocab.context_sentences ?? []).filter(
+    (sentence): sentence is string => typeof sentence === 'string' && sentence.trim().length > 0
+  );
+  const hasContext = contextSentences.length > 0;
 
   // 懒加载词典数据
   const { data: dictResult, isLoading, isError } = useQuery({
@@ -834,14 +927,24 @@ const VocabItem: React.FC<{ vocab: VocabularyResponse }> = ({ vocab }) => {
     speak(vocab.word);
   }, [vocab.word]);
 
-  // 删除生词
-  const handleDelete = useCallback((e: React.MouseEvent) => {
+  // 移除词汇收藏
+  const handleDelete = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`确定要删除生词"${vocab.word}"吗？`)) {
-      // 这里需要调用删除 API，暂时只从 store 中移除
-      queryClient.invalidateQueries({ queryKey: ['vocabularies'] });
+    if (isDeleting || !confirm(`确定要移除收藏词汇"${vocab.word}"吗？`)) {
+      return;
     }
-  }, [vocab.word, queryClient]);
+
+    setIsDeleting(true);
+    removeVocabulary(vocab.base_form);
+    try {
+      await deleteVocabulary(vocab.id);
+    } catch (error) {
+      console.error('Failed to delete vocabulary:', error);
+      addVocabularyRecord(vocab);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [isDeleting, vocab, removeVocabulary, addVocabularyRecord]);
 
   return (
     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg overflow-hidden">
@@ -871,8 +974,9 @@ const VocabItem: React.FC<{ vocab: VocabularyResponse }> = ({ vocab }) => {
             </button>
             <button
               onClick={handleDelete}
-              className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
-              title="删除生词"
+              disabled={isDeleting}
+              className="p-1 text-gray-400 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50 rounded transition-colors"
+              title="移除词汇收藏"
             >
               <Trash2 size={14} />
             </button>
@@ -894,82 +998,98 @@ const VocabItem: React.FC<{ vocab: VocabularyResponse }> = ({ vocab }) => {
         )}
       </div>
 
-      {/* 展开的词典释义 */}
+      {/* 展开的阅读上下文和词典释义 */}
       {expanded && (
         <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50">
-          {isLoading ? (
-            <div className="flex items-center text-gray-400 text-sm py-3">
-              <Loader2 className="animate-spin mr-2" size={14} />
-              查询中...
-            </div>
-          ) : isError || !dictResult ? (
-            <div className="text-sm text-gray-500 py-3">
-              查询失败，请稍后重试
-            </div>
-          ) : !dictResult.found ? (
-            <div className="text-sm text-gray-500 py-3">
-              未找到「{dictResult.query}」的释义
-            </div>
-          ) : (
-            <div className="max-h-60 overflow-y-auto">
-              {dictResult.entries.slice(0, 3).map((entry, idx) => (
-                <div
-                  key={`${entry.id}-${idx}`}
-                  className={clsx(
-                    'p-3',
-                    idx > 0 && 'border-t border-gray-100 dark:border-gray-800'
-                  )}
-                >
-                  {/* 汉字与读音 */}
-                  <div className="flex items-baseline gap-2 mb-2">
-                    {entry.kanji.length > 0 && (
-                      <span className="font-medium text-gray-900 dark:text-white text-sm">
-                        {entry.kanji.join('、')}
-                      </span>
-                    )}
-                    {entry.reading.length > 0 && (
-                      <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono">
-                        [{entry.reading.join('、')}]
-                      </span>
-                    )}
-                  </div>
-
-                  {/* 释义列表 - 每个 sense 分组显示 */}
-                  <div className="space-y-2">
-                    {entry.senses.map((sense, senseIdx) => (
-                      <div key={senseIdx}>
-                        {/* 词性标签 */}
-                        {sense.pos.length > 0 && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex flex-wrap gap-1">
-                            {sense.pos.map((pos, posIdx) => (
-                              <span
-                                key={posIdx}
-                                className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs"
-                              >
-                                {pos}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {/* 释义列表 */}
-                        <ul className="space-y-1">
-                          {sense.definitions.map((def, defIdx) => (
-                            <li
-                              key={defIdx}
-                              className="text-xs text-gray-700 dark:text-gray-300 flex items-start gap-1"
-                            >
-                              <span className="text-gray-400 flex-shrink-0">{defIdx + 1}.</span>
-                              <span className="break-words">{def}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+          {hasContext && (
+            <section aria-labelledby={`sidebar-vocabulary-context-${vocab.id}`} className="p-3">
+              <h3 id={`sidebar-vocabulary-context-${vocab.id}`} className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                阅读上下文
+              </h3>
+              <ul className="space-y-2">
+                {contextSentences.map((sentence, index) => (
+                  <li key={`${sentence}-${index}`} className="border-l-2 border-indigo-300 dark:border-indigo-600 pl-3 text-sm leading-6 text-gray-700 dark:text-gray-300">
+                    {sentence}
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
+          <div className={hasContext ? 'border-t border-gray-200 dark:border-gray-700' : undefined}>
+            {isLoading ? (
+              <div className="flex items-center p-3 text-sm text-gray-400">
+                <Loader2 className="mr-2 animate-spin" size={14} />
+                查询中...
+              </div>
+            ) : isError || !dictResult ? (
+              <div className="p-3 text-sm text-gray-500">
+                查询失败，请稍后重试
+              </div>
+            ) : !dictResult.found ? (
+              <div className="p-3 text-sm text-gray-500">
+                未找到「{dictResult.query}」的释义
+              </div>
+            ) : (
+              <div className="max-h-60 overflow-y-auto">
+                {dictResult.entries.slice(0, 3).map((entry, idx) => (
+                  <div
+                    key={`${entry.id}-${idx}`}
+                    className={clsx(
+                      'p-3',
+                      idx > 0 && 'border-t border-gray-100 dark:border-gray-800'
+                    )}
+                  >
+                    {/* 汉字与读音 */}
+                    <div className="flex items-baseline gap-2 mb-2">
+                      {entry.kanji.length > 0 && (
+                        <span className="font-medium text-gray-900 dark:text-white text-sm">
+                          {entry.kanji.join('、')}
+                        </span>
+                      )}
+                      {entry.reading.length > 0 && (
+                        <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono">
+                          [{entry.reading.join('、')}]
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 释义列表 - 每个 sense 分组显示 */}
+                    <div className="space-y-2">
+                      {entry.senses.map((sense, senseIdx) => (
+                        <div key={senseIdx}>
+                          {/* 词性标签 */}
+                          {sense.pos.length > 0 && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex flex-wrap gap-1">
+                              {sense.pos.map((pos, posIdx) => (
+                                <span
+                                  key={posIdx}
+                                  className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs"
+                                >
+                                  {pos}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {/* 释义列表 */}
+                          <ul className="space-y-1">
+                            {sense.definitions.map((def, defIdx) => (
+                              <li
+                                key={defIdx}
+                                className="text-xs text-gray-700 dark:text-gray-300 flex items-start gap-1"
+                              >
+                                <span className="text-gray-400 flex-shrink-0">{defIdx + 1}.</span>
+                                <span className="break-words">{def}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

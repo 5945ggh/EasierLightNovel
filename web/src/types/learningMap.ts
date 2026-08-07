@@ -27,43 +27,6 @@ export interface LearningMapChapter {
   new_lexeme_count: number;
 }
 
-export type LexemeKnowledgeStatus = 'learning' | 'known' | 'ignored';
-
-export interface LearningMapRecommendedLexeme {
-  lexeme_id: number;
-  normalized_form: string;
-  display_form: string;
-  reading: string | null;
-  part_of_speech: string;
-  book_occurrence_count: number;
-  upcoming_chapter_occurrence_count: number;
-  first_chapter_index: number;
-  excluded_from_learning_target: boolean;
-  state?: LexemeKnowledgeStatus | null;
-  knowledge_status?: LexemeKnowledgeStatus | null;
-  lookup_observation?: LearningMapLookupObservation | null;
-}
-
-export interface LearningMapManageableLexeme extends LearningMapRecommendedLexeme {
-  is_recommended: boolean;
-}
-
-export interface LearningMapLookupPosition {
-  chapter_index: number;
-  reader_segment_index: number;
-  reader_token_index: number;
-  created_at: string;
-}
-
-export interface LearningMapLookupObservation {
-  lookup_count: number;
-  first_lookup: LearningMapLookupPosition;
-  last_lookup: LearningMapLookupPosition;
-  occurrences_after_first_lookup: number | null;
-  occurrences_after_last_lookup: number | null;
-  later_lookup_count_after_first: number;
-}
-
 export interface LearningMapResponse {
   book_id: string;
   analysis_status: 'ready' | 'needs_analysis';
@@ -76,17 +39,22 @@ export interface LearningMapResponse {
   coverage: LearningMapCoverage | null;
   coverage_curve: LearningMapCurvePoint[];
   chapters: LearningMapChapter[];
-  recommended_lexemes: LearningMapRecommendedLexeme[];
-  manageable_lexemes?: LearningMapManageableLexeme[];
 }
 
-export interface LexemeKnowledgeUpdateRequest {
-  state: LexemeKnowledgeStatus;
-}
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
-export interface LexemeKnowledgeUpdateResponse {
-  lexeme_id: number;
-  state?: LexemeKnowledgeStatus;
-  knowledge_status?: LexemeKnowledgeStatus | null;
-  message?: string;
-}
+/** Runtime guard for the backend Learning Map response contract. */
+export const isLearningMapResponse = (value: unknown): value is LearningMapResponse => {
+  if (!isRecord(value)) return false;
+  if (typeof value.book_id !== 'string') return false;
+  if (value.analysis_status !== 'ready' && value.analysis_status !== 'needs_analysis') return false;
+  if (value.knowledge_baseline_status !== 'ready' && value.knowledge_baseline_status !== 'uninitialized') return false;
+  if (typeof value.knowledge_baseline_message !== 'string') return false;
+  if (!Number.isInteger(value.reading_anchor_chapter_index)) return false;
+  if (!isRecord(value.filter_spec) || !Array.isArray(value.filter_spec.pos_allowlist)) return false;
+  if (typeof value.filter_spec.exclude_proper_nouns !== 'boolean' || typeof value.filter_spec.exclude_oov !== 'boolean' || typeof value.filter_spec.identity !== 'string') return false;
+  if (!Array.isArray(value.coverage_curve) || !Array.isArray(value.chapters)) return false;
+  if (value.coverage !== null && !isRecord(value.coverage)) return false;
+  return true;
+};

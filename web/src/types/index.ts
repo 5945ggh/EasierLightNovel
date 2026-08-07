@@ -31,3 +31,9 @@ export * from './learningMap';
 
 // Reader 主动查词事件
 export * from './readerLookup';
+
+// 外部知识基线导入
+export * from './knowledgeImport';
+
+// 上下文卡片草稿
+export * from './contextCard';

@@ -176,7 +176,7 @@ def _build_map(Session):
     return session
 
 
-def test_learning_map_uses_only_explicit_canonical_known_and_prioritizes_upcoming(tmp_path):
+def test_learning_map_uses_only_explicit_canonical_known_and_returns_book_structure(tmp_path):
     Session = _session_factory(tmp_path)
     _seed_source(Session)
     session = _build_map(Session)
@@ -194,7 +194,7 @@ def test_learning_map_uses_only_explicit_canonical_known_and_prioritizes_upcomin
     }
     assert result["filter_spec"]["exclude_proper_nouns"] is False
     assert result["filter_spec"]["exclude_oov"] is False
-    assert [point["required_lexeme_count"] for point in result["coverage_curve"]] == [4, 5, 5, 5]
+    assert [point["required_lexeme_count"] for point in result["coverage_curve"]] == [2, 3, 3, 4, 4, 5, 5, 5]
 
     chapter_one = result["chapters"][1]
     assert chapter_one["title"] == "Library"
@@ -204,16 +204,8 @@ def test_learning_map_uses_only_explicit_canonical_known_and_prioritizes_upcomin
     assert chapter_one["unknown_lexeme_count"] == 1
     assert chapter_one["new_lexeme_count"] == 1
 
-    recommendations = result["recommended_lexemes"]
-    assert recommendations[0]["normalized_form"] == "本"
-    assert {item["normalized_form"] for item in recommendations} == {"本", "山", "太郎"}
-    assert recommendations[0]["upcoming_chapter_occurrence_count"] == 1
-    assert recommendations[0]["first_chapter_index"] == 1
-    assert all(item["normalized_form"] != "猫" for item in recommendations)
-    assert all(item["normalized_form"] != "QX" for item in recommendations)
-    assert next(item for item in recommendations if item["normalized_form"] == "太郎")[
-        "excluded_from_learning_target"
-    ] is False
+    assert "recommended_lexemes" not in result
+    assert "manageable_lexemes" not in result
     # A GET must keep legacy status-3 compatibility read-only. The explicit
     # migration endpoint remains the write boundary for persistent conversion.
     assert session.query(UserLexemeKnowledge).count() == 0
@@ -230,7 +222,8 @@ def test_learning_map_does_not_turn_vocab_or_missing_baseline_into_zero(tmp_path
 
     assert result["knowledge_baseline_status"] == "uninitialized"
     assert result["coverage"] is None
-    assert result["recommended_lexemes"] == []
+    assert "recommended_lexemes" not in result
+    assert "manageable_lexemes" not in result
     assert result["chapters"][0]["explicit_known_occurrences"] is None
     assert result["chapters"][0]["unknown_occurrences"] is None
     assert result["chapters"][0]["new_lexeme_count"] == 1
@@ -258,12 +251,6 @@ def test_learning_map_counts_only_formal_known_state(tmp_path):
         "eligible_occurrences": 7,
     }
     assert result["chapters"][1]["unknown_occurrences"] == 1
-    statuses = {row["normalized_form"]: row["knowledge_status"] for row in result["manageable_lexemes"]}
-    assert statuses["本"] == "learning"
-    assert statuses["山"] == "ignored"
-    manageable = {row["normalized_form"]: row for row in result["manageable_lexemes"]}
-    assert manageable["山"]["is_recommended"] is False
-    assert "山" not in {row["normalized_form"] for row in result["recommended_lexemes"]}
     session.close()
 
 
@@ -305,7 +292,6 @@ def test_learning_map_filter_spec_controls_denominator_without_excluding_proper_
     assert result["coverage"]["eligible_occurrences"] == 6
     assert result["coverage"]["known_occurrences"] == 3
     assert result["filter_spec"]["exclude_oov"] is True
-    assert {item["normalized_form"] for item in result["recommended_lexemes"]} == {"本", "山", "太郎"}
     session.close()
 
 
@@ -427,96 +413,6 @@ def test_learning_map_groups_high_repeat_occurrences_in_sql(tmp_path):
     session.close()
 
 
-def test_learning_map_representative_keeps_legacy_source_order(tmp_path):
-    Session = _session_factory(tmp_path)
-    _seed_source(Session)
-    session = _build_map(Session)
-    run = session.query(AnalysisRun).filter(AnalysisRun.book_id == BOOK_ID).one()
-    chapter = session.query(Chapter).filter_by(book_id=BOOK_ID, index=0).one()
-    ordered_lexeme = Lexeme(
-        normalized_form="順序",
-        canonical_reading_kana="じゅんじょ",
-        identity_key="learning-map-order",
-    )
-    session.add(ordered_lexeme)
-    session.flush()
-    token_first = RunLexeme(
-        analysis_run_id=run.id,
-        lexeme_id=ordered_lexeme.id,
-        observation_key="learning-map-order-token-first",
-        dictionary_form="token-first",
-        normalized_form="順序",
-        observed_reading="じゅんじょ",
-        observed_reading_kana="じゅんじょ",
-        reading_source="fixture",
-        reading_is_trusted=True,
-        is_oov=False,
-        part_of_speech=["名詞"],
-        inflection_type="*",
-        inflection_form="*",
-        word_id=10,
-        dictionary_id=10,
-    )
-    end_first = RunLexeme(
-        analysis_run_id=run.id,
-        lexeme_id=ordered_lexeme.id,
-        observation_key="learning-map-order-end-first",
-        dictionary_form="end-first",
-        normalized_form="順序",
-        observed_reading="じゅんじょ",
-        observed_reading_kana="じゅんじょ",
-        reading_source="fixture",
-        reading_is_trusted=True,
-        is_oov=False,
-        part_of_speech=["名詞"],
-        inflection_type="*",
-        inflection_form="*",
-        word_id=11,
-        dictionary_id=11,
-    )
-    session.add_all([token_first, end_first])
-    session.flush()
-    session.add_all([
-        LexemeOccurrence(
-            analysis_run_id=run.id,
-            chapter_id=chapter.id,
-            chapter_index=0,
-            run_lexeme_id=token_first.id,
-            surface="順序",
-            source_document_id="chapter-0.xhtml",
-            source_start=10,
-            source_end=20,
-            source_token_index=0,
-            reader_segment_index=0,
-            reader_token_index=10,
-        ),
-        LexemeOccurrence(
-            analysis_run_id=run.id,
-            chapter_id=chapter.id,
-            chapter_index=0,
-            run_lexeme_id=end_first.id,
-            surface="順序",
-            source_document_id="chapter-0.xhtml",
-            source_start=10,
-            source_end=11,
-            source_token_index=1,
-            reader_segment_index=0,
-            reader_token_index=11,
-        ),
-    ])
-    session.commit()
-
-    result = AnalysisService(session, tokenizer_factory=LearningMapTokenizer).get_learning_map(BOOK_ID)
-
-    ordered = next(
-        item for item in result["manageable_lexemes"]
-        if item["normalized_form"] == "順序"
-    )
-    assert ordered["display_form"] == "token-first"
-    assert ordered["book_occurrence_count"] == 2
-    session.close()
-
-
 def test_learning_map_router_returns_reproducible_run_and_filter_contract(tmp_path):
     Session = _session_factory(tmp_path)
     _seed_source(Session)
@@ -549,3 +445,5 @@ def test_learning_map_router_returns_reproducible_run_and_filter_contract(tmp_pa
         "identity": "normalized_form_and_trusted_canonical_reading",
     }
     assert body["reading_anchor_chapter_index"] == 1
+    assert "recommended_lexemes" not in body
+    assert "manageable_lexemes" not in body

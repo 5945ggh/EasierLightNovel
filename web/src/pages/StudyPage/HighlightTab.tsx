@@ -1,5 +1,5 @@
 /**
- * 积累与高亮标签页（简化版）
+ * 摘录与解析标签页（简化版）
  */
 
 import React, { useState, useMemo } from 'react';
@@ -41,7 +41,7 @@ const getJLPTColor = (level?: string) => {
 };
 
 /**
- * 安全解析 AI 分析结果
+ * 安全解析 AI 解析结果
  */
 const parseAnalysis = (analysisStr: string | undefined): AIAnalysisResult | null => {
   if (!analysisStr) return null;
@@ -111,7 +111,7 @@ const HighlightTab: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500">
-        <Loader2 className="animate-spin mr-2" size={20} /> 加载划线中...
+        <Loader2 className="animate-spin mr-2" size={20} /> 加载摘录中...
       </div>
     );
   }
@@ -119,19 +119,19 @@ const HighlightTab: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
       {/* 工具栏 */}
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-        <div className="relative w-64">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} strokeWidth={1.5} />
           <input
             type="text"
-            placeholder="搜索划线内容或书名..."
+            placeholder="搜索摘录内容或书名..."
             className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-blue-500 transition-all"
             value={filter}
             onChange={e => setFilter(e.target.value)}
           />
         </div>
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          共 {filteredData.length} 条划线
+        <div className="self-end whitespace-nowrap text-sm text-slate-500 dark:text-slate-400 sm:self-auto">
+          共 {filteredData.length} 条摘录
         </div>
       </div>
 
@@ -146,7 +146,7 @@ const HighlightTab: React.FC = () => {
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-12">
             <Quote size={48} strokeWidth={1.5} className="mb-4 opacity-50" />
-            <p>{highlights?.length === 0 ? '暂无划线记录，去阅读器里划线吧！' : '没有找到匹配的划线'}</p>
+            <p>{highlights?.length === 0 ? '暂无摘录，去阅读器里高亮原文吧！' : '没有找到匹配的摘录'}</p>
           </div>
         )}
       </div>
@@ -154,9 +154,9 @@ const HighlightTab: React.FC = () => {
       {/* 确认删除对话框 */}
       <ConfirmModal
         isOpen={deleteTargetId !== null}
-        title="确认删除划线？"
-        message="确定要删除这条划线记录吗？此操作无法撤销。"
-        confirmText="彻底删除"
+        title="确认删除摘录？"
+        message="确定要删除这条摘录记录吗？此操作无法撤销。"
+        confirmText="删除摘录"
         cancelText="取消"
         isDanger={true}
         isLoading={isDeleting}
@@ -168,14 +168,14 @@ const HighlightTab: React.FC = () => {
   );
 };
 
-// 单个划线项组件
+// 单个摘录项组件
 const HighlightItem: React.FC<{
   highlight: HighlightListItem;
   onDelete: (id: number) => void;
 }> = ({ highlight, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
 
-  // 懒加载积累本数据
+  // 懒加载摘录关联的解析资料
   const { data: archiveData, isLoading, isError } = useQuery({
     queryKey: ['archive', highlight.id],
     queryFn: () => getArchiveItem(highlight.id),
@@ -212,7 +212,7 @@ const HighlightItem: React.FC<{
           </div>
           <div className="flex items-center gap-2">
             {highlight.has_Archive && (
-              <span title="有 AI 分析">
+              <span title="有 AI 解析">
                 <Sparkles size={16} className="text-amber-400" />
               </span>
             )}
@@ -222,7 +222,7 @@ const HighlightItem: React.FC<{
                 onDelete(highlight.id);
               }}
               className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 rounded-lg transition-all text-slate-400 dark:text-slate-500"
-              title="删除划线"
+              title="删除摘录"
             >
               <Trash2 size={14} strokeWidth={1.5} />
             </button>
@@ -233,7 +233,7 @@ const HighlightItem: React.FC<{
         </div>
       </div>
 
-      {/* 展开区域：显示 AI 分析结果 */}
+      {/* 展开区域：显示 AI 解析结果 */}
       {expanded && (
         <div className="bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800 p-5 pl-14">
           {isLoading ? (
@@ -243,7 +243,7 @@ const HighlightItem: React.FC<{
           ) : isError || !archiveData ? (
             <div className="text-sm text-slate-500 dark:text-slate-400 italic flex items-center gap-2">
               <Sparkles size={14} className="text-slate-400" />
-              这条划线尚未进行深度分析。进入阅读器选中此文本后点击"AI 分析"即可添加到积累本。
+              这条摘录尚未保存 AI 解析。进入阅读器选中此文本后点击“AI 解析”即可生成并保存解析。
             </div>
           ) : (
             <ArchiveContent archive={archiveData} />
@@ -254,7 +254,7 @@ const HighlightItem: React.FC<{
   );
 };
 
-// 积累本内容组件
+// 摘录关联的解析内容组件
 const ArchiveContent: React.FC<{ archive: ArchiveItemResponse }> = ({ archive }) => {
   const analysis = parseAnalysis(archive.ai_analysis);
 
@@ -345,7 +345,7 @@ const ArchiveContent: React.FC<{ archive: ArchiveItemResponse }> = ({ archive })
       {/* 用户笔记 */}
       {archive.user_note && (
         <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">我的笔记</span>
+          <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">已有备注</span>
           <p className="mt-1 text-slate-700 dark:text-slate-200">{archive.user_note}</p>
         </div>
       )}

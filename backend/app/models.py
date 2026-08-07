@@ -42,6 +42,7 @@ class Book(Base):
     source_content_versions = relationship("SourceContentVersion", back_populates="book", cascade="all, delete-orphan")
     analysis_runs = relationship("AnalysisRun", back_populates="book", cascade="all, delete-orphan")
     lookup_events = relationship("ReaderLookupEvent", back_populates="book", cascade="all, delete-orphan")
+    context_card_drafts = relationship("ContextCardDraft", back_populates="book", cascade="all, delete-orphan")
 
 
 class BookSourceFile(Base):
@@ -277,6 +278,25 @@ class ExternalKnowledgeImportItem(Base):
     metadata_json = Column(JSON, nullable=False, default=dict)
     status = Column(String(32), nullable=False, default="applied", index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Anki provenance is intentionally stored as card-level evidence. The
+    # fields are nullable so existing JLPT rows and older SQLite databases
+    # remain readable after the additive migration.
+    card_id = Column(String(64), nullable=True, index=True)
+    note_id = Column(String(64), nullable=True, index=True)
+    deck_name = Column(String(255), nullable=True)
+    model_name = Column(String(255), nullable=True)
+    template_ord = Column(Integer, nullable=True)
+    anki_state = Column(String(32), nullable=True, index=True)
+    anki_underlying_state = Column(String(32), nullable=True)
+    anki_queue = Column(Integer, nullable=True)
+    anki_type = Column(Integer, nullable=True)
+    interval = Column(Integer, nullable=True)
+    reps = Column(Integer, nullable=True)
+    lapses = Column(Integer, nullable=True)
+    buried = Column(Boolean, nullable=True, default=False)
+    suspended = Column(Boolean, nullable=True, default=False)
+    snapshot_at = Column(DateTime(timezone=True), nullable=True)
 
     knowledge_import = relationship("ExternalKnowledgeImport", back_populates="items")
     lexeme = relationship("Lexeme")
@@ -535,6 +555,79 @@ class Vocabulary(Base):
     )
 
     book = relationship("Book", back_populates="vocabularies")
+    context_card_drafts = relationship("ContextCardDraft", back_populates="vocabulary", cascade="all, delete-orphan")
+
+
+class ContextCardDraft(Base):
+    """A user-owned contextual card draft with an immutable quote snapshot."""
+    __tablename__ = "context_card_drafts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vocabulary_id = Column(Integer, ForeignKey("vocabularies.id", ondelete="CASCADE"), nullable=False, index=True)
+    book_id = Column(String(32), ForeignKey("books.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    lexeme_occurrence_id = Column(Integer, ForeignKey("lexeme_occurrences.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_document_id = Column(String(255), nullable=True)
+    source_start = Column(Integer, nullable=True)
+    source_end = Column(Integer, nullable=True)
+    quote_text = Column(Text, nullable=False)
+    quote_locked = Column(Boolean, nullable=False, default=True)
+    analysis_version = Column(String(64), nullable=False, default="context-card-v1")
+    status = Column(String(24), nullable=False, default="draft", index=True)
+    meaning_in_context = Column(Text, nullable=True)
+    sentence_translation = Column(Text, nullable=True)
+    usage_note = Column(Text, nullable=True)
+    llm_model = Column(String(128), nullable=True)
+    generation_attempts = Column(Integer, nullable=False, default=0)
+    generation_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    vocabulary = relationship("Vocabulary", back_populates="context_card_drafts")
+    book = relationship("Book", back_populates="context_card_drafts")
+    chapter = relationship("Chapter")
+    lexeme_occurrence = relationship("LexemeOccurrence")
+    anki_ledger = relationship("ContextCardAnkiLedger", back_populates="draft", uselist=False, cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('draft', 'generated', 'failed', 'written')", name="ck_context_card_draft_status"),
+        CheckConstraint("source_start IS NULL OR source_start >= 0", name="ck_context_card_source_start"),
+        CheckConstraint("source_end IS NULL OR source_end > source_start", name="ck_context_card_source_end"),
+    )
+
+    @property
+    def anki_guid(self):
+        return self.anki_ledger.guid if self.anki_ledger else None
+
+    @property
+    def anki_note_id(self):
+        return self.anki_ledger.anki_note_id if self.anki_ledger else None
+
+    @property
+    def anki_status(self):
+        return self.anki_ledger.status if self.anki_ledger else None
+
+
+class ContextCardAnkiLedger(Base):
+    """Append-only-ish local record for idempotent Anki addNote writes."""
+    __tablename__ = "context_card_anki_ledgers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    draft_id = Column(Integer, ForeignKey("context_card_drafts.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    guid = Column(String(64), nullable=False, unique=True, index=True)
+    deck_name = Column(String(255), nullable=False)
+    model_name = Column(String(255), nullable=False)
+    fields_json = Column(JSON, nullable=False, default=dict)
+    anki_note_id = Column(String(64), nullable=True)
+    status = Column(String(24), nullable=False, default="pending", index=True)
+    last_error = Column(Text, nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    draft = relationship("ContextCardDraft", back_populates="anki_ledger")
+
+    __table_args__ = (CheckConstraint("status IN ('pending', 'written', 'failed')", name="ck_context_card_anki_status"),)
     
 
 class UserHighlight(Base):

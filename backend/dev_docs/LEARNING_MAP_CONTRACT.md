@@ -6,10 +6,9 @@
 
 Optional query parameters:
 
-- `chapter_index`: reading anchor used to rank upcoming occurrences. When omitted, the stored reading progress chapter is used, falling back to `0`.
-- `recommendation_limit`: maximum recommendation rows, default `20`, maximum `100`.
+- `chapter_index`: reading anchor used to select the chapter context. When omitted, the stored reading progress chapter is used, falling back to `0`.
 
-The response always includes `analysis_run_id` (or `null`), `analysis_status`, and the run's `filter_spec`. A missing active run returns HTTP 200 with `analysis_status: "needs_analysis"`, `coverage: null`, and an empty derived result. It does not calculate from legacy chapter JSON.
+The response always includes `analysis_run_id` (or `null`), `analysis_status`, the baseline status/message, the reading anchor, and the run's `filter_spec`. A missing active run returns HTTP 200 with `analysis_status: "needs_analysis"`, `coverage: null`, an empty coverage curve, and no chapter rows. It does not calculate from legacy chapter JSON.
 
 ## Coverage
 
@@ -19,7 +18,7 @@ The response always includes `analysis_run_id` (or `null`), `analysis_status`, a
 - `exclude_proper_nouns`: `false`
 - `exclude_oov`: `false`
 
-OOV and proper-noun behavior is therefore visible and reproducible. OOV can remain in the denominator while its `RunLexeme.excluded_from_learning_target` flag keeps it out of recommendations. The frequency curve uses the same eligible occurrences and ranks lexemes by book occurrence count.
+OOV and proper-noun behavior is therefore visible and reproducible. OOV can remain in the denominator when the persisted filter allows it. The coverage curve uses the same eligible occurrences and reports the additional covered occurrences needed for each target percentage.
 
 ## Knowledge baseline
 
@@ -55,7 +54,7 @@ it writes only unambiguous trusted canonical identities with provenance
 Unmapped legacy rows remain preserved and are counted in
 `knowledge_baseline_migration_status` / `knowledge_baseline_message`.
 
-When no canonical known Lexeme is available, `knowledge_baseline_status` is `"uninitialized"`, `coverage` is `null`, chapter unknown fields are `null`, and recommendations are empty. This does not mean every lexeme is unknown.
+When no canonical known Lexeme is available, `knowledge_baseline_status` is `"uninitialized"`, `coverage` is `null`, chapter unknown fields are `null`, and the coverage curve is empty. This does not mean every lexeme is unknown.
 
 ## Reader lookup facts and context observations
 
@@ -88,15 +87,9 @@ occurrence order. `LexemeOccurrence.reader_token_index` is an additive,
 nullable Reader-cache coordinate. Older analysis rows can therefore continue
 to load and can remain unresolved.
 
-The optional `lookup_observation` on manageable/recommended Lexeme rows is
-derived at Learning Map query time. It can report lookup count, first/recent
-lookup location and time, later occurrence count when both events and active
-occurrences share a proven source coordinate space, and whether later lookups
-occurred. These are explainable facts such as “查过 2 次；首次查询后又出现
-2 次”，not a second coverage metric, a hidden threshold, or a user knowledge
-state. Lookup counts, frequency, OOV status, external candidates, and this
-observation never increase `explicit_known_coverage`, and lookup writes never
-modify `UserLexemeKnowledge`.
+Lookup events remain an independent reader-history contract. They are not
+embedded in the Learning Map response, do not increase
+`explicit_known_coverage`, and never modify `UserLexemeKnowledge`.
 
 Events retain the Lexeme id that was known at write time. If a Lexeme is later
 merged, summary queries follow `Lexeme.merged_into_id` to the current canonical
@@ -113,38 +106,24 @@ the current Reader event payload, lookups against those rows are preserved as
 unresolved until the book is re-analyzed from its source content.
 
 Sentence entities, Japanese sentence splitting, i+1 selection/scoring,
-sentence caches, AnkiConnect writes, Anki exports, TTS/media exports, JLPT
-datasets, and new frequency baselines remain deferred. A future Anki export
+sentence caches, bulk Anki exports, TTS/media exports, JLPT datasets, and new
+frequency baselines remain deferred. Context-card Anki writes are a separate
+explicit action outside the Learning Map and baseline-import contract. A future Anki export
 must obtain stable GUID ownership from an append-only `AnkiExportLedger`, never
 from `lexeme_id` or another auto-increment id; Phase 5 does not create that
 ledger.
 
-## Recommendation order
-
-`recommended_lexemes` is the actionable learning-target set. It excludes
-canonical `known` Lexemes, Lexemes whose effective state is `ignored`, and
-rows marked `excluded_from_learning_target`. `known` is excluded because it is
-already counted in explicit-known coverage; `ignored` is excluded because the
-reader explicitly chose not to study it. `learning` remains eligible for
-recommendation but does not increase coverage.
-
-`manageable_lexemes` is deliberately broader than `recommended_lexemes`: it
-keeps the ranked, manually controllable rows visible, including `known` and
-`ignored` rows, so a reader can inspect the effective state and restore a
-different choice. It exposes `is_recommended` instead of silently treating an
-ignored row as a recommendation. Both collections use upcoming occurrence
-count from the reading anchor (descending), book occurrence count (descending),
-first chapter (ascending), then stable lexeme text/id tie-breakers.
-
-The endpoint does not implement an `acquired_in_context` state, sentence cards,
-i+1 selection, exports, external frequency data, or new OOV categories. Its
-lookup observation is explanatory output only.
+The endpoint does not implement per-lexeme recommendation rows, an
+`acquired_in_context` state, sentence cards, i+1 selection, exports, external
+frequency data, or new OOV categories. The coverage curve is aggregate output
+only; it is not a recommendation queue or a knowledge-state decision.
 
 ## External baseline imports
 
 External baseline reads are opt-in. AnkiConnect is queried only from an
-explicit preview/apply request using its localhost read-only actions `version`,
-`findNotes`, and `notesInfo`, with a finite timeout. An unavailable Anki,
+explicit preview/apply request using its localhost read-only v6 actions
+`version`, `deckNames`, `modelNames`, `findCards`, `cardsInfo`, `cardsToNotes`,
+and `notesInfo` (plus model template metadata), with a finite timeout. An unavailable Anki,
 connection refusal, timeout, or invalid protocol response returns a recoverable
 request error and never affects application startup, reading, or an existing
 baseline. Callers supply the expression and reading field mappings; no note
@@ -152,11 +131,16 @@ template is assumed.
 
 `POST /api/knowledge-imports/anki/preview` and its JLPT equivalent return
 total, parsable, unique, ambiguous, unmatched, and provisional counts before
-any write. Only a unique exact match on normalized form and trusted canonical
-kana reading can become `known`. `POST .../apply` repeats the specified read
-and persists one reversible import batch; `DELETE /api/knowledge-imports/{id}`
-revokes only that batch. Repeated active imports are idempotent, while a
-revoked import may be deliberately applied again.
+any write. Anki previews additionally return card/note/Lexeme conversion
+funnel counts, raw state distribution, known counts before/after, and affected
+book coverage deltas. Only a unique exact match on normalized form and trusted
+canonical kana reading can become `known`; Anki evidence below the Mature
+interval threshold becomes `learning`, while Suspended evidence is retained
+without creating `known`. `POST .../apply` repeats the specified read and
+persists one reversible import batch with card-level provenance;
+`DELETE /api/knowledge-imports/{id}` revokes only that batch. Repeated active
+imports are idempotent, while a revoked import may be deliberately applied
+again.
 
 Different active batches may retain separate import items for the same Lexeme,
 including across Anki and JLPT. A source-scoped `UserLexemeKnowledge` row is

@@ -60,6 +60,23 @@ SQLITE_ADDITIVE_MIGRATIONS: dict[str, dict[str, str]] = {
             "reader_token_index INTEGER"
         ),
     },
+    "external_knowledge_import_items": {
+        "card_id": "ALTER TABLE external_knowledge_import_items ADD COLUMN card_id VARCHAR(64)",
+        "note_id": "ALTER TABLE external_knowledge_import_items ADD COLUMN note_id VARCHAR(64)",
+        "deck_name": "ALTER TABLE external_knowledge_import_items ADD COLUMN deck_name VARCHAR(255)",
+        "model_name": "ALTER TABLE external_knowledge_import_items ADD COLUMN model_name VARCHAR(255)",
+        "template_ord": "ALTER TABLE external_knowledge_import_items ADD COLUMN template_ord INTEGER",
+        "anki_state": "ALTER TABLE external_knowledge_import_items ADD COLUMN anki_state VARCHAR(32)",
+        "anki_underlying_state": "ALTER TABLE external_knowledge_import_items ADD COLUMN anki_underlying_state VARCHAR(32)",
+        "anki_queue": "ALTER TABLE external_knowledge_import_items ADD COLUMN anki_queue INTEGER",
+        "anki_type": "ALTER TABLE external_knowledge_import_items ADD COLUMN anki_type INTEGER",
+        "interval": "ALTER TABLE external_knowledge_import_items ADD COLUMN interval INTEGER",
+        "reps": "ALTER TABLE external_knowledge_import_items ADD COLUMN reps INTEGER",
+        "lapses": "ALTER TABLE external_knowledge_import_items ADD COLUMN lapses INTEGER",
+        "buried": "ALTER TABLE external_knowledge_import_items ADD COLUMN buried BOOLEAN DEFAULT 0",
+        "suspended": "ALTER TABLE external_knowledge_import_items ADD COLUMN suspended BOOLEAN DEFAULT 0",
+        "snapshot_at": "ALTER TABLE external_knowledge_import_items ADD COLUMN snapshot_at DATETIME",
+    },
 }
 
 

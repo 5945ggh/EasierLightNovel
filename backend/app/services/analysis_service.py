@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Any, Callable, Iterable, Optional
 
-from sqlalchemy import func, literal
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import TOKENIZER_DEFAULT_MODE
@@ -29,7 +29,6 @@ from app.models import (
     Vocabulary,
 )
 from app.services.source_content_service import source_content_hash
-from app.services.lookup_event_service import LookupEventService
 from app.services.user_lexeme_knowledge_service import UserLexemeKnowledgeService
 from app.utils.lexeme_identity import normalize_canonical_reading, normalize_identity_text
 from app.utils.tokenizer import JapaneseTokenizer, RebuildToken
@@ -46,7 +45,7 @@ FILTER_SPEC = {
     "exclude_proper_nouns": False,
     "identity": "normalized_form_and_trusted_canonical_reading",
 }
-LEARNING_MAP_TARGETS = (0.80, 0.90, 0.95, 0.96)
+LEARNING_MAP_TARGETS = (0.50, 0.60, 0.70, 0.80, 0.85, 0.90, 0.95, 0.98)
 LEGACY_MASTERED_STATUS = 3
 
 
@@ -680,15 +679,6 @@ class AnalysisService:
             return False
         return True
 
-    @staticmethod
-    def _is_learning_target_excluded(run_lexeme: RunLexeme) -> bool:
-        # The explicit flag is persisted for future policy changes. The OOV
-        # fallback keeps old Phase 2 rows conservative after migration.
-        return bool(
-            getattr(run_lexeme, "excluded_from_learning_target", False)
-            or run_lexeme.is_oov
-        )
-
     def _reading_anchor_chapter(self, book_id: str, chapter_index: Optional[int]) -> int:
         if chapter_index is not None:
             return chapter_index
@@ -764,7 +754,6 @@ class AnalysisService:
         book_id: str,
         *,
         chapter_index: Optional[int] = None,
-        recommendation_limit: int = 20,
     ) -> dict[str, Any]:
         """Build the user-visible book learning map from one active run."""
         book = self.db.get(Book, book_id)
@@ -789,8 +778,6 @@ class AnalysisService:
                 "coverage": None,
                 "coverage_curve": [],
                 "chapters": [],
-                "recommended_lexemes": [],
-                "manageable_lexemes": [],
             }
 
         chapter_rows = self.db.query(Chapter).filter(
@@ -813,21 +800,10 @@ class AnalysisService:
 
         knowledge_service = UserLexemeKnowledgeService(self.db)
         map_started_at = time.perf_counter()
-        # Keep the source-order key only for representative selection. The
-        # rows returned here are one row per chapter/run-lexeme group, not one
-        # ORM object per occurrence.
-        first_occurrence_key = (
-            LexemeOccurrence.source_document_id
-            + literal("\x1f")
-            + func.printf("%020d", LexemeOccurrence.source_start)
-            + literal("\x1f")
-            + func.printf("%020d", LexemeOccurrence.source_token_index)
-        )
         grouped_occurrences = self.db.query(
             LexemeOccurrence.chapter_index.label("chapter_index"),
             LexemeOccurrence.run_lexeme_id.label("run_lexeme_id"),
             func.count(LexemeOccurrence.id).label("occurrence_count"),
-            func.min(first_occurrence_key).label("first_occurrence_key"),
         ).filter(
             LexemeOccurrence.analysis_run_id == run.id,
         ).group_by(
@@ -837,21 +813,13 @@ class AnalysisService:
         aggregate_rows = self.db.query(
             grouped_occurrences.c.chapter_index,
             grouped_occurrences.c.occurrence_count,
-            grouped_occurrences.c.first_occurrence_key,
             RunLexeme,
-            Lexeme,
         ).join(
             RunLexeme,
             RunLexeme.id == grouped_occurrences.c.run_lexeme_id,
-        ).join(
-            Lexeme,
-            Lexeme.id == RunLexeme.lexeme_id,
-        ).order_by(
-            grouped_occurrences.c.chapter_index,
-            grouped_occurrences.c.first_occurrence_key,
         ).all()
         canonical_by_source = knowledge_service.resolve_canonical_lexemes(
-            row[3].lexeme_id for row in aggregate_rows
+            row[2].lexeme_id for row in aggregate_rows
         )
         logger.debug(
             "learning_map phase=aggregate groups=%d chapters=%d elapsed_ms=%.2f",
@@ -860,7 +828,7 @@ class AnalysisService:
             (time.perf_counter() - map_started_at) * 1000,
         )
 
-        for chapter_index_value, occurrence_count, _first_key, run_lexeme, _lexeme in aggregate_rows:
+        for chapter_index_value, occurrence_count, run_lexeme in aggregate_rows:
             if not self._occurrence_matches_filter(run_lexeme, filter_spec):
                 continue
             canonical_lexeme = canonical_by_source[run_lexeme.lexeme_id]
@@ -879,26 +847,15 @@ class AnalysisService:
 
             item = aggregates.setdefault(canonical_lexeme.id, {
                 "lexeme": canonical_lexeme,
-                "representative": run_lexeme,
                 "book_occurrence_count": 0,
                 "chapter_counts": defaultdict(int),
                 "first_chapter_index": chapter_index_value,
-                "excluded_from_learning_target": False,
             })
-            if (
-                item["representative"].is_oov
-                and not run_lexeme.is_oov
-            ):
-                item["representative"] = run_lexeme
             item["book_occurrence_count"] += occurrence_count
             item["chapter_counts"][chapter_index_value] += occurrence_count
             item["first_chapter_index"] = min(
                 item["first_chapter_index"],
                 chapter_index_value,
-            )
-            item["excluded_from_learning_target"] = (
-                item["excluded_from_learning_target"]
-                or self._is_learning_target_excluded(run_lexeme)
             )
 
         knowledge_started_at = time.perf_counter()
@@ -949,24 +906,22 @@ class AnalysisService:
             ),
         )
         coverage_curve = []
+        cumulative = 0
+        required_count = 0
+        frequency_index = 0
         for target_coverage in LEARNING_MAP_TARGETS:
-            if eligible_occurrences == 0:
-                required_count = 0
-                covered_occurrences = 0
-            else:
-                cumulative = 0
-                required_count = 0
-                covered_occurrences = 0
-                for item in frequency_items:
-                    cumulative += item["book_occurrence_count"]
-                    required_count += 1
-                    covered_occurrences = cumulative
-                    if cumulative / eligible_occurrences >= target_coverage:
-                        break
+            while (
+                eligible_occurrences > 0
+                and frequency_index < len(frequency_items)
+                and cumulative / eligible_occurrences < target_coverage
+            ):
+                cumulative += frequency_items[frequency_index]["book_occurrence_count"]
+                required_count += 1
+                frequency_index += 1
             coverage_curve.append({
                 "target_coverage": target_coverage,
                 "required_lexeme_count": required_count,
-                "covered_occurrences": covered_occurrences,
+                "covered_occurrences": cumulative,
             })
 
         chapters = []
@@ -988,97 +943,6 @@ class AnalysisService:
                 chapter["unknown_lexeme_count"] = len(lexeme_ids - known_ids)
             chapters.append(chapter)
 
-        effective_state_started_at = time.perf_counter()
-        effective_states = knowledge_service.effective_states(set(aggregates))
-        logger.debug(
-            "learning_map phase=effective_state scoped=%d resolved=%d elapsed_ms=%.2f",
-            len(aggregates),
-            len(effective_states),
-            (time.perf_counter() - effective_state_started_at) * 1000,
-        )
-        manageable_lexemes = []
-        recommendation_candidates = []
-        for lexeme_id, item in aggregates.items():
-            if item["excluded_from_learning_target"]:
-                continue
-            upcoming_count = sum(
-                count
-                for index, count in item["chapter_counts"].items()
-                if index >= anchor_chapter_index
-            )
-            recommendation_candidates.append((
-                -upcoming_count,
-                -item["book_occurrence_count"],
-                item["first_chapter_index"],
-                item["lexeme"].normalized_form,
-                item["lexeme"].id,
-                item,
-                upcoming_count,
-            ))
-        recommendation_candidates.sort(key=lambda candidate: candidate[:5])
-        recommendation_lexeme_ids = {
-            candidate[5]["lexeme"].id
-            for candidate in recommendation_candidates[:recommendation_limit]
-        }
-        lookup_started_at = time.perf_counter()
-        lookup_observations = LookupEventService(self.db).get_learning_map_observations(
-            book_id,
-            run,
-            recommendation_lexeme_ids,
-        )
-        logger.debug(
-            "learning_map phase=lookup candidates=%d observed=%d elapsed_ms=%.2f",
-            len(recommendation_lexeme_ids),
-            len(lookup_observations),
-            (time.perf_counter() - lookup_started_at) * 1000,
-        )
-        for candidate in recommendation_candidates[:recommendation_limit]:
-            item = candidate[5]
-            representative = item["representative"]
-            pos = representative.part_of_speech or []
-            manageable_lexemes.append({
-                "lexeme_id": item["lexeme"].id,
-                "normalized_form": item["lexeme"].normalized_form,
-                "display_form": representative.dictionary_form or item["lexeme"].normalized_form,
-                "reading": item["lexeme"].canonical_reading_kana,
-                "part_of_speech": str(pos[0]) if pos else "",
-                "book_occurrence_count": item["book_occurrence_count"],
-                "upcoming_chapter_occurrence_count": candidate[6],
-                "first_chapter_index": item["first_chapter_index"],
-                "excluded_from_learning_target": item["excluded_from_learning_target"],
-                "knowledge_status": effective_states.get(item["lexeme"].id),
-                "is_recommended": (
-                    item["lexeme"].id not in known_ids
-                    and effective_states.get(item["lexeme"].id) != "ignored"
-                ),
-                "lookup_observation": lookup_observations.get(item["lexeme"].id),
-            })
-
-        recommended_lexemes = []
-        if baseline_ready:
-            for candidate in recommendation_candidates[:recommendation_limit]:
-                item = candidate[5]
-                if (
-                    item["lexeme"].id in known_ids
-                    or effective_states.get(item["lexeme"].id) == "ignored"
-                ):
-                    continue
-                representative = item["representative"]
-                pos = representative.part_of_speech or []
-                recommended_lexemes.append({
-                    "lexeme_id": item["lexeme"].id,
-                    "normalized_form": item["lexeme"].normalized_form,
-                    "display_form": representative.dictionary_form or item["lexeme"].normalized_form,
-                    "reading": item["lexeme"].canonical_reading_kana,
-                    "part_of_speech": str(pos[0]) if pos else "",
-                    "book_occurrence_count": item["book_occurrence_count"],
-                    "upcoming_chapter_occurrence_count": candidate[6],
-                    "first_chapter_index": item["first_chapter_index"],
-                    "excluded_from_learning_target": item["excluded_from_learning_target"],
-                    "knowledge_status": effective_states.get(item["lexeme"].id),
-                    "lookup_observation": lookup_observations.get(item["lexeme"].id),
-                })
-
         logger.debug(
             "learning_map phase=total aggregates=%d eligible_occurrences=%d elapsed_ms=%.2f",
             len(aggregates),
@@ -1097,8 +961,6 @@ class AnalysisService:
             "coverage": coverage,
             "coverage_curve": coverage_curve,
             "chapters": chapters,
-            "recommended_lexemes": recommended_lexemes,
-            "manageable_lexemes": manageable_lexemes,
         }
 
     def get_active_lexeme_stats(

@@ -21,14 +21,14 @@ interface BookCardProps {
 export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDeleting = false }) => {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const [imgError, setImgError] = React.useState(false);
+  const [imageState, setImageState] = React.useState<{ url: string | null; failed: boolean }>({
+    url: book.cover_url ?? null,
+    failed: false,
+  });
   const menuRef = React.useRef<HTMLDivElement>(null);
   const menuButtonRef = React.useRef<HTMLButtonElement>(null);
 
-  // 图片加载状态重置（当 book.cover_url 变化时）
-  React.useEffect(() => {
-    setImgError(false);
-  }, [book.cover_url]);
+  const imgError = imageState.url === (book.cover_url ?? null) && imageState.failed;
 
   // 点击外部关闭菜单
   React.useEffect(() => {
@@ -102,7 +102,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete, onEdit, isDe
             src={book.cover_url}
             alt={book.title}
             className='w-full h-full object-cover transition-transform duration-300 group-hover:scale-105'
-            onError={() => setImgError(true)}
+            onError={() => setImageState({ url: book.cover_url ?? null, failed: true })}
             loading='lazy'
           />
         ) : (

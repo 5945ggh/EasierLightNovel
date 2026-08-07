@@ -21,6 +21,7 @@ import { getUserConfig, updateUserConfig } from '@/services/userConfig.service';
 import type { UserConfigResponse, ConfigGroupInfo, ConfigFieldInfo } from '@/types/userConfig';
 import { SENSITIVE_FIELDS, RESTART_REQUIRED_FIELDS } from '@/types/userConfig';
 import clsx from 'clsx';
+import AnkiImportPanel from './AnkiImportPanel';
 
 export const SettingsPage: React.FC = () => {
   const [configData, setConfigData] = useState<UserConfigResponse | null>(null);
@@ -36,28 +37,50 @@ export const SettingsPage: React.FC = () => {
   // 敏感字段可见性状态
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
 
+  const applyConfigData = useCallback((data: UserConfigResponse) => {
+    setConfigData(data);
+    // 默认展开第一个分组
+    if (data.schema_info.length > 0) {
+      setExpandedGroups(new Set([data.schema_info[0].group]));
+    }
+  }, []);
+
   // 加载配置
   const loadConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getUserConfig();
-      setConfigData(data);
-      // 默认展开第一个分组
-      if (data.schema_info.length > 0) {
-        setExpandedGroups(new Set([data.schema_info[0].group]));
-      }
+      applyConfigData(data);
     } catch (err) {
       setError('加载配置失败');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyConfigData]);
 
   useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
+    let isMounted = true;
+
+    getUserConfig()
+      .then((data) => {
+        if (isMounted) applyConfigData(data);
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError('加载配置失败');
+          console.error(err);
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [applyConfigData]);
 
   // 切换分组展开/折叠
   const toggleGroup = (group: string) => {
@@ -436,8 +459,8 @@ export const SettingsPage: React.FC = () => {
 
       {/* 头部 */}
       <header className="max-w-5xl mx-auto mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <Link
               to="/"
               className="p-2.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 transition-all shadow-sm rounded-xl active:scale-[0.98]"
@@ -445,12 +468,12 @@ export const SettingsPage: React.FC = () => {
             >
               <ArrowLeft size={20} strokeWidth={1.5} />
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="p-2.5 bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl text-white shadow-lg">
                 <SettingsIcon size={24} />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800 tracking-tight">
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-gray-800 sm:text-2xl tracking-tight">
                   系统设置
                 </h1>
                 <p className="text-xs text-gray-500 mt-0.5">
@@ -461,7 +484,7 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* 操作按钮 */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-start sm:self-auto">
             {hasChanges && (
               <button
                 onClick={handleReset}
@@ -519,6 +542,8 @@ export const SettingsPage: React.FC = () => {
       <main className="max-w-5xl mx-auto space-y-4">
         {configData?.schema_info.map((group) => renderGroup(group))}
       </main>
+
+      <AnkiImportPanel />
 
       {/* 底部提示 */}
       <footer className="max-w-5xl mx-auto mt-8 text-center text-sm text-gray-500">

@@ -2,9 +2,9 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-08-03
-- Primary product surfaces: Library, Reader, Study, book learning map
-- Evidence reviewed: `web/src/App.tsx`, `web/src/pages/LibraryPage.tsx`, `web/src/pages/LearningMapPage.tsx`, `web/src/components/reader/TokenRenderer.tsx`, `backend/app/services/analysis_service.py`, `backend/app/services/lookup_event_service.py`, `backend/tests/test_learning_map.py`, `backend/tests/test_lookup_events.py`, `backend/dev_docs/LEARNING_MAP_CONTRACT.md`
+- Last refreshed: 2026-08-05
+- Primary product surfaces: Library, Reader, global vocabulary and excerpt library, book learning map
+- Evidence reviewed: `web/src/App.tsx`, `web/src/pages/LibraryPage.tsx`, `web/src/pages/StudyPage/index.tsx`, `web/src/pages/StudyPage/VocabularyTab.tsx`, `web/src/pages/StudyPage/HighlightTab.tsx`, `web/src/pages/LearningMapPage.tsx`, `web/src/components/reader/TokenPopover.tsx`, `web/src/components/reader/ReaderSidebar.tsx`, `backend/app/services/analysis_service.py`, `backend/app/services/lookup_event_service.py`, `backend/tests/test_learning_map.py`, `backend/tests/test_lookup_events.py`, `backend/dev_docs/LEARNING_MAP_CONTRACT.md`, `backend/dev_docs/KNOWLEDGE_IMPORT_CONTRACT.md`, `backend/dev_docs/STUDY_MATERIALS_BOUNDARY.md`
 
 ## Brand
 - Personality: quiet, practical, study-focused, and local-first
@@ -12,9 +12,9 @@
 - Avoid: marketing dashboards, competing coverage percentages, decorative visualization without reading value
 
 ## Product goals
-- Goals: help a reader decide what to read next and which unknown lexemes matter in the current book
-- Non-goals: spaced repetition, external corpus ranking, Anki export, sentence cards, or treating lookup history as inferred context acquisition
-- Success signals: a reader can identify the next chapter, its unresolved vocabulary density, the real long-tail cost of book coverage, and factual lookup/recurrence evidence without mistaking it for mastery
+- Goals: help a reader decide what to read next and which unknown lexemes matter in the current book; preserve a clear cross-book library for saved vocabulary, excerpts, and reading analyses
+- Non-goals: spaced repetition, review scheduling, external corpus ranking, bulk Anki export, automatic or bulk sentence-card generation, editable personal notes, or treating lookup history as inferred context acquisition. Context-card Anki writing is an explicit, text-only action outside the Learning Map.
+- Success signals: a reader can identify the next chapter, its unresolved vocabulary density, the real long-tail cost of book coverage, and factual lookup/recurrence evidence without mistaking saved material for mastery or a review queue
 
 ## Personas and jobs
 - Primary personas: one local reader studying Japanese through imported light novels
@@ -22,15 +22,16 @@
 - Key contexts of use: desktop study sessions and narrow mobile reading breaks
 
 ## Information architecture
-- Primary navigation: Library -> Reader; Library -> Study; Library book menu -> Learning map; Reader -> current-book Learning map; Study -> Vocabulary, Highlights
+- Primary navigation: Library -> Reader; Library -> Vocabulary and excerpts; Library book menu -> Learning map; Reader -> current-book Learning map; Vocabulary and excerpts -> Vocabulary collection, Excerpts and analysis
 - Core routes/screens: `/`, `/read/:bookId`, `/study`, `/study/map/:bookId`
-- Content hierarchy: book identity and reading anchor context, primary reading readiness & explicit-known coverage, chapter route & unknown vocabulary burden, next step priority words / baseline setup, learning investment & coverage yield curve, collapsible scope notes
+- Content hierarchy: global material library title and scope, Vocabulary collection (word form, reading, definition, source book, existing context), Excerpts and analysis (highlighted original text and saved AI analysis), while book learning map remains a separate book-level route
 
 ## Design principles
 - Evidence before interpretation: show the filter scope, run identity, and actual curve values close to the metric
 - Compact scanning: use dense rows and restrained panels instead of a marketing-style dashboard
 - Honest empty states: uninitialized baseline and missing analysis are explicit states, never zero-filled substitutes
 - Fact versus inference: lookup history is an immutable user-action fact; recurrence after a lookup is a query-time observation and must never be presented as a knowledge-state decision
+- Content role clarity: saved vocabulary is a reading-material collection, excerpts and AI analysis are reference material, and neither is presented as a review queue or mastery state
 - Tradeoffs: small-screen readability and stable labels take priority over showing every metadata field at once
 
 ## Visual language
@@ -43,7 +44,7 @@
 
 ## Components
 - Existing components to reuse: Study header/tab pattern, `Loader2`, `AlertCircle`, `BookOpen`, `ArrowLeft`, Tailwind status colors
-- New/changed components: learning map page, chapter density rows, frequency curve table, recommendation rows
+- New/changed components: learning map page, chapter density rows, and coverage curve table
 - Variants and states: loading, ready, uninitialized baseline, needs analysis, request error, and an optional lookup observation only when real event evidence exists
 - Token/component ownership: page-local Tailwind classes, with global changes limited to responsive behavior if required
 
@@ -61,7 +62,7 @@
 
 ## Interaction states
 - Loading: centered spinner and short loading label
-- Empty: explain that the personal vocabulary baseline is not initialized; do not say coverage is 0%
+- Empty: distinguish no saved vocabulary/excerpts from an uninitialized learning-map baseline; do not say coverage is 0% and do not suggest that empty material means no review is due
 - Error: distinguish missing analysis from a generic request failure and preserve a recovery-oriented message
 - Success: show the single explicit-known metric and evidence underneath
 - Disabled: none beyond unavailable/rebuild-required actions
@@ -69,18 +70,22 @@
 
 ## Content voice
 - Tone: concise, factual, non-judgmental
-- Terminology: use “明确掌握” for explicit known, “个人词汇基线” for the baseline, and “待确认” for unavailable chapter unknown counts
-- Microcopy rules: explain OOV/proper-noun handling in plain language; state that the reader queried and that the word later appeared, never that the system decided the reader learned it; do not promise that a small word list reaches a target percentage
+- Terminology: use “词汇与摘录”, “词汇收藏”, and “摘录与解析” for the global library; use “明确掌握” for explicit known, “个人词汇基线” for the learning-map baseline, and “待确认” for unavailable chapter unknown counts
+- Microcopy rules: describe saved vocabulary as material the reader chose to keep, not as a study commitment or mastery; describe highlights/AI analysis as reference material; explain OOV/proper-noun handling in plain language; state that the reader queried and that the word later appeared, never that the system decided the reader learned it; do not promise that a small word list reaches a target percentage
 
 ## Implementation constraints
 - Framework/styling system: React 19, TypeScript, Vite, Tailwind, React Query, lucide-react
 - Design-token constraints: follow existing utility classes and palette; no new dependency or parallel design system
-- Performance constraints: one learning-map request per book view, bounded recommendation list, no client-side corpus computation
+- Performance constraints: one learning-map request per book view, bounded aggregate response, no client-side corpus computation
 - Compatibility constraints: preserve existing Reader, Vocabulary, Highlight, and Progress routes and API contracts
+- Study boundary: `/study` keeps its route and data requests, but is labeled “词汇与摘录”; do not add SRS, review, note-editing, AI schema migration, or bulk export controls as part of terminology changes. Context-card Anki writing remains an explicit action after a draft is generated.
 - Lookup constraints: `GET /api/dictionary/search` stays side-effect free; only the Reader token selection handler owns the idempotent lookup-event write. Unresolved mappings remain valid data, while Lexeme merges are resolved only during summary queries.
 - Lookup provenance: Learning Map observations only use events whose recorded analysis run shares the active run's `source_content_version_id`; legacy analysis rows without a Reader token projection remain readable, but Reader-originated events against them generally stay unresolved until re-analysis.
-- Deferred exports: Sentence/i+1/Anki write remain out of scope. Future Anki GUIDs belong to an append-only `AnkiExportLedger`, not auto-increment Lexeme ids.
+- Deferred exports: Sentence/i+1 and bulk Anki export remain out of scope. Context-card writes use their own `ContextCardAnkiLedger`; any future bulk-export GUIDs belong to an append-only `AnkiExportLedger`, not auto-increment Lexeme ids.
 - Test/screenshot expectations: lint and build; inspect desktop and mobile widths when a browser surface is available
 
 ## Open questions
 - [ ] Manual explicit-known editing is a Phase 4 concern; Phase 3 only consumes unambiguous legacy mastered records.
+- [ ] Personal note ownership (vocabulary, excerpt, or independent entity), editing/history, and export semantics need a separate design.
+- [ ] `ai_analysis` compatibility, structured schema, rendering, and migration strategy need a separate review.
+- [ ] Anki baseline import must remain distinct from context-card writes and future bulk export; stable GUID, example/i+1, media, and bulk export-ledger semantics need a separate design.

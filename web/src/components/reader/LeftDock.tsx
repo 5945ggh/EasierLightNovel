@@ -17,17 +17,17 @@ interface LeftDockProps {
 // Tab 按钮配置（桌面端）
 const TAB_BUTTONS: { tab: SidebarTab; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
   { tab: 'dictionary', icon: BookOpen, label: '词典' },
-  { tab: 'ai', icon: Sparkles, label: 'AI分析' },
-  { tab: 'vocabulary', icon: Bookmark, label: '生词本' },
-  { tab: 'highlights', icon: Highlighter, label: '高亮列表' },
+  { tab: 'ai', icon: Sparkles, label: 'AI 解析' },
+  { tab: 'vocabulary', icon: Bookmark, label: '词汇收藏' },
+  { tab: 'highlights', icon: Highlighter, label: '摘录列表' },
 ];
 
 // 移动端底部 Tab 配置（不包含目录和设置，它们在顶部）
 const MOBILE_TAB_BUTTONS: { tab: SidebarTab; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
   { tab: 'dictionary', icon: BookOpen, label: '词典' },
   { tab: 'ai', icon: Sparkles, label: 'AI' },
-  { tab: 'vocabulary', icon: Bookmark, label: '生词' },
-  { tab: 'highlights', icon: Highlighter, label: '高亮' },
+  { tab: 'vocabulary', icon: Bookmark, label: '词汇' },
+  { tab: 'highlights', icon: Highlighter, label: '摘录' },
 ];
 
 interface DockButtonProps {

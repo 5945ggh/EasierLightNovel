@@ -2,7 +2,7 @@
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -14,6 +14,8 @@ from app.models import (
 )
 from app.schemas import (
     AnkiKnowledgeImportRequest,
+    AnkiKnowledgeImportApplyRequest,
+    AnkiCatalogResponse,
     ExternalKnowledgeImportApplyResponse,
     ExternalKnowledgeImportPreviewResponse,
     ExternalKnowledgeImportRevokeResponse,
@@ -45,6 +47,19 @@ def _service(db: Session) -> ExternalKnowledgeImportService:
     )
 
 
+@router.get("/anki/catalog", response_model=AnkiCatalogResponse)
+def inspect_anki_catalog(
+    model_name: str | None = Query(default=None, max_length=255),
+    timeout_seconds: float = Query(default=2.0, gt=0, le=10),
+):
+    """Read connection, deck, model, field, and template metadata only."""
+    try:
+        source = AnkiConnectKnowledgeSource(timeout_seconds=timeout_seconds)
+        return source.inspect_catalog(model_name=model_name)
+    except ExternalKnowledgeImportError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 def _preview_payload(preview) -> dict:
     return {
         "source_kind": preview.source_kind,
@@ -57,10 +72,26 @@ def _preview_payload(preview) -> dict:
                 "canonical_reading_kana": item.canonical_reading_kana,
                 "source_entry_id": item.source_entry_id,
                 "level": item.level,
+                "target_state": item.target_state,
             }
             for item in preview.accepted
         ],
-        "skipped": [asdict(item) for item in preview.skipped],
+        "skipped": [_skip_payload(item) for item in preview.skipped],
+        "known_before_count": preview.known_before_count,
+        "known_after_count": preview.known_after_count,
+        "known_delta": preview.known_after_count - preview.known_before_count,
+        "learning_map_impact": preview.learning_map_impact,
+    }
+
+
+def _skip_payload(item) -> dict:
+    # ImportSkip.metadata contains internal, card-level evidence needed for
+    # aggregation. It deliberately never crosses the API boundary.
+    return {
+        "source_entry_id": item.source_entry_id,
+        "reason": item.reason,
+        "normalized_form": item.normalized_form,
+        "canonical_reading_kana": item.canonical_reading_kana,
     }
 
 
@@ -70,6 +101,9 @@ def _anki_preview(db: Session, request: AnkiKnowledgeImportRequest):
         "anki",
         source.fetch_candidates(
             query=request.query,
+            deck_name=request.deck_name,
+            model_name=request.model_name,
+            template_ord=request.template_ord,
             expression_fields=request.expression_fields,
             reading_fields=request.reading_fields,
         ),
@@ -92,16 +126,22 @@ def preview_anki(request: AnkiKnowledgeImportRequest, db: Session = Depends(get_
 
 
 @router.post("/anki/apply", response_model=ExternalKnowledgeImportApplyResponse)
-def apply_anki(request: AnkiKnowledgeImportRequest, db: Session = Depends(get_db)):
+def apply_anki(request: AnkiKnowledgeImportApplyRequest, db: Session = Depends(get_db)):
     try:
         service = _service(db)
-        result = service.apply_preview(_anki_preview(db, request))
+        preview = _anki_preview(db, request)
+        if preview.import_digest != request.preview_digest:
+            raise HTTPException(
+                status_code=409,
+                detail="Anki 内容已变化，请重新生成预览后再应用。",
+            )
+        result = service.apply_preview(preview)
         return {
             "batch_id": result.batch_id,
             "source_kind": result.source_kind,
             "import_digest": result.import_digest,
             "created_count": result.created_count,
-            "skipped": [asdict(item) for item in result.skipped],
+            "skipped": [_skip_payload(item) for item in result.skipped],
         }
     except ExternalKnowledgeImportError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -125,7 +165,7 @@ def apply_jlpt(request: JLPTKnowledgeImportRequest, db: Session = Depends(get_db
             "source_kind": result.source_kind,
             "import_digest": result.import_digest,
             "created_count": result.created_count,
-            "skipped": [asdict(item) for item in result.skipped],
+            "skipped": [_skip_payload(item) for item in result.skipped],
         }
     except (ExternalKnowledgeImportError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -237,22 +237,6 @@ class ReaderLookupEventResponse(BaseModel):
     created_at: datetime
 
 
-class ReaderLookupEventFirstLast(BaseModel):
-    chapter_index: int
-    reader_segment_index: int
-    reader_token_index: int
-    created_at: datetime
-
-
-class LearningMapLookupObservation(BaseModel):
-    lookup_count: int
-    first_lookup: ReaderLookupEventFirstLast
-    last_lookup: ReaderLookupEventFirstLast
-    occurrences_after_first_lookup: Optional[int] = None
-    occurrences_after_last_lookup: Optional[int] = None
-    later_lookup_count_after_first: int
-
-
 class LearningMapFilterSpec(BaseModel):
     pos_allowlist: List[str]
     exclude_proper_nouns: bool
@@ -282,24 +266,6 @@ class LearningMapChapterResponse(BaseModel):
     new_lexeme_count: int
 
 
-class LearningMapRecommendedLexeme(BaseModel):
-    lexeme_id: int
-    normalized_form: str
-    display_form: str
-    reading: Optional[str] = None
-    part_of_speech: str
-    book_occurrence_count: int
-    upcoming_chapter_occurrence_count: int
-    first_chapter_index: int
-    excluded_from_learning_target: bool
-    knowledge_status: Optional[Literal["learning", "known", "ignored"]] = None
-    lookup_observation: Optional[LearningMapLookupObservation] = None
-
-
-class LearningMapManageableLexeme(LearningMapRecommendedLexeme):
-    is_recommended: bool
-
-
 class LearningMapResponse(BaseModel):
     book_id: str
     analysis_status: Literal["ready", "needs_analysis"]
@@ -312,8 +278,6 @@ class LearningMapResponse(BaseModel):
     coverage: Optional[LearningMapCoverage] = None
     coverage_curve: List[LearningMapCurvePoint]
     chapters: List[LearningMapChapterResponse]
-    recommended_lexemes: List[LearningMapRecommendedLexeme]
-    manageable_lexemes: List[LearningMapManageableLexeme] = Field(default_factory=list)
 
 
 class UserLexemeKnowledgeUpdate(BaseModel):
@@ -370,6 +334,13 @@ class ExternalKnowledgeImportStatsResponse(BaseModel):
     ambiguous: int
     unmatched: int
     provisional: int
+    card_count: int = 0
+    note_count: int = 0
+    unique_lexeme_count: int = 0
+    known_candidate_count: int = 0
+    learning_candidate_count: int = 0
+    anki_state_counts: Dict[str, int] = Field(default_factory=dict)
+    conversion_funnel: Dict[str, int] = Field(default_factory=dict)
 
 
 class ExternalKnowledgeImportCandidateResponse(BaseModel):
@@ -378,6 +349,7 @@ class ExternalKnowledgeImportCandidateResponse(BaseModel):
     canonical_reading_kana: str
     source_entry_id: str
     level: Optional[str] = None
+    target_state: Optional[Literal["learning", "known"]] = None
 
 
 class ExternalKnowledgeImportSkipResponse(BaseModel):
@@ -387,19 +359,65 @@ class ExternalKnowledgeImportSkipResponse(BaseModel):
     canonical_reading_kana: Optional[str] = None
 
 
+class ExternalKnowledgeImportBookImpactResponse(BaseModel):
+    book_id: str
+    book_title: str
+    eligible_occurrences: int
+    known_lexeme_count_before: int
+    known_lexeme_count_after: int
+    known_occurrences_before: int
+    known_occurrences_after: int
+    coverage_before: Optional[float] = None
+    coverage_after: Optional[float] = None
+    coverage_delta: Optional[float] = None
+
+
 class ExternalKnowledgeImportPreviewResponse(BaseModel):
     source_kind: Literal["anki", "jlpt"]
     import_digest: str
     stats: ExternalKnowledgeImportStatsResponse
     accepted: List[ExternalKnowledgeImportCandidateResponse]
     skipped: List[ExternalKnowledgeImportSkipResponse]
+    known_before_count: int = 0
+    known_after_count: int = 0
+    known_delta: int = 0
+    learning_map_impact: List[ExternalKnowledgeImportBookImpactResponse] = Field(default_factory=list)
 
 
 class AnkiKnowledgeImportRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=500)
+    query: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    deck_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    model_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    template_ord: Optional[int] = Field(default=None, ge=0)
     expression_fields: List[str] = Field(default_factory=lambda: ["Expression", "Word", "Vocabulary", "Front"])
     reading_fields: List[str] = Field(default_factory=lambda: ["Reading", "Kana", "Yomi"])
     timeout_seconds: float = Field(default=2.0, gt=0, le=10)
+
+    @model_validator(mode="after")
+    def require_scope(self):
+        if not self.query and not self.deck_name:
+            raise ValueError("Anki import requires query or deck_name")
+        return self
+
+
+class AnkiKnowledgeImportApplyRequest(AnkiKnowledgeImportRequest):
+    """Apply only the exact Anki snapshot the user confirmed."""
+
+    preview_digest: str = Field(..., min_length=64, max_length=64)
+
+
+class AnkiTemplateResponse(BaseModel):
+    ord: int
+    name: str
+
+
+class AnkiCatalogResponse(BaseModel):
+    version: int
+    deck_names: List[str]
+    model_names: List[str]
+    selected_model: Optional[str] = None
+    fields: List[str] = Field(default_factory=list)
+    templates: List[AnkiTemplateResponse] = Field(default_factory=list)
 
 
 class JLPTKnowledgeImportRequest(BaseModel):
@@ -445,6 +463,73 @@ class VocabularyResponse(VocabularyBase):
     status: int = 0
     next_review_at: Optional[datetime] = None
     context_sentences: Optional[List[str]] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ContextCardDraftCreate(BaseModel):
+    vocabulary_id: int = Field(..., gt=0)
+    chapter_id: Optional[int] = Field(None, gt=0)
+    lexeme_occurrence_id: Optional[int] = Field(None, gt=0)
+    source_document_id: Optional[str] = None
+    source_start: Optional[int] = Field(None, ge=0)
+    source_end: Optional[int] = Field(None, gt=0)
+    quote_text: str = Field(..., min_length=1, max_length=10000)
+    quote_locked: bool = True
+
+    @model_validator(mode="after")
+    def validate_source_coordinate_pair(self):
+        if (self.source_start is None) != (self.source_end is None):
+            raise ValueError("source_start and source_end must be supplied together")
+        if self.source_start is not None and self.source_end is not None and self.source_end <= self.source_start:
+            raise ValueError("source_end must be greater than source_start")
+        return self
+
+
+class ContextCardDraftUpdate(BaseModel):
+    quote_text: Optional[str] = Field(None, min_length=1, max_length=10000)
+    quote_locked: Optional[bool] = None
+    meaning_in_context: Optional[str] = None
+    sentence_translation: Optional[str] = None
+    usage_note: Optional[str] = None
+
+
+class ContextCardGenerateRequest(BaseModel):
+    model_preference: Optional[str] = None
+
+
+class ContextCardAnkiWriteRequest(BaseModel):
+    deck_name: str = Field(..., min_length=1, max_length=255)
+    model_name: str = Field(..., min_length=1, max_length=255)
+    field_mapping: Optional[Dict[str, str]] = None
+    timeout_seconds: float = Field(default=10.0, gt=0, le=120)
+
+
+class ContextCardDraftResponse(BaseModel):
+    id: int
+    vocabulary_id: int
+    book_id: str
+    chapter_id: Optional[int] = None
+    lexeme_occurrence_id: Optional[int] = None
+    source_document_id: Optional[str] = None
+    source_start: Optional[int] = None
+    source_end: Optional[int] = None
+    quote_text: str
+    quote_locked: bool
+    analysis_version: str
+    status: str
+    meaning_in_context: Optional[str] = None
+    sentence_translation: Optional[str] = None
+    usage_note: Optional[str] = None
+    llm_model: Optional[str] = None
+    generation_attempts: int
+    generation_error: Optional[str] = None
+    anki_guid: Optional[str] = None
+    anki_note_id: Optional[str] = None
+    anki_status: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

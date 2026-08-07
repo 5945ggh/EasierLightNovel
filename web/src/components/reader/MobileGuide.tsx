@@ -19,7 +19,7 @@ const GUIDE_STEPS: GuideStep[] = [
   {
     icon: BookOpen,
     title: '底部导航栏',
-    description: '点击底部图标可打开词典、AI 分析、生词本和高亮列表',
+    description: '点击底部图标可打开词典、AI 解析、词汇收藏和摘录列表',
   },
   {
     icon: Highlighter,

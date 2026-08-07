@@ -1,6 +1,10 @@
 from types import SimpleNamespace
 
-from app.schemas import ChapterHighlightData, HighlightResponse
+import pytest
+
+from pydantic import ValidationError
+
+from app.schemas import AnkiKnowledgeImportApplyRequest, ChapterHighlightData, HighlightResponse
 
 
 def test_highlight_response_exposes_both_archive_fields_and_normalizes_style():
@@ -53,3 +57,14 @@ def test_chapter_highlight_data_maps_deep_to_favorite():
     )
 
     assert item.style_category == "favorite"
+
+
+def test_anki_apply_requires_the_confirmed_preview_digest():
+    with pytest.raises(ValidationError):
+        AnkiKnowledgeImportApplyRequest(deck_name="Deck")
+
+    request = AnkiKnowledgeImportApplyRequest(
+        deck_name="Deck",
+        preview_digest="a" * 64,
+    )
+    assert request.preview_digest == "a" * 64

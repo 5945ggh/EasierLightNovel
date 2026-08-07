@@ -1,6 +1,6 @@
 /**
- * 学习中心页面
- * 包含生词本和积累本（高亮句）两个标签页
+ * 词汇与摘录页面
+ * 包含词汇收藏和摘录与解析两个标签页
  */
 
 import React, { useState } from 'react';
@@ -32,8 +32,8 @@ const StudyPage: React.FC = () => {
               <BrainCircuit size={24} strokeWidth={1.5} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">学习中心</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">积累词汇，回顾高亮与 AI 解析</p>
+              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">词汇与摘录</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400">管理阅读中收藏的词汇、摘录与解析</p>
             </div>
           </div>
         </div>
@@ -46,13 +46,13 @@ const StudyPage: React.FC = () => {
             active={activeTab === 'vocabulary'}
             onClick={() => setActiveTab('vocabulary')}
             icon={<BookOpen size={18} strokeWidth={1.5} />}
-            label="生词本"
+            label="词汇收藏"
           />
           <TabButton
             active={activeTab === 'highlights'}
             onClick={() => setActiveTab('highlights')}
             icon={<Highlighter size={18} strokeWidth={1.5} />}
-            label="积累与高亮"
+            label="摘录与解析"
           />
         </div>
       </div>

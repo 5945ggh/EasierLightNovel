@@ -61,6 +61,11 @@ CLAUDE.md
 #codex
 AGENTS.md
 
+# OMX runtime state and package-manager files not used by this project
+.omx/
+web/pnpm-lock.yaml
+web/pnpm-workspace.yaml
+
 
 dev_docs/
 .design-notes/

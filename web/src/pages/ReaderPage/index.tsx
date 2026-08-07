@@ -266,7 +266,7 @@ export const ReaderPage: React.FC = () => {
     staleTime: Infinity,
   });
 
-  // 7. Query: 获取生词本（完整数据，包含 ID 用于删除）
+  // 7. Query: 获取词汇收藏（完整数据，包含 ID 用于删除）
   const { data: vocabulariesData } = useQuery({
     queryKey: ['vocabularies-full', bookId],
     queryFn: () => getBookVocabularies(bookId!),

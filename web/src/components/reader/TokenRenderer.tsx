@@ -111,6 +111,12 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
           tokenIndex,
           text: token.s,
         });
+
+        // 如果侧边栏处于展开状态，点击 Token 时自动切到词典 Tab 方便查看与收藏
+        const state = useReaderStore.getState();
+        if (state.isSidebarOpen) {
+          state.setActiveTab('dictionary');
+        }
       },
       [token, segmentIndex, tokenIndex, setSelectedToken, bookId, chapterIndex]
     );

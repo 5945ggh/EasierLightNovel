@@ -63,30 +63,45 @@
 - 自动保存划线到数据库
 - 高亮状态持久化
 
-#### 6. 生词本功能
-- 一键添加生词（点击词 → 弹窗 → 加入生词本）
-- 生词标记（红色文字 + 下划线）
-- 按书存储生词（同一本书的同一原型只记录一次）
-- 刷新页面后生词状态持久化
-- 生词本统计（总数、按状态分组）
+#### 6. 词汇收藏
+- 一键保存词汇（点击词 → 弹窗 → 加入词汇收藏）
+- 词汇标记（红色文字 + 下划线）
+- 按书存储词汇（同一本书的同一原型只记录一次）
+- 刷新页面后词汇收藏状态持久化
+- 跨书资料库查看词形、读音、已有释义、来源书籍和现有上下文信息
 
-#### 7. 划线与 AI 深度解析
-- 点击已高亮文本内部token → 显示"AI 分析(高亮句)"按钮
+#### 7. 摘录与 AI 解析
+- 点击已高亮文本内部 token → 显示“AI 解析”按钮
 - LLM 语法解析与翻译
-- 积累本：结构化保存 AI 解析结果
-- 支持添加个人笔记
+- 摘录资料：保存并展示与高亮关联的 AI 解析结果
+- 当前不提供个人笔记编辑；已有 `user_note` 数据仅按兼容需要展示
 
-#### 8. 生词本增强功能
-- Spaced Repetition 算法（Anki 风格）
-- 学习状态追踪（新学/学习中/复习/已掌握）
-- 生词本列表页面
-- 从生词本移除功能
+#### 8. 后续能力（尚未实现）
+- Spaced Repetition / SRS 和到期复习调度
+- 词汇掌握状态的用户复习工作流
+- 从词汇收藏或摘录批量导出 Anki 卡片（语境卡片的显式 Anki 写入已单独实现）
 
 #### 9. TTS 发音
 - VoiceVox
 - 日语语音合成（词/句级别）
 - 支持音调重音（Pitch Accent）
 - token/高亮文本可朗读
+
+---
+
+## 产品边界：词汇与摘录
+
+当前 `/study` 路由的用户可见名称是“词汇与摘录”。它是跨书保存和回看阅读素材的资料库，分为“词汇收藏”和“摘录与解析”两个内容域，不是学习中心或复习中心。
+
+- 词汇收藏保存用户在阅读中主动加入的词形、读音、已有释义、来源书籍和现有上下文信息。收藏不等于长期学习决定，也不等于掌握。
+- 摘录与解析保存用户高亮的原文及关联的 AI 解析。AI 解析当前是保存/展示的阅读辅助内容；个人笔记编辑尚未完成。
+- `Vocabulary.status`、`next_review_at` 和 `ArchiveItem.in_review_queue` 是历史/预留字段，当前不实现 SRS、复习队列或到期复习，也不因字段存在而改变页面口径。
+- 书籍学习地图继续负责单本书的词汇阅读负担、章节路线和阅读决策，不迁移到 `/study`。
+- AnkiConnect 的个人词汇基线导入仅在用户显式请求时通过 AnkiConnect v6 的 `deckNames`、`modelNames`、`findCards`、`cardsInfo`、`cardsToNotes`、`notesInfo`（以及模板读取）读取外部数据；它只把可撤销的基线证据写入本地数据库，不会写回 Anki。导入先按 card 聚合到 note，再匹配唯一 canonical Lexeme；只有 interval >= 21 天且未被 Suspended 覆盖的 Mature 证据进入 `known`，New/Learning/Relearning/Young 默认进入 `learning`，Buried 保留标志但不覆盖底层成熟度。批次和 card 证据可撤销，手动状态优先。
+
+语境卡片是不同的显式写入路径：`POST /api/context-cards/{draft_id}/anki` 在用户点击写入后调用 AnkiConnect `addNote`，仅写入当前已生成的文本卡片；`ContextCardAnkiLedger` 保存稳定 GUID、字段快照和重试状态，重复操作不会静默创建重复笔记。该路径不改变基线导入的只读外部边界。本应用仍不提供词汇收藏/摘录的批量 Anki 导出；批量导出需要另行定义稳定 GUID、例句/i+1、媒体和导出记录。
+
+后续阶段的个人笔记归属、编辑/历史/导出语义，`ai_analysis` 的结构化 schema 与兼容迁移，以及 Anki 基线导入和本应用制卡/导出的边界，记录在 [`dev_docs/STUDY_MATERIALS_BOUNDARY.md`](dev_docs/STUDY_MATERIALS_BOUNDARY.md)。
 
 ---
 
@@ -127,7 +142,7 @@
 
 删除书籍时，私有原始文件会先原子移动到 `static_data/sources/.cleanup/`，数据库提交后再删除。若文件系统暂时拒绝删除，后端启动时会重试该目录，避免无归属的原始文件永久遗留。
 
-#### 划线与 AI 解析流程（计划中）
+#### 划线与 AI 解析流程（当前流程）
 
 ```
 用户选中文本 → 划线
@@ -136,13 +151,13 @@
     ↓
 【可选】请求 AI 解析
     ↓
-保存 ArchiveItem (结构化 JSON)
+保存 ArchiveItem（保存文本/JSON 兼容的 AI 解析内容）
     ├─ translation: 翻译
     ├─ grammar: 语法点列表
     ├─ nuance: 语感说明
     └─ key_words: 重点词汇
     ↓
-展示解析结果 + 可加入生词本/复习队列
+展示并保存 AI 解析，供“词汇与摘录”资料库回看
 ```
 
 ---
@@ -185,8 +200,9 @@
 `known`、`learning`、`ignored` 和无记录（未声明）是学习地图的状态语义，其中只有有效
 `known` 会进入明确掌握覆盖率。它不能因分析 run 重建而丢失。`ExternalKnowledgeImport` 和
 `ExternalKnowledgeImportItem` 保存 AnkiConnect/JLPT 外部已知集的可撤销证据；手动状态优先于
-外部证据，外部证据优先于旧 `Vocabulary.status == 3` 的兼容迁移。`Vocabulary.status` 仍服务
-既有生词本/复习功能，但不再是学习地图的主真值来源。
+外部证据，外部证据优先于旧 `Vocabulary.status == 3` 的兼容迁移。`Vocabulary.status`、
+`next_review_at` 等字段属于历史/预留兼容字段；当前词汇收藏不会把它们呈现为掌握状态、
+复习队列或到期时间，也不把它们作为学习地图的主真值来源。
 
 详细的 source coordinate、身份和 API 契约见
 [`dev_docs/SOURCE_CONTENT_CONTRACT.md`](dev_docs/SOURCE_CONTENT_CONTRACT.md) 与
@@ -227,7 +243,7 @@ Learning Map 的坐标观察。同一 source version 的重新分析可以继续
 - gap: Optional[bool]        # 是否为间隔符
 - RUBY: Optional[List]       # 振假名分段（如"食べる" → "た/べる"）
 - definition: Optional[str]  # 释义（来自词典）
-- is_vocabulary: Optional[bool]  # 是否在生词本中（动态添加）
+- is_vocabulary: Optional[bool]  # 是否在词汇收藏中（动态添加）
 - highlight_id: Optional[int]    # 所属高亮的 ID（动态添加）
 - highlight_style: Optional[str] # 高亮样式（动态添加）
 ```
@@ -260,17 +276,17 @@ Learning Map 的坐标观察。同一 source version 的重新分析可以继续
 - updated_at: datetime
 ```
 
-#### ArchiveItem（积累本）
+#### ArchiveItem（摘录资料）
 ```python
 - highlight_id: int          # 关联高亮（可选）
-- user_note: Optional[str]   # 用户笔记
-- ai_analysis: Text          # AI 解析结果（JSON 或纯文本）
-- in_review_queue: bool      # 是否加入复习队列
+- user_note: Optional[str]   # 兼容字段；当前不提供个人笔记编辑
+- ai_analysis: Text          # 已保存的 AI 解析（JSON 或纯文本）
+- in_review_queue: bool      # 历史/预留字段，不表示当前有可用复习队列
 - created_at: datetime
 - updated_at: datetime
 ```
 
-#### Vocabulary（生词本）
+#### Vocabulary（词汇收藏）
 ```python
 - book_id: str               # 书籍 ID
 - word: str                  # 单词
@@ -278,17 +294,17 @@ Learning Map 的坐标观察。同一 source version 的重新分析可以继续
 - base_form: str             # 原型
 - part_of_speech: Optional[str]  # 词性
 - definition: Optional[str]  # 释义
-- status: int                # 复习状态（0:新学 1:学习中 2:复习 3:已掌握）
-- next_review_at: Optional[datetime]   # 下次复习时间
+- status: int                # 历史/预留状态字段，不表示当前复习能力
+- next_review_at: Optional[datetime]   # 历史/预留时间字段，不用于当前到期复习
 - context_sentences: Optional[JSON]  # 例句列表
 - created_at: datetime
 - updated_at: datetime
 - UniqueConstraint: (book_id, base_form)  # 同一书同一原型只记录一次
 ```
 
-未来 Anki 导出必须由只增的 `AnkiExportLedger` 持有稳定 GUID，不能直接由
-数据库自增 `lexeme_id` 派生。本阶段不实现 Sentence、i+1、例句缓存、Anki
-写入/导出、TTS 或媒体文件导出，也不引入新的覆盖率定义。
+未来批量 Anki 导出必须由只增的 `AnkiExportLedger` 持有稳定 GUID，不能直接由
+数据库自增 `lexeme_id` 派生。本阶段不实现 Sentence、i+1、例句缓存、批量
+Anki 导出、TTS 或媒体文件导出；语境卡片的用户显式 Anki 写入是独立的文本卡片路径，也不引入新的覆盖率定义。
 
 ---
 
@@ -306,8 +322,8 @@ Learning Map 的坐标观察。同一 source version 的重新分析可以继续
 5. 逐段阅读：
    - 点击汉字 → 显示假名注音
    - 点击单词 → 显示词典释义弹窗（Glassmorphism Lite 风格）
-   - 遇到生词 → 点击"加入生词本"按钮
-   - 生词标记为红色文字+下划线
+   - 遇到需要保存的词 → 点击“加入词汇收藏”按钮
+   - 已收藏词汇标记为红色文字+下划线
 6. 自动保存书籍级阅读位置（章节索引、段落索引和章节内百分比）
 7. 刷新页面或点击“继续阅读” → 自动恢复到最近保存的位置
 ```

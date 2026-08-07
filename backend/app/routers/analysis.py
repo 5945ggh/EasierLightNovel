@@ -48,14 +48,12 @@ def get_user_lexeme_knowledge_service(
 def get_learning_map(
     book_id: str,
     chapter_index: Optional[int] = Query(default=None, ge=0),
-    recommendation_limit: int = Query(default=20, ge=1, le=100),
     service: AnalysisService = Depends(get_analysis_service),
 ):
     try:
         return service.get_learning_map(
             book_id,
             chapter_index=chapter_index,
-            recommendation_limit=recommendation_limit,
         )
     except AnalysisBookNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
