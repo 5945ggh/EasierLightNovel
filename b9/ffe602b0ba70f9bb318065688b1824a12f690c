@@ -1,0 +1,284 @@
+backend/tests/test_database_migrations.py
+  s_309a1f86bf8fb9::t_ef74936dd184cf 45-82
+backend/main.py
+  s_eadee3a634af95::t_503890afb6e3f1 156,166
+web/src/pages/BookHomePage/index.tsx
+  s_4463b7e855b80c::t_fa4c0e711d1f4d 731
+  s_bca9112d395d5c::t_603012b7f6cd0e 455,718,745,751,754,760
+  s_bca9112d395d5c::t_72b98293a77199 359
+web/src/pages/StudyPage/VocabularyTab.tsx
+  s_bca9112d395d5c::t_2d9828e175effc 145-146,156
+  s_b73c0f5a28d05d::t_8d77dfe883be92 287-300
+  s_b73c0f5a28d05d::t_24e95772d6b793 204-213,263,267-268,283-284,286,301-315
+  s_bca9112d395d5c::t_603012b7f6cd0e 2,137,157,172,180-182,195,276
+  s_eadee3a634af95::t_13f53aed25713e 8,11,87,166,190,199-200,255-262
+web/src/pages/LibraryPage.tsx
+  s_bca9112d395d5c::t_603012b7f6cd0e 241,278,284
+  s_069288604d53e2::t_edb69d55b4cb49 68,137,139-140,148,249
+.gitignore
+  s_069288604d53e2::t_2947f9df8300ad 64-68
+backend/app/services/analysis_service.py
+  s_4463b7e855b80c::t_7d039547c6dfcc 14
+  s_4463b7e855b80c::t_7330b9ebf86e1a 822,831,909-911,913-920,924
+  s_4463b7e855b80c::t_90ad03fdfa91e2 48
+web/src/types/learningMap.ts
+  s_069288604d53e2::t_d3b05fc8c591a5 44-60
+web/src/pages/StudyPage/index.tsx
+  s_bca9112d395d5c::t_603012b7f6cd0e 2-3,35-36,49,55
+web/src/services/context-card.service.ts
+  s_eadee3a634af95::t_45b8058a225973 1-21
+web/src/pages/StudyPage/HighlightTab.tsx
+  s_bca9112d395d5c::t_72b98293a77199 171,215
+  s_bca9112d395d5c::t_603012b7f6cd0e 2,44,114,127,134,149,157-159,178,225,236,246,257,348
+  s_bca9112d395d5c::t_2d9828e175effc 122-123,133
+web/src/types/index.ts
+  s_eadee3a634af95::t_7b94459653557d 34-36
+  s_eadee3a634af95::t_45b8058a225973 37-39
+web/tests/learningMapContract.test.ts
+  s_069288604d53e2::t_d3b05fc8c591a5 4-12,16-17,20-29,33-34,37-45,48-51
+web/src/components/reader/SelectionMenu.tsx
+  s_069288604d53e2::t_edb69d55b4cb49 79-81,409,490
+web/eslint.config.js
+  s_fc9834eb178168::t_128d364a3da9c4 15
+web/src/services/knowledge-import.service.ts
+  s_eadee3a634af95::t_42c008ddd1f4c9 5,10,25-26
+  s_eadee3a634af95::t_7b94459653557d 1,3,6-9,33-36,38,40-41,43-46
+  s_eadee3a634af95::t_4b872184d5d2b5 11-20,23-24,27-28,30
+  s_069288604d53e2::t_db167b1e6f92be 4,39
+web/src/components/reader/LeftDock.tsx
+  s_bca9112d395d5c::t_72b98293a77199 29
+  s_bca9112d395d5c::t_603012b7f6cd0e 20-22,30
+web/src/pages/LearningMapPage.tsx
+  s_4463b7e855b80c::t_f6d9b1f6e0df9d 813-818,820-824,828-846,848-857,874,881,883-894,896-907
+  s_4463b7e855b80c::t_6f566d78947013 62-64,88-102,106-116,118-125,127,129-135,138-169,172-185,188-199,202-218,220-223,226-234,238,240-245,300,304-305,308,312-313,315,326,333-340,367,389,398,419-424,462,473-476,514,523,528-529,543,570-575,580-581,583-584,586-587,592,596-599,607-610,625-626,634,650-651,678,680,685,697,727,746,748-755,757-766,768-769,771-772,774-778,780-782,789-812,868-869,1005,1034
+  s_4463b7e855b80c::t_39eb19aa3f75cb 858-860,865-867
+  s_4463b7e855b80c::t_2ad81676d4d4cb 870-873
+  s_4463b7e855b80c::t_ac1277f6878406 875-880
+  s_4463b7e855b80c::t_7afe70a764204d 882
+  s_4463b7e855b80c::t_635eddea74bd75 908-910
+backend/app/services/external_knowledge_import_service.py
+  s_eadee3a634af95::t_aa2ca203884b7b 1461-1505
+  s_309a1f86bf8fb9::t_87a795ff0c12f9 651-664,679-782
+  s_309a1f86bf8fb9::t_e81abe751c2c0b 1398-1405
+  s_309a1f86bf8fb9::t_e31a4aefa8753c 783-850,854-857,860-863,873-962
+  s_309a1f86bf8fb9::t_f9aa8225b5e4e5 383-388,394-397,403-424,429-433,435-438,440-455,457-470
+  s_309a1f86bf8fb9::t_4c9a8a86dfc804 1263-1266,1271-1304,1306-1339,1353-1363,1372,1375-1379,1382-1397,1413-1427,1430,1435-1450
+  s_309a1f86bf8fb9::t_b24b69e3e7c3d8 28-30,34-38,136,149-151
+  s_309a1f86bf8fb9::t_e9101301b44d39 1091-1092
+  s_309a1f86bf8fb9::t_2e5ee70c8f71ff 612-614,616-623,631,638
+  s_1c2ebf48b90fc8::t_776f08019a2bfc 851-853,864-872
+  s_069288604d53e2::t_cc3390d60f9333 425-428,439,486,488-494,498,502-516,520-527,615,624-630,665-678
+  s_309a1f86bf8fb9::t_1efc316c1fbe9c 1340-1352
+  s_309a1f86bf8fb9::t_43ac391c5746f6 1368,1373-1374,1451-1457
+  s_309a1f86bf8fb9::t_93bb79e4c6ac50 540-546,556-558,1019,1025-1028,1034-1039,1044-1049,1069-1082,1085-1090,1093-1117,1130-1136,1138-1140
+  s_309a1f86bf8fb9::t_5ddf47bf97eec9 254-285,293-298,306-375
+  s_309a1f86bf8fb9::t_6170c747cf9a84 286-292,299-305
+  s_309a1f86bf8fb9::t_fc25b0cb7406e6 976,978-983
+  s_309a1f86bf8fb9::t_e2831f596db120 27,637,1242
+  s_1c2ebf48b90fc8::t_a6a386bf71f59f 31-33,858-859
+  s_309a1f86bf8fb9::t_d5f2c0dee20567 1406-1411
+web/package.json
+  s_069288604d53e2::t_d3b05fc8c591a5 10
+backend/tests/test_external_knowledge_imports.py
+  s_069288604d53e2::t_c15c834a091dbe 36,590,608-609,611,621-637
+  s_309a1f86bf8fb9::t_ce1736918e247d 112,119-135,138-156,164,166-167,172-173,175-176,180-182,187-188,190-200,209-211,221-226,238-243,245-253,255-257,259,261,282-283,304-345,348
+  s_1c2ebf48b90fc8::t_cb85fe0cd45ab2 136-137,262-281
+  s_1c2ebf48b90fc8::t_a6a386bf71f59f 35
+  s_1c2ebf48b90fc8::t_776f08019a2bfc 284-303
+  s_309a1f86bf8fb9::t_7da302605537d9 8,10,12-13,16,18-19,227,762-888
+  s_309a1f86bf8fb9::t_556ad1e379128e 228-235,244
+  s_309a1f86bf8fb9::t_4dd5eb4b37ba63 638-761,889
+  s_309a1f86bf8fb9::t_487e48a13ee49b 254
+  s_309a1f86bf8fb9::t_2a171d9bddeea6 260
+  s_eadee3a634af95::t_6f64162b96a7bc 532-563
+web/src/components/reader/TokenPopover.tsx
+  s_fc9834eb178168::t_b67d9e909e0dae 8,26,83-94,106,108
+  s_fc9834eb178168::t_163d947adf12e8 7
+  s_bca9112d395d5c::t_603012b7f6cd0e 4,444,455,465
+  s_bca9112d395d5c::t_25b734933d45ca 226-227
+backend/app/schemas.py
+  s_309a1f86bf8fb9::t_ff2dbb7504c13b 362-374,384
+  s_309a1f86bf8fb9::t_7e7b9d1d57279e 337-343,352,381-383,388-391
+  s_069288604d53e2::t_cc3390d60f9333 403-408
+  s_eadee3a634af95::t_c571a42af37b4c 409-421
+  s_eadee3a634af95::t_d6c63377f09240 472-482,491-534
+  s_eadee3a634af95::t_80be8e6624b72b 483-490
+  s_309a1f86bf8fb9::t_61cf9d0c5b47b0 396-401
+  s_eadee3a634af95::t_da0515bad91da3 469-471
+  s_069288604d53e2::t_56a53eddf85be4 402,468
+backend/tests/test_learning_map.py
+  s_4463b7e855b80c::t_66a94c5ba0446b 179,197,207-208,225-226,448-449
+backend/app/models.py
+  s_eadee3a634af95::t_6712610898d938 598-609
+  s_eadee3a634af95::t_dbf8136735caff 45,558-597,610-630
+  s_309a1f86bf8fb9::t_167ad4e0c080da 282-300
+backend/app/routers/knowledge_imports.py
+  s_309a1f86bf8fb9::t_7e7b9d1d57279e 75,79-94,104-106,144,168
+  s_eadee3a634af95::t_ae072723a2b874 5,18,50-60
+  s_069288604d53e2::t_cc3390d60f9333 17,129,132-138
+  s_eadee3a634af95::t_98cfc49bcac5ef 61-62
+web/src/services/learning-map.service.ts
+  s_4463b7e855b80c::t_7d039547c6dfcc 3
+  s_069288604d53e2::t_d3b05fc8c591a5 2,9,14-17
+web/src/types/knowledgeImport.ts
+  s_eadee3a634af95::t_7b94459653557d 1-10,15-16,31-99
+  s_eadee3a634af95::t_42c008ddd1f4c9 17-30
+  s_069288604d53e2::t_db167b1e6f92be 11-14
+web/src/pages/SettingsPage/AnkiImportPanel.tsx
+  s_069288604d53e2::t_3bcdd331ec8b15 22,68,90,94-105,133-135,146,150
+  s_069288604d53e2::t_7760404f95390a 44-51,152-157
+  s_eadee3a634af95::t_ce4bcd3700ce70 33-37
+  s_eadee3a634af95::t_13585f5a092a1e 38-39
+  s_069288604d53e2::t_760cace78527b2 139
+  s_eadee3a634af95::t_3c8593020cc0da 15,20,69-71,106-122,198,200-203,205,213,215-218,220,224,226-229,231,254-266
+  s_eadee3a634af95::t_4983b830a9950e 292-293
+  s_069288604d53e2::t_4dd80dad9ab34b 199,204,209,214,219,225,230,235,239,244-245,273
+  s_eadee3a634af95::t_81986cf1bbdc77 1-14,16-19,21,23-32,40-43,52-67,72-89,91-93,123-132,136-138,140-145,147-149,151,158-197,206-208,210-212,221-223,232-234,236-238,240-243,246-253,267-272,274-291,294-365
+backend/app/routers/context_cards.py
+  s_eadee3a634af95::t_503890afb6e3f1 1-56
+DESIGN.md
+  s_bca9112d395d5c::t_ae5f4f073e86bb 5-7,15,17,25,27,34,65,73-74,89-90
+  s_069288604d53e2::t_1d5ea92bb4a912 81,84,91
+  s_069288604d53e2::t_166c7714a7d68e 47,79
+  s_069288604d53e2::t_613aeb3fc548ad 16
+backend/dev_docs/LEARNING_MAP_CONTRACT.md
+  s_069288604d53e2::t_166c7714a7d68e 9,11,21,57,90-92,116-119
+  s_069288604d53e2::t_1d5ea92bb4a912 109-111
+  s_309a1f86bf8fb9::t_51f33f05d8dca9 124-126,134-143
+README.md
+  s_069288604d53e2::t_7688fa74e464cb 170,203-204,209-210,221
+  s_bca9112d395d5c::t_25b734933d45ca 286
+  s_b73c0f5a28d05d::t_24e95772d6b793 19
+  s_bca9112d395d5c::t_5afe66d7f3531f 20,148,158,160,212,214-220,348
+  s_4463b7e855b80c::t_fa4c0e711d1f4d 22,147,164,169,171
+backend/app/services/context_card_service.py
+  s_069288604d53e2::t_cc3390d60f9333 34,36,38-54,58,84-89,93-100
+  s_eadee3a634af95::t_454ca89957dddf 186-194
+  s_eadee3a634af95::t_298bc0942b53d5 1-33,35,37,55-57,59-79,91-92,101-149,177,179-185,195-222,263-270
+  s_eadee3a634af95::t_fb6a5b385cb7ac 80-83,90,150-176,178,223-262
+backend/tests/test_context_card_service.py
+  s_069288604d53e2::t_3fcf9319726860 9-20,30-75,77-78,80
+  s_eadee3a634af95::t_e8a5b846ed7b44 7-8,102-108,110-111,145,198,202-203,211-223
+  s_eadee3a634af95::t_429037868e088f 1-6,21-29,88-101,109,144,146-197,199-201,204-210,224-241
+  s_069288604d53e2::t_c15c834a091dbe 76,79,81-87,112-143
+web/src/types/contextCard.ts
+  s_eadee3a634af95::t_45b8058a225973 1-53
+web/src/components/reader/MobileGuide.tsx
+  s_bca9112d395d5c::t_603012b7f6cd0e 22
+web/src/components/reader/ReaderSidebar.tsx
+  s_bca9112d395d5c::t_72b98293a77199 639
+  s_fc9834eb178168::t_af17e39f6ab78c 164-173,175
+  s_bca9112d395d5c::t_25b734933d45ca 386,581,600,605,611-612,630,634,638,656,676,680,699,718,766,795,877
+  s_bca9112d395d5c::t_603012b7f6cd0e 3,140-142,728,755,772,788,884,930,979
+  s_b73c0f5a28d05d::t_cc93fa74265a19 7,154,309,900,903-909,931,933-934,936-947,977-978,1001,1004-1015,1017-1039,1041-1054,1056-1078,1080-1082,1084-1087,1089-1092
+  s_fc9834eb178168::t_3c31563a0fc594 214-215,223,248,394,663-664,668-669,681-683,685-687,690-696
+  s_b73c0f5a28d05d::t_4819b925f7d911 1016
+  s_b73c0f5a28d05d::t_80cedbe77c369b 8
+  s_b73c0f5a28d05d::t_afc8da8d70da27 151-153
+  s_b73c0f5a28d05d::t_0cd61d0ed69876 155
+  s_fc9834eb178168::t_af84c822ad6d40 211-213
+  s_fc9834eb178168::t_59200391fd622f 216-218,220-222
+  s_fc9834eb178168::t_7ecc50b135dc80 224-226,245-247
+  s_fc9834eb178168::t_8888699a1f859a 249-251
+  s_b73c0f5a28d05d::t_c6da6ed67ad13f 306-308
+  s_b73c0f5a28d05d::t_c474c3f9803c93 310-312
+  s_fc9834eb178168::t_4f9050088ee177 13-14,149-150,195-210,219,227-244,252-273,277,294-305,313-315
+web/src/pages/ReaderPage/index.tsx
+  s_bca9112d395d5c::t_72b98293a77199 269
+backend/app/database.py
+  s_309a1f86bf8fb9::t_167ad4e0c080da 63-79
+web/src/pages/SettingsPage/index.tsx
+  s_fc9834eb178168::t_63d0f4f5028d2a 40-47,54,61,64-83
+  s_eadee3a634af95::t_8e50300bcc8489 462-463,471,475-476,487
+  s_eadee3a634af95::t_56b32dd2f886e4 24,546
+  s_eadee3a634af95::t_b412482cbd333d 547
+web/src/components/study/ContextCardModal.tsx
+  s_eadee3a634af95::t_c8d6cf8efe48ca 2-19,33-65,67-78,80-95,97-106,113-114,116-159,167-176
+  s_eadee3a634af95::t_26bbeaa425e569 160-165
+  s_eadee3a634af95::t_1f77552e251954 1
+  s_eadee3a634af95::t_08480689c95673 107-112
+  s_eadee3a634af95::t_4149483ce00af0 166
+  s_eadee3a634af95::t_7db37ca16b67ab 20-32,66,79,96,115
+web/src/components/library/BookCard.tsx
+  s_069288604d53e2::t_edb69d55b4cb49 24-27,31,105
+backend/tests/test_schemas.py
+  s_069288604d53e2::t_049dbb9f03fc7d 3-7,60-70
+backend/README.md
+  s_bca9112d395d5c::t_ae5f4f073e86bb 92-99,103-107,246
+  s_069288604d53e2::t_54ca640b33497b 82,100-102
+  s_bca9112d395d5c::t_b7f4aab1e5dca3 145,154
+  s_069288604d53e2::t_05951f53bef8cb 305-307
+  s_bca9112d395d5c::t_31b65cff30c53e 66-74,76-77,79-81,160,203-205,279,282-284,289,297-298,325-326
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b9ffe602b0ba70f9bb318065688b1824a12f690c",
+  "prompts": {},
+  "sessions": {
+    "s_069288604d53e2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fdbc7-bda6-7242-9adb-7c81bdcdf7a8",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_1c2ebf48b90fc8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fd742-6a11-7191-a423-d0d284132d31",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_309a1f86bf8fb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fd601-cdd9-71b3-98d7-18b05f61d327",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_4463b7e855b80c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcfda-4276-7dc1-94a3-a6879342ab71",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_b73c0f5a28d05d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcfa3-6d92-7811-b322-3eedccdb8b45",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_bca9112d395d5c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fcfa6-f662-7c41-a4ea-a145ef84c57c",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_eadee3a634af95": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fd7b9-874d-7b91-83e8-a6ef1ba4c16c",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_fc9834eb178168": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fdbc9-32e0-7e10-8dd2-0aecc1a9037b",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
