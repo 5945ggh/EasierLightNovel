@@ -4,8 +4,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Plus, UploadCloud, Library as LibraryIcon, Loader2, FileText, CheckCircle, AlertCircle, BrainCircuit, Settings } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Plus, UploadCloud, Library as LibraryIcon, Loader2, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { useLibrary } from '@/hooks/useLibrary';
 import { BookCard } from '@/components/library/BookCard';
 import { EditBookModal } from '@/components/library/EditBookModal';
@@ -203,7 +202,7 @@ export const LibraryPage: React.FC = () => {
 
   return (
     <div
-      className='min-h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100/90 dark:from-slate-950 dark:to-slate-900 text-slate-800 dark:text-slate-100 p-4 sm:p-6 md:p-10 transition-colors'
+      className='min-h-full p-4 text-slate-800 transition-colors dark:text-slate-100 sm:p-6 lg:p-8'
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -250,7 +249,7 @@ export const LibraryPage: React.FC = () => {
       />
 
       {/* 头部 */}
-      <header className='max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+      <header className='mx-auto mb-7 flex max-w-7xl flex-col justify-between gap-4 sm:flex-row sm:items-center'>
         <div className='flex items-center gap-3'>
           <LibraryIcon size={32} strokeWidth={1.5} className='text-slate-blue-600 dark:text-slate-blue-400 shrink-0' />
           <div>
@@ -264,53 +263,31 @@ export const LibraryPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 右侧按钮组 */}
-        <div className='flex items-center gap-2.5'>
-          {/* 系统设置入口 */}
-          <Link
-            to='/settings'
-            className='group flex items-center gap-2 px-3.5 py-2 bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200/70 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-xl transition-all shadow-sm hover:shadow-sm font-medium text-sm active:scale-[0.98]'
+        <div>
+          <input
+            type='file'
+            ref={fileInputRef}
+            className='hidden'
+            accept='.epub,.pdf'
+            onChange={handleFileChange}
+          />
+          <button
+            disabled={isUploading}
+            onClick={() => fileInputRef.current?.click()}
+            className='flex items-center gap-2 rounded-lg bg-slate-blue-700 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-blue-800 disabled:cursor-not-allowed disabled:opacity-60'
           >
-            <Settings size={17} strokeWidth={1.5} className='text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors' />
-            <span>系统设置</span>
-          </Link>
-
-          {/* 词汇与摘录入口 */}
-          <Link
-            to='/study'
-            className='group flex items-center gap-2 px-3.5 py-2 bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200/70 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-xl transition-all shadow-sm hover:shadow-sm font-medium text-sm active:scale-[0.98]'
-          >
-            <BrainCircuit size={17} strokeWidth={1.5} className='text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors' />
-            <span>词汇与摘录</span>
-          </Link>
-
-          {/* 上传按钮 */}
-          <div>
-            <input
-              type='file'
-              ref={fileInputRef}
-              className='hidden'
-              accept='.epub,.pdf'
-              onChange={handleFileChange}
-            />
-            <button
-              disabled={isUploading}
-              onClick={() => fileInputRef.current?.click()}
-              className='flex items-center gap-2 px-4 py-2 bg-slate-blue-600 hover:bg-slate-blue-700 active:scale-[0.98] text-white rounded-xl transition-all shadow-sm hover:shadow shadow-slate-blue-500/20 disabled:opacity-60 disabled:cursor-not-allowed font-medium text-sm'
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 size={17} className='animate-spin' />
-                  <span>上传中...</span>
-                </>
-              ) : (
-                <>
-                  <Plus size={17} strokeWidth={1.5} />
-                  <span>导入书籍</span>
-                </>
-              )}
-            </button>
-          </div>
+            {isUploading ? (
+              <>
+                <Loader2 size={17} className='animate-spin' />
+                <span>上传中...</span>
+              </>
+            ) : (
+              <>
+                <Plus size={17} strokeWidth={1.5} />
+                <span>导入书籍</span>
+              </>
+            )}
+          </button>
         </div>
       </header>
 

@@ -379,7 +379,7 @@ export const BookHomePage: React.FC = () => {
         <main className="max-w-3xl mx-auto px-4 py-12 text-center">
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center">
             {/* 封面 preview */}
-            <div className="w-32 aspect-[2/3] bg-gray-100 rounded-lg overflow-hidden shadow-inner mb-6 relative">
+            <div className="w-32 aspect-[2/3] bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden shadow-inner mb-6 relative">
               {book.cover_url && !imgError ? (
                 <img
                   src={book.cover_url}
@@ -388,20 +388,20 @@ export const BookHomePage: React.FC = () => {
                   onError={() => setImgError(true)}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-300">
+                <div className="w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-600">
                   <BookOpen size={36} />
                 </div>
               )}
             </div>
 
-            <h1 className="text-xl font-bold text-gray-800 mb-1">{book.title}</h1>
-            <p className="text-sm text-gray-500 mb-6">{book.author || '佚名'}</p>
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">{book.title}</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{book.author || '佚名'}</p>
 
             {isProcessing && (
-              <div className="w-full max-w-sm bg-blue-50 border border-blue-100 rounded-xl p-4 flex flex-col items-center">
-                <Loader2 size={28} className="animate-spin text-blue-600 mb-2" />
-                <p className="text-sm font-semibold text-blue-900">书籍正在解析中...</p>
-                <p className="text-xs text-blue-700 mt-1">
+              <div className="w-full max-w-sm bg-slate-blue-50 border border-slate-blue-100 dark:bg-slate-900 dark:border-slate-800 rounded-xl p-4 flex flex-col items-center">
+                <Loader2 size={28} className="animate-spin text-slate-blue-600 dark:text-slate-blue-400 mb-2" />
+                <p className="text-sm font-semibold text-slate-blue-900 dark:text-slate-blue-200">书籍正在解析中...</p>
+                <p className="text-xs text-slate-blue-700 dark:text-slate-blue-300 mt-1">
                   {book.pdf_progress_stage
                     ? `解析阶段: ${book.pdf_progress_stage} (${book.pdf_progress_current ?? 0}/${book.pdf_progress_total ?? 0})`
                     : '解析完成后即可进入阅读工作台。'}
@@ -410,18 +410,18 @@ export const BookHomePage: React.FC = () => {
             )}
 
             {isFailed && (
-              <div className="w-full max-w-md bg-red-50 border border-red-100 rounded-xl p-4 flex flex-col items-center text-left">
-                <div className="flex items-center gap-2 text-red-700 font-semibold text-sm mb-1">
+              <div className="w-full max-w-md bg-red-50 border border-red-100 dark:bg-red-950/40 dark:border-red-900/50 rounded-xl p-4 flex flex-col items-center text-left">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-300 font-semibold text-sm mb-1">
                   <AlertCircle size={18} />
                   <span>解析失败</span>
                 </div>
-                <p className="text-xs text-red-600 leading-relaxed mb-4">
+                <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed mb-4">
                   {book.error_message || '文件格式不支持或内容损坏，请重新上传。'}
                 </p>
                 <button
                   onClick={handleOpenDeleteModal}
                   disabled={isDeleting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
                 >
                   <Trash2 size={13} />
                   <span>删除此书</span>
@@ -432,7 +432,7 @@ export const BookHomePage: React.FC = () => {
             <div className="mt-8">
               <Link
                 to="/"
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-blue-700 text-white rounded-xl text-sm font-medium hover:bg-slate-blue-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
               >
                 <ArrowLeft size={16} />
                 <span>返回书架</span>
@@ -525,10 +525,10 @@ export const BookHomePage: React.FC = () => {
       {/* 主体工作台内容 */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 顶部 Hero 区域：书籍信息 + 阅读进度 */}
-        <section className="bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-7 shadow-sm">
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-7 shadow-sm">
           <div className="flex flex-col md:flex-row gap-6 items-start">
             {/* 左侧：封面 */}
-            <div className="w-28 sm:w-36 aspect-[2/3] shrink-0 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl overflow-hidden shadow-md border border-gray-100 relative self-center md:self-start">
+            <div className="w-28 sm:w-36 aspect-[2/3] shrink-0 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden shadow-md border border-slate-200 dark:border-slate-700 relative self-center md:self-start">
               {book.cover_url && !imgError ? (
                 <img
                   src={book.cover_url}
@@ -537,9 +537,9 @@ export const BookHomePage: React.FC = () => {
                   onError={() => setImgError(true)}
                 />
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 p-2">
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 p-2">
                   <ImageOff size={32} strokeWidth={1.5} />
-                  <span className="text-[10px] text-gray-400 mt-1">无封面</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">无封面</span>
                 </div>
               )}
             </div>
@@ -548,58 +548,58 @@ export const BookHomePage: React.FC = () => {
             <div className="flex-1 min-w-0 w-full flex flex-col justify-between self-stretch">
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <span className="px-2 py-0.5 text-[11px] font-medium bg-blue-50 text-blue-700 rounded-md border border-blue-100">
+                  <span className="px-2 py-0.5 text-[11px] font-medium bg-slate-blue-50 text-slate-blue-700 dark:bg-slate-800 dark:text-slate-blue-300 rounded-md border border-slate-blue-100 dark:border-slate-700">
                     {toc.length > 0 ? `${toc.length} 章节` : 'EPUB/PDF'}
                   </span>
                   {progressStats.hasProgress && (
-                    <span className="px-2 py-0.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100 flex items-center gap-1">
+                    <span className="px-2 py-0.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-md border border-emerald-100 dark:border-emerald-900/50 flex items-center gap-1">
                       <BookmarkCheck size={12} />
                       <span>正在阅读</span>
                     </span>
                   )}
                 </div>
 
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-snug line-clamp-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2">
                   {book.title}
                 </h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  作者: <span className="text-gray-700 font-medium">{book.author || '佚名'}</span>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  作者: <span className="text-slate-700 dark:text-slate-200 font-medium">{book.author || '佚名'}</span>
                 </p>
               </div>
 
               {/* 进度控制面板 */}
-              <div className="mt-6 pt-5 border-t border-gray-100">
+              <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   {/* 进度数值与进度条 */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between mb-1.5 text-xs sm:text-sm">
-                      <span className="font-semibold text-gray-800">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">
                         {progressStats.hasProgress
                           ? `上次读到：第 ${ (progressStats.currentChapter?.index ?? 0) + 1 } 章 · ${progressStats.currentChapter?.title || '未命名章节'}`
                           : '尚未开始阅读'}
                       </span>
-                      <span className="font-bold text-blue-600 ml-2">
+                      <span className="font-bold text-slate-blue-600 dark:text-slate-blue-400 ml-2">
                         {progressStats.overallPercentage}%
                       </span>
                     </div>
 
                     {/* 总体进度条 */}
-                    <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-slate-blue-500 to-slate-blue-700 rounded-full transition-all duration-500"
                         style={{ width: `${progressStats.overallPercentage}%` }}
                       />
                     </div>
 
                     {/* 进度详情 */}
-                    <div className="flex items-center justify-between mt-2 text-[11px] text-gray-400">
+                    <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400 dark:text-slate-500">
                       <span>
                         {progressStats.hasProgress
                           ? `当前章节进度: ${progressStats.inChapterPercentage}%`
                           : '准备开启阅读体验'}
                       </span>
                       {activeProgress?.updated_at && (
-                        <span className="flex items-center gap-1 text-gray-400">
+                        <span className="flex items-center gap-1 text-slate-400 dark:text-slate-500">
                           <Clock size={11} />
                           {activeProgress.updated_at}
                         </span>
@@ -611,7 +611,7 @@ export const BookHomePage: React.FC = () => {
                   <div className="shrink-0">
                     <button
                       onClick={() => navigate(`/read/${book.id}`)}
-                      className="w-full sm:w-auto min-w-[140px] px-6 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-xl transition-all shadow-md shadow-blue-500/20 hover:shadow-lg flex items-center justify-center gap-2 group cursor-pointer"
+                      className="w-full sm:w-auto min-w-[140px] px-6 py-3 bg-slate-blue-700 hover:bg-slate-blue-800 active:bg-slate-blue-900 text-white font-semibold rounded-xl transition-all shadow-md shadow-slate-blue-500/20 hover:shadow-lg flex items-center justify-center gap-2 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
                     >
                       <BookOpen size={18} className="transition-transform group-hover:scale-110" />
                       <span>{progressStats.hasProgress ? '继续阅读' : '开始阅读'}</span>
@@ -626,22 +626,22 @@ export const BookHomePage: React.FC = () => {
         {/* 下方双栏布局：章节目录 + 学习工作台入口 */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* 左侧/中栏：章节目录 (8 cols) */}
-          <section className="lg:col-span-8 bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm flex flex-col">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+          <section className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm flex flex-col">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <BarChart3 size={18} className="text-blue-600" />
-                <h2 className="text-base font-semibold text-gray-900">章节目录</h2>
-                <span className="text-xs text-gray-400">({toc.length} 章)</span>
+                <BarChart3 size={18} className="text-slate-blue-600 dark:text-slate-blue-400" />
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">章节目录</h2>
+                <span className="text-xs text-slate-400 dark:text-slate-500">({toc.length} 章)</span>
               </div>
               {progressStats.hasProgress && (
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   当前处于第 {progressStats.currentTocIndex + 1} 章
                 </span>
               )}
             </div>
 
             {toc.length === 0 ? (
-              <div className="py-12 text-center text-gray-400">
+              <div className="py-12 text-center text-slate-400 dark:text-slate-500">
                 <AlertCircle size={32} className="mx-auto mb-2 opacity-50" />
                 <p className="text-sm">书籍尚未成功解析出章节</p>
               </div>
@@ -670,15 +670,15 @@ export const BookHomePage: React.FC = () => {
                       className={clsx(
                         'w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between group border',
                         isCurrent
-                          ? 'bg-blue-50/80 border-blue-200 text-blue-900 font-medium shadow-sm'
-                          : 'bg-white hover:bg-gray-50/80 border-transparent hover:border-gray-200/60 text-gray-700'
+                          ? 'bg-slate-blue-50 border-slate-blue-200 text-slate-blue-900 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-blue-200 font-medium shadow-sm'
+                          : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border-transparent hover:border-slate-200 dark:hover:border-slate-700 text-slate-700 dark:text-slate-200'
                       )}
                     >
                       <div className="flex items-center gap-3 min-w-0 pr-2">
                         <span
                           className={clsx(
                             'text-xs tabular-nums font-semibold w-7 text-right shrink-0',
-                            isCurrent ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                            isCurrent ? 'text-slate-blue-600 dark:text-slate-blue-400' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300'
                           )}
                         >
                           {idx + 1}.
@@ -690,13 +690,13 @@ export const BookHomePage: React.FC = () => {
 
                       <div className="flex items-center gap-2 shrink-0">
                         {isCurrent && (
-                          <span className="px-2 py-0.5 text-[10px] font-semibold bg-blue-600 text-white rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-blue-700 text-white rounded-full">
                             当前 ({progressStats.inChapterPercentage}%)
                           </span>
                         )}
                         <span className={clsx(
                           'text-[10px] tabular-nums',
-                          checkpointPercentage === null ? 'text-gray-400' : 'text-emerald-600'
+                          checkpointPercentage === null ? 'text-slate-400 dark:text-slate-500' : 'text-emerald-600 dark:text-emerald-400'
                         )}>
                           {checkpointPercentage === null ? '未开始' : `${checkpointPercentage}%`}
                         </span>
@@ -704,7 +704,7 @@ export const BookHomePage: React.FC = () => {
                           size={15}
                           className={clsx(
                             'transition-transform group-hover:translate-x-0.5',
-                            isCurrent ? 'text-blue-500' : 'text-gray-300 group-hover:text-gray-500'
+                            isCurrent ? 'text-slate-blue-500 dark:text-slate-blue-400' : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400'
                           )}
                         />
                       </div>
@@ -718,16 +718,16 @@ export const BookHomePage: React.FC = () => {
           {/* 右侧：学习地图与词汇与摘录入口 (4 cols) */}
           <aside className="lg:col-span-4 space-y-4">
             {/* 学习地图入口 */}
-            <div className="bg-gradient-to-br from-indigo-50/70 to-blue-50/40 rounded-2xl border border-indigo-100 p-5 shadow-sm flex flex-col justify-between">
+            <div className="bg-slate-blue-50/60 dark:bg-slate-900 rounded-2xl border border-slate-blue-100 dark:border-slate-800 p-5 shadow-sm flex flex-col justify-between">
               <div>
-                <div className="flex items-center gap-2.5 text-indigo-900 font-semibold text-base mb-2">
-                  <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-sm">
+                <div className="flex items-center gap-2.5 text-slate-blue-900 dark:text-slate-blue-200 font-semibold text-base mb-2">
+                  <div className="p-2 bg-slate-blue-100 dark:bg-slate-800 text-slate-blue-700 dark:text-slate-blue-300 rounded-xl">
                     <MapIcon size={18} />
                   </div>
                   <span>书籍学习地图</span>
                 </div>
 
-                <p className="text-xs text-gray-600 leading-relaxed mb-4">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
                   全书词汇负担、章节路线与书内高频词元覆盖曲线。
                 </p>
 
@@ -735,7 +735,7 @@ export const BookHomePage: React.FC = () => {
 
               <Link
                 to={`/study/map/${book.id}`}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl text-center transition-all shadow-sm flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 px-4 border border-slate-blue-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-blue-50 dark:hover:bg-slate-700 text-slate-blue-700 dark:text-slate-blue-300 text-xs font-semibold rounded-xl text-center transition-colors flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
               >
                 <Sparkles size={14} />
                 <span>进入学习地图</span>
@@ -743,19 +743,19 @@ export const BookHomePage: React.FC = () => {
             </div>
 
             {/* 词汇与摘录入口 */}
-            <div className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm">
-              <div className="flex items-center gap-2.5 text-gray-900 font-semibold text-sm mb-2">
-                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-slate-100 font-semibold text-sm mb-2">
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
                   <BrainCircuit size={18} />
                 </div>
                 <span>词汇与摘录</span>
               </div>
-              <p className="text-xs text-gray-500 leading-relaxed mb-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
                 跨书查看阅读中收藏的词汇、摘录与 AI 解析。
               </p>
               <Link
                 to="/study"
-                className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-xl text-center transition-colors flex items-center justify-center gap-1"
+                className="w-full py-2.5 px-4 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl text-center transition-colors flex items-center justify-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
               >
                 <span>查看词汇与摘录</span>
                 <ChevronRight size={14} />

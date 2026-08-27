@@ -12,6 +12,7 @@ import { ReaderPage } from '@/pages/ReaderPage';
 import { BookHomePage } from '@/pages/BookHomePage';
 import StudyPage from '@/pages/StudyPage';
 import SettingsPage from '@/pages/SettingsPage';
+import { AppShell } from '@/components/layout/AppShell';
 import { initConfig } from '@/services/config.service';
 
 import { useThemeSync } from '@/hooks/useThemeSync';
@@ -74,9 +75,9 @@ function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LibraryPage />} />
+        <Route path="/" element={<AppShell><LibraryPage /></AppShell>} />
         <Route path="/book/:bookId" element={<BookHomePage />} />
-        <Route path="/study" element={<StudyPage />} />
+        <Route path="/study" element={<AppShell><StudyPage /></AppShell>} />
         <Route
           path="/study/map/:bookId"
           element={
@@ -85,7 +86,7 @@ function AppRoutes() {
             </Suspense>
           }
         />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings" element={<AppShell><SettingsPage /></AppShell>} />
         <Route path="/read/:bookId" element={<ReaderPage />} />
       </Routes>
     </BrowserRouter>

@@ -4,18 +4,14 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Settings as SettingsIcon,
-  ArrowLeft,
   Save,
   RotateCw,
   Check,
   AlertTriangle,
   Eye,
   EyeOff,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { getUserConfig, updateUserConfig } from '@/services/userConfig.service';
 import type { UserConfigResponse, ConfigGroupInfo, ConfigFieldInfo } from '@/types/userConfig';
@@ -28,7 +24,7 @@ export const SettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [activeSection, setActiveSection] = useState<string | null>(null);
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<string[]>([]);
 
@@ -37,12 +33,16 @@ export const SettingsPage: React.FC = () => {
   // 敏感字段可见性状态
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
 
+  const getGroupSectionId = (group: ConfigGroupInfo) => `group:${group.group}`;
+
   const applyConfigData = useCallback((data: UserConfigResponse) => {
     setConfigData(data);
-    // 默认展开第一个分组
-    if (data.schema_info.length > 0) {
-      setExpandedGroups(new Set([data.schema_info[0].group]));
-    }
+    setActiveSection((current) => {
+      const currentGroupExists = data.schema_info.some((group) => getGroupSectionId(group) === current);
+      return current === 'anki' || currentGroupExists
+        ? current
+        : data.schema_info[0] ? getGroupSectionId(data.schema_info[0]) : 'anki';
+    });
   }, []);
 
   // 加载配置
@@ -81,19 +81,6 @@ export const SettingsPage: React.FC = () => {
       isMounted = false;
     };
   }, [applyConfigData]);
-
-  // 切换分组展开/折叠
-  const toggleGroup = (group: string) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(group)) {
-        next.delete(group);
-      } else {
-        next.add(group);
-      }
-      return next;
-    });
-  };
 
   // 切换敏感字段可见性
   const toggleFieldVisibility = (key: string) => {
@@ -310,79 +297,61 @@ export const SettingsPage: React.FC = () => {
 
   // 渲染配置分组
   const renderGroup = (group: ConfigGroupInfo) => {
-    const isExpanded = expandedGroups.has(group.group);
     const hasModifications = isGroupModified(group);
 
     return (
-      <div
-        key={group.group}
+      <section
+        aria-labelledby={`config-group-${group.group}`}
         className={clsx(
-          'bg-white dark:bg-slate-900 rounded-xl border transition-all',
+          'overflow-hidden rounded-xl border bg-white dark:bg-slate-900',
           hasModifications ? 'border-slate-blue-400 dark:border-slate-blue-500 shadow-md' : 'border-slate-200 dark:border-slate-800'
         )}
       >
-        {/* 分组标题 */}
-        <button
-          onClick={() => toggleGroup(group.group)}
-          className="w-full flex items-center justify-between px-6 py-4 text-left"
-        >
-          <div className="flex items-center gap-3">
+        <header className="border-b border-slate-200 px-5 py-4 dark:border-slate-800 sm:px-6">
+          <div className="flex items-start gap-3">
             {hasModifications && (
-              <div className="w-2 h-2 bg-slate-blue-500 rounded-full" />
+              <span className="mt-2 size-2 shrink-0 rounded-full bg-slate-blue-500" aria-label="包含未保存修改" />
             )}
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-              {group.label}
-            </h3>
-            <span className="text-sm text-slate-500 dark:text-slate-400">
-              ({group.fields.length} 项)
-            </span>
-          </div>
-          {isExpanded ? (
-            <ChevronUp size={20} className="text-slate-400 dark:text-slate-500" />
-          ) : (
-            <ChevronDown size={20} className="text-slate-400 dark:text-slate-500" />
-          )}
-        </button>
-
-        {/* 分组内容 */}
-        {isExpanded && (
-          <div className="px-6 pb-6 space-y-4">
-            {group.description && (
-              <p className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg">
-                {group.description}
-              </p>
-            )}
-
-            {group.fields.map((field) => (
-              <div
-                key={field.key}
-                className={clsx(
-                  'grid grid-cols-1 md:grid-cols-3 gap-4 p-3 rounded-lg',
-                  isFieldModified(field.key) && 'bg-slate-blue-50/50 dark:bg-slate-800/40'
-                )}
-              >
-                {/* 字段标签 */}
-                <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-                    {field.key}
-                    {isFieldModified(field.key) && (
-                      <span className="ml-2 text-xs text-slate-blue-600 dark:text-slate-blue-400">(已修改)</span>
-                    )}
-                  </label>
-                  {field.description && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{field.description}</p>
-                  )}
-                </div>
-
-                {/* 字段输入 */}
-                <div className="md:col-span-2">
-                  {renderFieldInput(field)}
-                </div>
+            <div>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <h2 id={`config-group-${group.group}`} className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {group.label}
+                </h2>
+                <span className="text-sm text-slate-500 dark:text-slate-400">{group.fields.length} 项</span>
               </div>
-            ))}
+              {group.description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{group.description}</p>}
+            </div>
           </div>
-        )}
-      </div>
+        </header>
+
+        <div className="space-y-4 px-5 py-5 sm:px-6 sm:py-6">
+          {group.fields.map((field) => (
+            <div
+              key={field.key}
+              className={clsx(
+                'grid grid-cols-1 gap-4 rounded-lg p-3 md:grid-cols-3',
+                isFieldModified(field.key) && 'bg-slate-blue-50/50 dark:bg-slate-800/40'
+              )}
+            >
+              <div className="md:col-span-1">
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {field.key}
+                  {isFieldModified(field.key) && (
+                    <span className="ml-2 text-xs text-slate-blue-600 dark:text-slate-blue-400">(已修改)</span>
+                  )}
+                </label>
+                {field.description && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{field.description}</p>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                {renderFieldInput(field)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     );
   };
 
@@ -406,9 +375,10 @@ export const SettingsPage: React.FC = () => {
   }
 
   const hasChanges = Object.keys(editedConfig).length > 0;
+  const activeGroup = configData?.schema_info.find((group) => getGroupSectionId(group) === activeSection);
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 text-slate-800 dark:text-slate-100 p-4 sm:p-6 md:p-10 transition-colors">
+    <div className="min-h-full p-4 text-slate-800 transition-colors dark:text-slate-100 sm:p-6 lg:p-8">
       {/* 重启提示弹窗 */}
       {showRestartModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -458,38 +428,28 @@ export const SettingsPage: React.FC = () => {
       )}
 
       {/* 头部 */}
-      <header className="max-w-5xl mx-auto mb-8">
+      <header className="mx-auto mb-8 max-w-7xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <Link
-              to="/"
-              className="p-2.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 transition-all shadow-sm rounded-xl active:scale-[0.98]"
-              title="返回书架"
-            >
-              <ArrowLeft size={20} strokeWidth={1.5} />
-            </Link>
-            <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
               <div className="p-2.5 bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl text-white shadow-lg">
                 <SettingsIcon size={24} />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl font-bold text-gray-800 sm:text-2xl tracking-tight">
+                <h1 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 sm:text-2xl">
                   系统设置
                 </h1>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                   修改 config/user.json 配置
                 </p>
               </div>
             </div>
-          </div>
-
           {/* 操作按钮 */}
           <div className="flex items-center gap-3 self-start sm:self-auto">
             {hasChanges && (
               <button
                 onClick={handleReset}
                 disabled={saving}
-                className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl transition-all font-medium text-sm disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 重置
               </button>
@@ -498,10 +458,10 @@ export const SettingsPage: React.FC = () => {
               onClick={handleSave}
               disabled={!hasChanges || saving}
               className={clsx(
-                'flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all font-medium text-sm',
+                'flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors',
                 hasChanges && !saving
-                  ? 'bg-slate-600 hover:bg-slate-700 text-white shadow-md'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'bg-slate-blue-700 text-white shadow-sm hover:bg-slate-blue-800'
+                  : 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
               )}
             >
               {saving ? (
@@ -538,15 +498,75 @@ export const SettingsPage: React.FC = () => {
         )}
       </header>
 
-      {/* 配置分组列表 */}
-      <main className="max-w-5xl mx-auto space-y-4">
-        {configData?.schema_info.map((group) => renderGroup(group))}
-      </main>
+      <section className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8" aria-label="设置内容">
+        <aside className="hidden border-r border-slate-200 pr-6 dark:border-slate-800 lg:block">
+          <div className="sticky top-8">
+            <nav aria-label="设置分类" className="space-y-1">
+              {configData?.schema_info.map((group) => {
+                const sectionId = getGroupSectionId(group);
+                const isActive = activeSection === sectionId;
+                const hasModifications = isGroupModified(group);
 
-      <AnkiImportPanel />
+                return (
+                  <button
+                    key={group.group}
+                    type="button"
+                    onClick={() => setActiveSection(sectionId)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={clsx(
+                      'flex w-full items-start gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-blue-500',
+                      isActive
+                        ? 'bg-slate-blue-100 text-slate-blue-800 dark:bg-slate-blue-900/40 dark:text-slate-blue-200'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+                    )}
+                  >
+                    <span className={clsx('mt-1.5 size-1.5 shrink-0 rounded-full', hasModifications ? 'bg-slate-blue-500' : 'bg-transparent')} aria-hidden="true" />
+                    <span className="min-w-0 flex-1 leading-5">{group.label}</span>
+                    <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">{group.fields.length}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setActiveSection('anki')}
+                aria-current={activeSection === 'anki' ? 'page' : undefined}
+                className={clsx(
+                  'w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-blue-500',
+                  activeSection === 'anki'
+                    ? 'bg-slate-blue-100 text-slate-blue-800 dark:bg-slate-blue-900/40 dark:text-slate-blue-200'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+                )}
+              >
+                Anki 词汇基线
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <div className="min-w-0">
+          <label className="mb-5 block lg:hidden">
+            <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">设置分类</span>
+            <select
+              value={activeSection ?? ''}
+              onChange={(event) => setActiveSection(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-slate-blue-500 focus:ring-2 focus:ring-slate-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-slate-blue-900"
+            >
+              {configData?.schema_info.map((group) => (
+                <option key={group.group} value={getGroupSectionId(group)}>{group.label}</option>
+              ))}
+              <option value="anki">Anki 词汇基线</option>
+            </select>
+          </label>
+
+          {activeGroup ? renderGroup(activeGroup) : <AnkiImportPanel className="m-0 max-w-none" />}
+        </div>
+      </section>
 
       {/* 底部提示 */}
-      <footer className="max-w-5xl mx-auto mt-8 text-center text-sm text-gray-500">
+      <footer className="mx-auto mt-8 max-w-7xl text-center text-sm text-slate-500 dark:text-slate-400">
         <p>配置文件保存位置: config/user.json</p>
         <p className="mt-1">修改后自动保存，部分配置需要重启后端服务</p>
       </footer>

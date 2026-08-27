@@ -664,6 +664,19 @@ def _optional_int(value: Any) -> int | None:
         return None
 
 
+def _anki_numeric_ids(values: Iterable[Any], *, action: str) -> list[int]:
+    """Normalize AnkiConnect card/note IDs to the integer wire format."""
+    normalized: list[int] = []
+    for value in values:
+        identifier = _optional_int(value)
+        if identifier is None:
+            raise ExternalKnowledgeProtocolError(
+                f"{action} ids must be integers"
+            )
+        normalized.append(identifier)
+    return normalized
+
+
 def _external_item_target_state(item: Any, source_kind: str) -> str | None:
     """Recover an item's applied target for rollback, including legacy rows."""
     metadata = item.metadata_json if isinstance(item.metadata_json, Mapping) else {}
@@ -1301,6 +1314,7 @@ class AnkiConnectKnowledgeSource:
         card_ids = self._invoke("findCards", {"query": search_query})
         if not isinstance(card_ids, list):
             raise ExternalKnowledgeProtocolError("findCards result must be a list")
+        card_ids = _anki_numeric_ids(card_ids, action="findCards")
         if not card_ids:
             return []
 
@@ -1361,7 +1375,10 @@ class AnkiConnectKnowledgeSource:
             notes_to_cards.setdefault(note_id, []).append(evidence)
 
         note_ids = list(notes_to_cards)
-        notes = self._invoke("notesInfo", {"notes": note_ids})
+        notes = self._invoke(
+            "notesInfo",
+            {"notes": _anki_numeric_ids(note_ids, action="notesInfo")},
+        )
         if not isinstance(notes, list):
             raise ExternalKnowledgeProtocolError("notesInfo result must be a list")
 

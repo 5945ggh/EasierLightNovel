@@ -241,6 +241,11 @@ def test_anki_preview_reads_card_protocol_and_keeps_unique_trusted_canonical_onl
     assert "cardsInfo" in actions
     assert "cardsToNotes" in actions
     assert "notesInfo" in actions
+    notes_requests = [params for action, params, _timeout in requests_seen if action == "notesInfo"]
+    assert notes_requests == [
+        {"notes": [10, 11, 12, 13, 14]},
+        {"notes": [10, 11, 12, 13, 14]},
+    ]
     assert repeated_preview.import_digest == preview.import_digest
     assert preview.accepted_count == 4
     assert preview.stats.card_count == 6

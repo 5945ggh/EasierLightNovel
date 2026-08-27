@@ -57,7 +57,11 @@ const parseFields = (value: string, fallback: string[]): string[] => {
 const formatCoverage = (value?: number | null): string =>
   value == null ? '-' : `${(value * 100).toFixed(1)}%`;
 
-export const AnkiImportPanel: React.FC = () => {
+interface AnkiImportPanelProps {
+  className?: string;
+}
+
+export const AnkiImportPanel: React.FC<AnkiImportPanelProps> = ({ className }) => {
   const [deckName, setDeckName] = useState('');
   const [query, setQuery] = useState('');
   const [modelName, setModelName] = useState('');
@@ -179,7 +183,7 @@ export const AnkiImportPanel: React.FC = () => {
   const stats = preview?.stats;
 
   return (
-    <section className="max-w-5xl mx-auto mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className={clsx('mx-auto mt-8 max-w-5xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900', className)}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Anki 学习基线导入</h2>
