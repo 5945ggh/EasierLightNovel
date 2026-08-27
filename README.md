@@ -1,5 +1,7 @@
 # EasierLightNovel
 
+[English](README.en-US.md) | 简体中文
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-19+-cyan.svg)](https://react.dev/)
@@ -33,12 +35,12 @@
 
 ## 快速开始
 
-> **提示**：Windows 用户可下载 `release` 中的打包文件直接使用，更快捷轻量。
+> **提示**：如果仓库已发布打包版本，Windows 用户可从 Release 页面下载后直接使用，更快捷轻量。
 
 ### 环境要求
 
 - **Python**: 3.11+
-- **Node.js**: 18+
+- **Node.js**: 20.19+ or 22.12+（Vite 7 要求）
 - **操作系统**: Windows / macOS / Linux
 
 ### 一、安装依赖
@@ -48,15 +50,17 @@
 cd backend
 pip install uv
 uv sync
+cd ..
 
 # 前端依赖
-cd ../web
+cd web
 npm install
+cd ..
 ```
 
 ### 二、配置文件
 
-复制配置模板并修改：
+在仓库根目录复制配置模板并修改：
 
 ```bash
 # Windows
@@ -195,20 +199,6 @@ EasierLightNovel/
 
 首次在移动端访问时会显示引导说明，可随时跳过。
 
----
-
-## 路线图
-
-- [ ] 支持更多电子书格式（TXT、MOBI）
-- [x] 从摘录与解析显式写入语境 Anki 卡片
-- [ ] 从词汇收藏或摘录批量导出 Anki 卡片
-- [x] 书籍学习地图（明确掌握覆盖率、章节难度与书内频率曲线）
-- [x] 章节级阅读检查点（阅读覆盖度统计仍待定义）
-- [ ] 更广泛的阅读统计可视化
-
-批量 Anki 导出仍未实现。未来稳定 GUID 必须由只增的 `AnkiExportLedger` 持有，不能
-直接由数据库自增 `lexeme_id` 派生；Sentence、i+1、例句缓存和媒体导出也继续延期。
-
 ### 3. 词汇与摘录
 
 「词汇与摘录」是跨书保存和回看阅读素材的资料库，不是学习中心或复习中心：
@@ -288,9 +278,7 @@ AI 解析功能需要配置 LLM，支持通过 litellm 接入多种模型：
 ```json
 {
   "llm": {
-    "model": "openai/gpt-4o-mini",    // OpenAI
-    // "model": "deepseek/deepseek-chat",  // DeepSeek
-    // "model": "ollama/llama3",            // 本地 Ollama
+    "model": "openai/gpt-4o-mini",
     "api_key": "your-api-key",
     "base_url": "https://api.example.com"
   }
@@ -330,7 +318,7 @@ A: 确保已配置 MinerU API Token。如果遇到网络错误，尝试关闭代
 
 **Q: 数据存储在哪里？**
 
-A: 所有数据**完全本地化**存储在 `static_data/` 目录，包括书籍信息数据库、提取出的图片和私有原始 EPUB/PDF 副本。原始副本位于 `static_data/sources/`，不会通过静态 URL 暴露。
+A: 书籍数据库、阅读进度、词汇、摘录、提取图片和私有原始 EPUB/PDF 副本都存储在本地 `static_data/` 目录；原始副本位于 `static_data/sources/`，不会通过静态 URL 暴露。请注意，使用 PDF 导入时会将 PDF 上传到 MinerU 云端 API；使用 AI 解析时会将所选文本发送到你配置的 LLM 提供商。
 
 **Q: 更新应用后，之前导入的书需要重新开始阅读吗？**
 
@@ -345,9 +333,13 @@ A: 学习地图只读取完成且 active 的分析结果，避免将新旧分词
 ## 路线图
 
 - [ ] 支持更多电子书格式（TXT、MOBI）
-- [ ] 从词汇收藏或摘录创建/导出 Anki 卡片
+- [x] 从摘录与解析显式写入语境 Anki 卡片
+- [ ] 从词汇收藏或摘录批量创建/导出 Anki 卡片
 - [x] 书籍学习地图（明确掌握覆盖率、章节难度与书内频率曲线）
+- [x] 章节级阅读检查点（阅读覆盖度统计仍待定义）
 - [ ] 更广泛的阅读统计可视化
+
+批量 Anki 导出仍未实现。未来稳定 GUID 必须由只增的 `AnkiExportLedger` 持有，不能直接由数据库自增 `lexeme_id` 派生；Sentence、i+1、例句缓存和媒体导出也继续延期。
 
 ### 欢迎提交代码!
 
@@ -365,7 +357,7 @@ A: 学习地图只读取完成且 active 的分析结果，避免将新旧分词
 - [Jamdict](https://github.com/neocl/jamdict) - 日语词典
 - [FastAPI](https://fastapi.tiangolo.com/) - 后端框架
 - [React](https://react.dev/) - 前端框架
-- [薛老师]() - 动力来源
+- 薛老师 - 动力来源
 
 ## 其他可能有用的项目
 - [Jamdict中文翻译版本](https://github.com/5945ggh/jamdict-cn) - 可用以替换 jamdict_data 中的 .db 文件
