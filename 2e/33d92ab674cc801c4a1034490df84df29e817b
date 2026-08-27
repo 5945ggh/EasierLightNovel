@@ -1,0 +1,58 @@
+web/src/App.tsx
+  s_399b47bda96abc::t_0007cd5e46ad9f 15,78,80,89
+web/src/pages/SettingsPage/AnkiImportPanel.tsx
+  s_399b47bda96abc::t_dae9abb8b74afa 60-64,186
+backend/app/services/external_knowledge_import_service.py
+  s_20a53c812c72cd::t_1a094f16001f15 667-679,1317,1378-1381
+web/src/pages/BookHomePage/index.tsx
+  s_0dd0593a4c1843::t_8a20fc340e8e88 382,391,397-398,401-404,413-414,418,424,435,528,531,540,542,551,555,562,565-566,571,576,581,587,589,595,602,614,629-630,632-634,637,644,673-674,681,693,699,707,721,723-724,730,738,746-748,753,758
+web/src/pages/SettingsPage/index.tsx
+  s_399b47bda96abc::t_f060a4fd530c0e 438,441,452,461,463-464
+  s_399b47bda96abc::t_46dc1e7701e1db 381,433
+  s_399b47bda96abc::t_28d0a930a1fd06 378,431,501-566,569
+  s_399b47bda96abc::t_dae9abb8b74afa 27,36-37,40-45,303-304,306,310-311,313,315-323,325,327-340,342-346,348-349,351-354
+backend/tests/test_external_knowledge_imports.py
+  s_20a53c812c72cd::t_1a094f16001f15 244
+  s_20a53c812c72cd::t_97fa1a5ccf7c7f 245-248
+web/src/components/layout/AppShell.tsx
+  s_399b47bda96abc::t_0007cd5e46ad9f 1-75
+web/src/pages/StudyPage/index.tsx
+  s_399b47bda96abc::t_46dc1e7701e1db 7,18-22,24-28,30,45,61-62
+DESIGN.md
+  s_399b47bda96abc::t_d8925497ac0bda 5,27,36,42,49,62,84
+  s_399b47bda96abc::t_64208a9b285929 6-7,25-26,35,37,43,48,83
+web/src/pages/LibraryPage.tsx
+  s_399b47bda96abc::t_46dc1e7701e1db 7,205,252,266-277,279-290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2e33d92ab674cc801c4a1034490df84df29e817b",
+  "prompts": {},
+  "sessions": {
+    "s_0dd0593a4c1843": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fdee1-3c5c-78e1-aef3-28cdeef5c149",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_20a53c812c72cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fdf11-68b2-7c22-808a-9d14cd8d250d",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_399b47bda96abc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fdcea-cea0-7991-96e4-44dfd5ebc1e7",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
