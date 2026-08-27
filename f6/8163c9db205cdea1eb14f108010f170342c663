@@ -1,0 +1,43 @@
+README.md
+  s_9c2bf9f7ef1c20::t_ca8a1038d7b9cc 3-4,38,43
+  s_b92545fd3b7795::t_1b61aeca66faf4 53,56,58,63
+  s_b92545fd3b7795::t_8165060b44c66f 281,321
+  s_b92545fd3b7795::t_b0bb8f95ec3bb2 336-337,339,342
+  s_b92545fd3b7795::t_265d34030f0eae 360
+  s_b92545fd3b7795::t_a3f426524435c1 343
+LICENSE
+  s_b92545fd3b7795::t_cdc26c5d2c5305 1-21
+README.en-US.md
+  s_b92545fd3b7795::t_b0bb8f95ec3bb2 336-337,339,342
+  s_b92545fd3b7795::t_8165060b44c66f 139,143-173,175,202,204,206-207,209-211,215,281,321,338
+  s_b92545fd3b7795::t_265d34030f0eae 360
+  s_9c2bf9f7ef1c20::t_ca8a1038d7b9cc 3-4,21-22,38,43,128
+  s_b92545fd3b7795::t_e973deba56228f 323-329
+  s_b92545fd3b7795::t_1b61aeca66faf4 53,56,58,63
+  s_b92545fd3b7795::t_15c4ace7682d61 322
+  s_b92545fd3b7795::t_753216a28b4cd3 343
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f68163c9db205cdea1eb14f108010f170342c663",
+  "prompts": {},
+  "sessions": {
+    "s_9c2bf9f7ef1c20": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0436d-95c3-7c13-abfc-a087713189e0",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_b92545fd3b7795": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04359-0eea-7522-982f-709045efe640",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
