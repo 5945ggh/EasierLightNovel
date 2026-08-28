@@ -1,0 +1,21 @@
+web/src/pages/LibraryPage.tsx
+  s_19d94526034d8f::t_819d5e4e51c6c3 313
+README.md
+  s_19d94526034d8f::t_fab096d864c330 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c5fc6d46e2c797b2f02dd3a7ccc253151fd9b284",
+  "prompts": {},
+  "sessions": {
+    "s_19d94526034d8f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04866-96b0-7f62-9d12-45f1211cc6d3",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
