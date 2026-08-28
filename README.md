@@ -12,6 +12,8 @@
 
 **EasierLightNovel** 是一个本地化部署的日语学习阅读器，为想阅读原版轻小说而受日语基础限制的用户设计。
 
+![EasierLightNovel 书架界面预览](.images/library-preview.webp)
+
 ### 核心特性
 
 | 功能 | 描述 |
