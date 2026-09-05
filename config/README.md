@@ -144,6 +144,7 @@ PDF 文件通过 MinerU 云端 API 解析，需要配置 API Token。
 | :---------------- | :------------------------------ | :----------------------- |
 | `data_dir`        | **核心数据目录**<br>存放数据库、解压后的图片和私有原始书籍副本 | `"static_data"`          |
 | `temp_upload_dir` | 上传文件临时缓存目录                      | `"backend/temp_uploads"` |
+| `knowledge_import_dir` | JLPT 等外部知识 JSON 导入目录（仅允许读取其中的真实 `.json` 文件） | `"static_data/knowledge_imports"` |
 
 导入成功后，原始 EPUB/PDF 会保存在 `data_dir/sources/<book-id>/`，供后续重建解析数据使用。该目录不通过 `/static` 提供访问；只有 `data_dir/books/` 中的阅读图片资源会被公开为静态文件。删除书籍会一并删除其原始副本；若文件系统暂时拒绝删除，副本会被移入私有的 `data_dir/sources/.cleanup/` 并在下一次后端启动时重试。
 

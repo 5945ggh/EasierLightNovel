@@ -368,4 +368,10 @@ Bulk Anki export is not implemented. Future stable GUIDs must be held by an appe
 
 If you find this project helpful, please give it a Star for support!
 
-Issues and Pull Requests are welcome; the author is actively maintaining the project.
+Issues and Pull Requests are welcome.
+
+The project's high-density iteration and optimization phase has come to an end. The author will continue basic maintenance, including occasional small updates and handling Issues and Pull Requests.
+
+Most future effort will go into a new project aimed at providing an open-source, free Immersion Learning Data Layer/Pipeline with multimodal input support. The experience and technical foundation from this project will inform that work.
+
+Updates will be shared here when available. Thank you again for supporting this project!
