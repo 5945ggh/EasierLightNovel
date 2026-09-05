@@ -1,0 +1,29 @@
+config/README.md
+  s_b7311d985b858e::t_c3feff4cd83a5b 147
+README.en-US.md
+  s_7d5fe6244ac1e4::t_3ba2be6fd1371e 371-377
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e549c025ae6757d49a0e88dc8d838899044a7b75",
+  "prompts": {},
+  "sessions": {
+    "s_7d5fe6244ac1e4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06f79-78f3-7ed0-abf1-25b473d501b2",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_b7311d985b858e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0463f-8637-7fc1-9eb9-c0e0fba9af05",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
