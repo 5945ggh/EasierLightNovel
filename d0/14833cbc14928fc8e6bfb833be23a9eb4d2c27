@@ -1,0 +1,165 @@
+web/src/utils/readerAnchor.ts
+  s_059c59faa87055::t_47705f797011e5 1-26,30-48
+  s_efad116d8237ea::t_a537da0a4e67a0 27-29
+config/user.json.example
+  s_b7311d985b858e::t_faff55e1b75d61 18-19
+web/src/hooks/useScrollProgress.ts
+  s_059c59faa87055::t_221726cf345187 27,46-52,83
+  s_059c59faa87055::t_ad7b7d80840caa 1-4,10,16-26,28-31,35-45,56-71,74-82,84-85,88-90,92,94-96,98-99,101,103-114
+web/tests/readerText.test.ts
+  s_059c59faa87055::t_c92aaf76477a47 1-2,4-10,13-16,20-27
+  s_efad116d8237ea::t_35fbb478759b3d 3,34
+  s_059c59faa87055::t_9ad31886d7dfd9 11-12,17-19
+  s_efad116d8237ea::t_805af5057b1994 28-33,35-37
+README.md
+  s_059c59faa87055::t_2d4445c713b3f4 21,34,168-173
+  s_059c59faa87055::t_bac793fd7d76f9 174
+backend/app/schemas.py
+  s_b7311d985b858e::t_9abf5c2f85c003 428-433
+web/src/components/reader/SegmentRenderer.tsx
+  s_059c59faa87055::t_a8c9505444dc1f 11,26,30,35
+  s_059c59faa87055::t_9ad31886d7dfd9 37,39-40
+web/tests/readerSelection.test.ts
+  s_059c59faa87055::t_c92aaf76477a47 1-5,7-10,12-18,29-44
+  s_efad116d8237ea::t_f8c9380f284e6f 45-83
+  s_059c59faa87055::t_b495530d861ff8 6,11,19-28
+web/src/utils/readerSelection.ts
+  s_059c59faa87055::t_c92aaf76477a47 5-6,13,19
+  s_efad116d8237ea::t_98733d7b53ee69 20-50
+  s_059c59faa87055::t_a8c9505444dc1f 1-2,4,7-12,14-18
+  s_059c59faa87055::t_025061d50cc81f 3
+web/tests/readerAnchor.test.ts
+  s_efad116d8237ea::t_80c6975665796a 40,47-71
+  s_059c59faa87055::t_47705f797011e5 1-39,41-46,72
+backend/app/routers/knowledge_imports.py
+  s_b7311d985b858e::t_ec367930ff7895 3,5,153-154,156-157,166-169
+  s_b7311d985b858e::t_44702fc742f5f0 155,158,160,162-165
+  s_b7311d985b858e::t_be0c3d16ab8c14 4
+  s_b7311d985b858e::t_9abf5c2f85c003 6,25,28,118-125,133-151,211,214-220
+  s_b7311d985b858e::t_e597a56b1eab8d 126-132
+backend/app/services/external_knowledge_import_service.py
+  s_b7311d985b858e::t_44702fc742f5f0 1551,1553,1562-1563
+web/package.json
+  s_059c59faa87055::t_8ddedcd9160f25 10
+backend/tests/test_knowledge_import_router.py
+  s_b7311d985b858e::t_dccca2344c714e 1,43-55,71-77
+  s_b7311d985b858e::t_be0c3d16ab8c14 8,38-42,56-60,68-70
+  s_b7311d985b858e::t_6b607b1bb44ea8 9,61-67
+  s_b7311d985b858e::t_727dec3f60e039 2-7,10-37,78-104
+web/src/components/reader/ContentCanvas.tsx
+  s_059c59faa87055::t_a273528f952144 76
+  s_059c59faa87055::t_20b6b6a75f6149 148
+  s_059c59faa87055::t_ad7b7d80840caa 12,21-25,28-30,47-49,62-63,65-75,77-83,85,90-93,95-97,100-104,106-109,111-127,145,147,149,154,189,209,254,268
+web/src/components/reader/SettingsPopover.tsx
+  s_059c59faa87055::t_879966442382d8 19,45-46,66-69,87,101,106-107,114,121,145,150-151,166-188
+  s_059c59faa87055::t_7dfea291f47517 189
+web/src/pages/ReaderPage/index.tsx
+  s_059c59faa87055::t_5cc2f9d1b8a869 70,294,304,313-314,402,406,550,564-566,568,575-577,606
+  s_059c59faa87055::t_a273528f952144 162
+  s_efad116d8237ea::t_a537da0a4e67a0 230-233,241,312,320
+web/src/components/reader/LeftDock.tsx
+  s_059c59faa87055::t_bbd706b2645e7d 45-46,68,79-82,90-119,187,205,210
+backend/dev_docs/READING_PROGRESS_CONTRACT.md
+  s_efad116d8237ea::t_df24a73f84b086 363-383
+  s_059c59faa87055::t_2d4445c713b3f4 327-328,331-362
+  s_efad116d8237ea::t_854c1c7bcb100a 384-386
+web/src/components/reader/TokenRenderer.tsx
+  s_059c59faa87055::t_9ad31886d7dfd9 22,55,100,123
+  s_efad116d8237ea::t_d1c181a5880f09 113
+web/tests/readerStore.test.ts
+  s_efad116d8237ea::t_805af5057b1994 1-43
+backend/app/utils/parsers/epub_parser.py
+  s_efad116d8237ea::t_43f66290094336 48-54,161-162,168,183-198,207-208
+  s_059c59faa87055::t_585091cea11b5a 1,3,7,123,128,151-152,159-160,163,165-166,169-181,200-206,209-216,218-234,302,315,329,349,366,434,519,542,606,608,615,625
+backend/dev_docs/SOURCE_CONTENT_CONTRACT.md
+  s_059c59faa87055::t_2d4445c713b3f4 132-134,139
+  s_efad116d8237ea::t_2418f861eaef74 135-138
+web/src/utils/progressPersistence.ts
+  s_059c59faa87055::t_c484a4d09c4674 1-53
+web/src/components/reader/SelectionMenu.tsx
+  s_efad116d8237ea::t_d1c181a5880f09 327-328
+  s_efad116d8237ea::t_98733d7b53ee69 24,150-151,153,186,209-210,212,250
+  s_059c59faa87055::t_a8c9505444dc1f 134,142,206
+backend/main.py
+  s_b7311d985b858e::t_9abf5c2f85c003 13,25,56
+web/tests/progressPersistence.test.ts
+  s_059c59faa87055::t_8ddedcd9160f25 34
+  s_059c59faa87055::t_49adf796204da8 1-33,35-90
+web/src/components/reader/TocModal.tsx
+  s_059c59faa87055::t_bbd706b2645e7d 35-36,39-40,88
+  s_059c59faa87055::t_68dbe318b2f549 7,12-13,21,30,32-34,37-38,41,44-65,68,70-72,74,81,84-87,93,95-96,103-105,107-108,110,115,117,129-136
+  s_059c59faa87055::t_07e4cd3e087564 137
+web/tests/browser/reader-regressions.mjs
+  s_efad116d8237ea::t_907f260b7ae98c 1-15,17-29,31-111,113-156
+  s_efad116d8237ea::t_8dacbfae58957b 16,30,112
+config/schema.json
+  s_b7311d985b858e::t_c3feff4cd83a5b 65-69
+web/src/components/reader/ReaderSidebar.tsx
+  s_efad116d8237ea::t_d1c181a5880f09 14,229,474,1122
+backend/app/services/book_service.py
+  s_efad116d8237ea::t_43f66290094336 496,551-555
+web/src/utils/readingProgress.ts
+  s_059c59faa87055::t_c484a4d09c4674 153-154,157,164,167,175-176
+backend/tests/test_schemas.py
+  s_b7311d985b858e::t_727dec3f60e039 7-12,76-87
+web/src/pages/BookHomePage/index.tsx
+  s_efad116d8237ea::t_a537da0a4e67a0 223-224
+web/src/stores/settingsStore.ts
+  s_059c59faa87055::t_879966442382d8 28,47,66,87
+backend/app/config.py
+  s_b7311d985b858e::t_2f52276d58ab26 170-173,178-180,187
+  s_b7311d985b858e::t_7fa827580e9d2d 174-177
+  s_b7311d985b858e::t_9abf5c2f85c003 186
+web/src/components/reader/TokenPopover.tsx
+  s_efad116d8237ea::t_d1c181a5880f09 188
+web/src/services/books.service.ts
+  s_059c59faa87055::t_8ddedcd9160f25 6,21-22,142,156-158,167
+README.en-US.md
+  s_059c59faa87055::t_2d4445c713b3f4 19,32
+  s_059c59faa87055::t_67850b9512981e 164-173
+web/src/stores/readerStore.ts
+  s_efad116d8237ea::t_d1c181a5880f09 23-24,128,374,376-384,386-388
+web/src/utils/readerText.ts
+  s_efad116d8237ea::t_d1c181a5880f09 1,40-56,58-65
+  s_059c59faa87055::t_9ad31886d7dfd9 5-6,9-22,25,36
+  s_059c59faa87055::t_c92aaf76477a47 2-4,7-8,23,27,38-39,66
+  s_059c59faa87055::t_a8c9505444dc1f 24,26,28-35,37
+  s_efad116d8237ea::t_b8255fa41cbf81 57
+backend/tests/test_epub_reader_regressions.py
+  s_efad116d8237ea::t_cdfad3cfc8a047 2
+  s_059c59faa87055::t_ffa1f30ee673c8 1,6-60,63-101,103-105
+  s_efad116d8237ea::t_8c316509973e56 3-5,106-192
+  s_059c59faa87055::t_f11457d3227cde 61-62,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d014833cbc14928fc8e6bfb833be23a9eb4d2c27",
+  "prompts": {},
+  "sessions": {
+    "s_059c59faa87055": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1642c-2246-78b3-887d-ffc059e38c0d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_b7311d985b858e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0463f-8637-7fc1-9eb9-c0e0fba9af05",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    },
+    "s_efad116d8237ea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16455-be11-7b13-8433-c86edc66ee27",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
