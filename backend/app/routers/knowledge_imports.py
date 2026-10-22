@@ -1,6 +1,9 @@
 """Explicit, read-only external-known-baseline import endpoints."""
 
-from dataclasses import asdict
+import hashlib
+import os
+from dataclasses import asdict, replace
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -19,8 +22,10 @@ from app.schemas import (
     ExternalKnowledgeImportApplyResponse,
     ExternalKnowledgeImportPreviewResponse,
     ExternalKnowledgeImportRevokeResponse,
+    JLPTKnowledgeImportApplyRequest,
     JLPTKnowledgeImportRequest,
 )
+from app.config import KNOWLEDGE_IMPORT_DIR
 from app.services.external_knowledge_import_service import (
     AnkiConnectKnowledgeSource,
     ExternalKnowledgeImportError,
@@ -110,11 +115,58 @@ def _anki_preview(db: Session, request: AnkiKnowledgeImportRequest):
     )
 
 
+def _safe_jlpt_path(path: str) -> Path:
+    """Resolve a client path without allowing reads outside the import root."""
+    import_root = Path(KNOWLEDGE_IMPORT_DIR)
+    raw_path = Path(path)
+    raw_candidate = raw_path if raw_path.is_absolute() else import_root / raw_path
+
+    # Reject symlink components before resolving.  This keeps the accepted
+    # source contract stable even when a link later gets retargeted.
+    if raw_candidate.anchor:
+        probe = Path(raw_candidate.anchor)
+        parts = raw_candidate.parts[1:]
+    else:
+        probe = import_root
+        parts = raw_candidate.parts
+    for part in parts:
+        probe /= part
+        if probe.is_symlink():
+            raise ValueError("JLPT 文件不得通过符号链接访问")
+
+    resolved_root = import_root.resolve(strict=False)
+    resolved_candidate = raw_candidate.resolve(strict=False)
+    try:
+        common = Path(os.path.commonpath((str(resolved_root), str(resolved_candidate))))
+    except ValueError as exc:
+        raise ValueError("JLPT 文件路径无效") from exc
+    if common != resolved_root:
+        raise ValueError("JLPT 文件必须位于受控导入目录内")
+    if resolved_candidate.suffix.lower() != ".json":
+        raise ValueError("JLPT 导入文件必须使用 .json 扩展名")
+    if not resolved_candidate.is_file():
+        raise ValueError("JLPT 导入文件不存在或不可读")
+    return resolved_candidate
+
+
 def _jlpt_preview(db: Session, request: JLPTKnowledgeImportRequest):
-    return _service(db).preview_candidates(
+    safe_path = _safe_jlpt_path(request.path)
+    try:
+        source_bytes = safe_path.read_bytes()
+    except OSError as exc:
+        raise ValueError("JLPT 导入文件不存在或不可读") from exc
+    preview = _service(db).preview_candidates(
         "jlpt",
-        JLPTJsonKnowledgeSource(request.path).fetch_candidates(levels=request.levels),
+        JLPTJsonKnowledgeSource(safe_path, json_bytes=source_bytes).fetch_candidates(levels=request.levels),
     )
+    # Bind the confirmation digest to the same source bytes that produced the
+    # parsed candidates. This detects edits to skipped entries, metadata, or
+    # formatting between preview and apply without mixing file snapshots.
+    source_digest = hashlib.sha256(source_bytes).hexdigest()
+    import_digest = hashlib.sha256(
+        f"{preview.import_digest}:{source_digest}".encode("ascii")
+    ).hexdigest()
+    return replace(preview, import_digest=import_digest)
 
 
 @router.post("/anki/preview", response_model=ExternalKnowledgeImportPreviewResponse)
@@ -156,10 +208,16 @@ def preview_jlpt(request: JLPTKnowledgeImportRequest, db: Session = Depends(get_
 
 
 @router.post("/jlpt/apply", response_model=ExternalKnowledgeImportApplyResponse)
-def apply_jlpt(request: JLPTKnowledgeImportRequest, db: Session = Depends(get_db)):
+def apply_jlpt(request: JLPTKnowledgeImportApplyRequest, db: Session = Depends(get_db)):
     try:
         service = _service(db)
-        result = service.apply_preview(_jlpt_preview(db, request))
+        preview = _jlpt_preview(db, request)
+        if preview.import_digest != request.preview_digest:
+            raise HTTPException(
+                status_code=409,
+                detail="JLPT 内容已变化，请重新生成预览后再应用。",
+            )
+        result = service.apply_preview(preview)
         return {
             "batch_id": result.batch_id,
             "source_kind": result.source_kind,

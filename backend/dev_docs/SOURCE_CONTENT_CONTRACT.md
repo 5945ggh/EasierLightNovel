@@ -129,6 +129,14 @@ It must not be serialized through the reader cache.
 
 ## Compatibility And Migration
 
+EPUB 阅读收尾修复只应用于新导入：标题推断不再删除正文；内联普通／全角空白与 XHTML
+缩进分开处理；图片按当前 XHTML 的相对包内路径解析，并使用路径哈希生成不冲突的文件名。
+来源投影与阅读正文继续共用同一空白规则。该修复不重新解析旧书，也不会修复旧缓存中已丢失的内容。
+图片 URI 只解码一次；ebooklib 已解码的资源名与文档路径保留字面百分号，避免将 `%20`
+文件名与空格文件名混同。EPUB 2 封面元数据与 EPUB 3 `cover-image` 资源映射到实际输出 URL，
+即使封面不在 spine 中也优先用于书架。无声明封面时仍优先正文首图，随后按原始资源名匹配
+`cover`，最后使用首张可用图片；路径哈希不参与封面语义判断。
+
 - Existing books imported before Phase 1 are `legacy_unavailable` because the
   original upload and a source-content version do not exist. They remain fully
   readable.

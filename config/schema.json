@@ -62,6 +62,11 @@
           "type": "string",
           "description": "临时上传目录（相对或绝对路径）",
           "default": "backend/temp_uploads"
+        },
+        "knowledge_import_dir": {
+          "type": "string",
+          "description": "外部知识导入目录（JLPT JSON 仅允许从此目录读取）",
+          "default": "static_data/knowledge_imports"
         }
       }
     },

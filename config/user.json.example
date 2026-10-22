@@ -15,7 +15,8 @@
   },
   "paths": {
     "data_dir": "static_data",
-    "temp_upload_dir": "backend/temp_uploads"
+    "temp_upload_dir": "backend/temp_uploads",
+    "knowledge_import_dir": "static_data/knowledge_imports"
   },
   "upload": {
     "max_file_size": 52428800

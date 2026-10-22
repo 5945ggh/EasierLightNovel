@@ -67,7 +67,7 @@ export const ReaderPage: React.FC = () => {
   );
 
   // 设置 Store
-  const { theme, furiganaMode, fontSize, lineHeight, fontFamily } = useSettingsStore();
+  const { theme, furiganaMode, fontSize, lineHeight, fontFamily, readerWidth } = useSettingsStore();
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -159,10 +159,7 @@ export const ReaderPage: React.FC = () => {
     retry: false,
   });
 
-  const localStore = useMemo(
-    () => (bookId ? loadReadingProgressStore(bookId) : null),
-    [bookId]
-  );
+  const localStore = bookId ? loadReadingProgressStore(bookId) : null;
   const localProgress = localStore?.resume ?? null;
 
   const localProgressAsResponse = useMemo(
@@ -230,6 +227,10 @@ export const ReaderPage: React.FC = () => {
     // 优先读取 URL Query 中的 chapter 参数
     if (parsedQueryChapter !== null) return parsedQueryChapter;
 
+    // Do not turn a temporary first-chapter fallback into the mounted chapter
+    // before the server has supplied the book's resume cursor.
+    if (isProgressLoading) return null;
+
     // 检查进度中的章节索引是否在 TOC 中存在
     const progressIndex = persistedProgress?.current_chapter_index;
     const isValidProgressIndex =
@@ -237,7 +238,7 @@ export const ReaderPage: React.FC = () => {
       chapterList.some((ch) => ch.index === progressIndex);
 
     return isValidProgressIndex ? progressIndex : chapterList[0].index;
-  }, [persistedProgress, chapterList, parsedQueryChapter]);
+  }, [persistedProgress, chapterList, parsedQueryChapter, isProgressLoading]);
 
   const scopedChapterIndex = storeBookId === currentBookId ? storeChapterIndex : null;
   const scopedPendingChapterIndex = storeBookId === currentBookId ? pendingChapterIndex : null;
@@ -290,7 +291,7 @@ export const ReaderPage: React.FC = () => {
   // URL 章节和目录切换只读取该章节检查点；无明确章节时才使用书籍级恢复点。
   const initialPosition = useMemo(
     () => resolveInitialReaderPosition({
-      targetChapterIndex,
+      targetChapterIndex: currentChapterIndex,
       isExplicitChapterRequest: parsedQueryChapter !== null || isExplicitChapterRequest,
       selectedChapterProgress,
       persistedProgress,
@@ -300,7 +301,7 @@ export const ReaderPage: React.FC = () => {
       parsedQueryChapter,
       persistedProgress,
       selectedChapterProgress,
-      targetChapterIndex,
+      currentChapterIndex,
     ]
   );
   const initialPercentage = initialPosition.percentage;
@@ -308,13 +309,15 @@ export const ReaderPage: React.FC = () => {
 
   // 8. 同步数据到 Store
   useEffect(() => {
-    if (chapterData && currentChapterIndex !== null) {
+    if (!isProgressLoading && !isChapterProgressLoading && chapterData && currentChapterIndex !== null) {
+      if (useReaderStore.getState().chapter === chapterData &&
+          useReaderStore.getState().chapterIndex === currentChapterIndex) return;
       // 先设置 chapterIndex，确保 setChapter 能正确过滤 allHighlights
       setChapterIndex(currentChapterIndex);
       setChapter(chapterData);
       setCurrentSegmentIndex(initialSegmentIndex);
     }
-  }, [chapterData, currentChapterIndex, initialSegmentIndex, setChapter, setChapterIndex, setCurrentSegmentIndex]);
+  }, [chapterData, currentChapterIndex, initialSegmentIndex, isProgressLoading, isChapterProgressLoading, setChapter, setChapterIndex, setCurrentSegmentIndex]);
 
   useEffect(() => {
     if (vocabBaseFormsData) {
@@ -396,10 +399,11 @@ export const ReaderPage: React.FC = () => {
 
   // 章节选择处理 - 移到所有条件返回之前
   const handleChapterSelect = useCallback((index: number) => {
+    if (index === currentChapterIndex) return;
     setExplicitChapterRequest({ bookId: currentBookId, index });
     setCurrentSegmentIndex(0);
     setChapterIndex(index);
-  }, [currentBookId, setCurrentSegmentIndex, setChapterIndex]);
+  }, [currentBookId, currentChapterIndex, setCurrentSegmentIndex, setChapterIndex]);
 
   // 判断是否有上一章/下一章
   const hasPrevChapter =
@@ -543,6 +547,7 @@ export const ReaderPage: React.FC = () => {
         '--reader-font-size': `${fontSize}px`,
         '--reader-line-height': String(lineHeight),
         '--reader-font-family': fontFamily,
+        '--reader-width': `${readerWidth ?? 768}px`,
       } as React.CSSProperties}
     >
       {/* 左侧 Dock */}
@@ -556,14 +561,20 @@ export const ReaderPage: React.FC = () => {
       )}>
         <div
           ref={scrollContainerRef}
+          tabIndex={0}
+          aria-label="章节正文"
+          style={{ overflowAnchor: 'none' }}
           className={clsx(
-            'h-full w-full overflow-y-auto scroll-smooth',
+            'h-full w-full overflow-y-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
             `furigana-mode-${furiganaMode}`,
             `theme-${resolvedTheme}`
           )}
         >
           <ContentCanvas
             key={currentChapterIndex ?? 'default'}
+            bookId={bookId!}
+            chapter={chapterData!}
+            layoutKey={`${fontSize}|${lineHeight}|${fontFamily}|${furiganaMode}|${readerWidth}|${isSidebarOpen}`}
             scrollContainerRef={scrollContainerRef}
             onPrevChapter={handlePrevChapter}
             onNextChapter={handleNextChapter}
@@ -592,6 +603,7 @@ export const ReaderPage: React.FC = () => {
           onClose={() => setIsTocOpen(false)}
           chapters={chapterList}
           currentIndex={currentChapterIndex}
+          chapterProgressByIndex={chapterProgressByIndex}
           onChapterSelect={handleChapterSelect}
         />
       )}

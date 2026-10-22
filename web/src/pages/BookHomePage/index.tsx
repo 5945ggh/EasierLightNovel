@@ -220,6 +220,8 @@ export const BookHomePage: React.FC = () => {
       setIsDeleting(true);
       await deleteBook(bookId);
       clearReadingProgressSnapshot(bookId);
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[1] === bookId });
+      await queryClient.invalidateQueries({ queryKey: ['books'] });
       setIsConfirmDeleteOpen(false);
       navigate('/');
     } catch (err) {

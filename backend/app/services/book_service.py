@@ -493,7 +493,7 @@ class BookService:
             tokenizer = JapaneseTokenizer(mode=mode) #type: ignore
 
             # C. 遍历处理每个章节
-            detected_cover_url: Optional[str] = None
+            detected_cover_url: Optional[str] = getattr(parser, "cover_image_url", None)
             total_chapters = len(raw_chapters)
             orm_chapters = []
 
@@ -548,7 +548,11 @@ class BookService:
             db.add(source_version)
 
             # F. 若遍历时落空, 兜底查找封面图片
-            cover_url = detected_cover_url or self._find_cover_image_fallback(book_id)
+            cover_url = (
+                detected_cover_url
+                or getattr(parser, "fallback_cover_image_url", None)
+                or self._find_cover_image_fallback(book_id)
+            )
 
             # G. 更新书籍状态
             book.status = ProcessingStatus.COMPLETED  # type: ignore

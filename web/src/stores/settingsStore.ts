@@ -25,6 +25,7 @@ interface SettingsState {
   lineHeight: number;         // 行高倍数
   furiganaMode: FuriganaMode; // 注音显示模式
   fontFamily: string;         // 字体
+  readerWidth: number;        // 正文最大宽度 (px)
 
   // 阅读设置
   autoScroll: boolean;        // 是否自动滚动
@@ -43,6 +44,7 @@ interface SettingsActions {
   setLineHeight: (height: number) => void;
   setFuriganaMode: (mode: FuriganaMode) => void;
   setFontFamily: (font: string) => void;
+  setReaderWidth: (width: number) => void;
 
   // 阅读相关
   setAutoScroll: (auto: boolean) => void;
@@ -61,6 +63,7 @@ const defaultSettings: SettingsState = {
   lineHeight: 1.8,
   furiganaMode: 'always',
   fontFamily: '"Noto Sans JP", "Hiragino Sans", sans-serif',
+  readerWidth: 768,
   autoScroll: false,
   scrollSpeed: 1,
 };
@@ -81,6 +84,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setLineHeight: (lineHeight) => set({ lineHeight }),
       setFuriganaMode: (furiganaMode) => set({ furiganaMode }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
+      setReaderWidth: (readerWidth) => set({ readerWidth: [640, 768, 960].includes(readerWidth) ? readerWidth : 768 }),
 
       // 阅读相关
       setAutoScroll: (autoScroll) => set({ autoScroll }),

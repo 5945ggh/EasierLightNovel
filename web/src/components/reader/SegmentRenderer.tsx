@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { TokenRenderer } from './TokenRenderer';
+import { splitReaderParagraphs } from '@/utils/readerText';
 import type { ContentSegment, TextSegment, ImageSegment } from '@/types/chapter';
 
 interface SegmentRendererProps {
@@ -22,56 +23,21 @@ const TextSegmentRenderer: React.FC<{
   ({ segment, index }) => {
     if (!segment.tokens) return null;
 
-    // 将 token 数组按 gap 分组，实现真正的段落分隔
-    const paragraphs: Array<{ tokens: typeof segment.tokens; startIdx: number }> = [];
-    let currentGroup: typeof segment.tokens = [];
-    let currentStartIdx = 0;
-
-    // 判断 token 是否为段落分隔符
-    const isParagraphBreak = (token: typeof segment.tokens[0]): boolean => {
-      // 1. 显式的 gap 标记
-      if (token.gap) return true;
-      // 2. 空字符串或纯空白（通常是分段标记）
-      if (!token.s || /^\s*$/.test(token.s)) return true;
-      // 3. 全角空格（常见的日文分段标记）
-      if (token.s === '　') return true;
-      return false;
-    };
-
-    segment.tokens.forEach((token, tIdx) => {
-      // 跳过分段标记 token 本身，不渲染
-      if (isParagraphBreak(token)) {
-        // 结束当前段落
-        if (currentGroup.length > 0) {
-          paragraphs.push({ tokens: currentGroup, startIdx: currentStartIdx });
-          currentGroup = [];
-          currentStartIdx = tIdx + 1;
-        }
-        return;
-      }
-
-      currentGroup.push(token);
-    });
-
-    // 添加最后一个段落（如果有剩余 token）
-    if (currentGroup.length > 0) {
-      paragraphs.push({ tokens: currentGroup, startIdx: currentStartIdx });
-    }
+    const paragraphs = splitReaderParagraphs(segment.tokens);
 
     return (
       <>
-        {paragraphs.map(({ tokens, startIdx }, pIdx) => (
+        {paragraphs.map((tokens, pIdx) => (
           <p
             key={`${index}-p-${pIdx}`}
             data-segment-index={index}
             className="mb-6 text-justify"
-            style={{ textIndent: '1em' }}
+            style={{ textIndent: '1em', whiteSpace: 'pre-wrap', minHeight: '1em' }}
           >
-            {tokens.map((token, relIdx) => {
-              const tIdx = startIdx + relIdx;
+            {tokens.map(({ token, tokenIndex: tIdx, sourceTokenIndex }) => {
               return (
-                <React.Fragment key={`${index}-${tIdx}`}>
-                  <TokenRenderer token={token} segmentIndex={index} tokenIndex={tIdx} />
+                <React.Fragment key={`${index}-${sourceTokenIndex}`}>
+                  {tIdx === null ? token.s : <TokenRenderer token={token} segmentIndex={index} tokenIndex={tIdx} sourceTokenIndex={sourceTokenIndex} />}
                 </React.Fragment>
               );
             })}

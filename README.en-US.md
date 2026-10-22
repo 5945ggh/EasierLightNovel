@@ -16,7 +16,7 @@
 
 | Feature | Description |
 |------|------|
-| **EPUB/PDF Parsing** | Supports uploading EPUB/PDF files, automatically extracts illustrations, and preserves original layout. (Currently, PDF processing is suboptimal and is being optimized). |
+| **EPUB/PDF Parsing** | Extracts text and illustrations into a consistent reader layout; EPUB is parsed locally and PDF uses MinerU. |
 | **Intelligent Tokenization** + **Offline Instant Dictionary** | Japanese tokenization based on SudachiPy with automatic furigana generation; integrated Jamdict Japanese dictionary—click a word to view definitions. |
 | **Vocabulary Collection** + **Highlights** | Save words, excerpts, and related AI analysis, with cross-book browsing; spaced repetition review is not currently available. |
 | **Book Learning Map** | View chapter vocabulary load, in-book high-frequency coverage, and optional explicit-knowledge coverage for a book. |
@@ -29,7 +29,7 @@
 - **Hybrid Architecture**: Traditional NLP (tokenization, furigana) + Large Language Models (deep analysis).
 - **Progressive Learning**: From basic furigana to AI grammar analysis, adapting to different proficiency levels.
 - **Local Deployment**: Controllable data privacy, suitable for personal use.
-- **Immersive Reading**: Retains original book layout and supports mixed illustration placement.
+- **Immersive Reading**: Mixed text and illustrations, configurable fonts and width, and visible-text preservation when the layout changes.
 
 ---
 
@@ -160,6 +160,16 @@ The Book Home loads only the table of contents and progress, not chapter text. R
 - **Save vocabulary**: select "Add to Vocabulary Collection" in the dictionary popover.
 - **Highlight text**: drag to select text, then choose a highlight style.
 - **AI analysis**: select a saved highlight to request and retain reading support.
+
+Reader settings include serif/sans-serif fonts, three content widths, font size, line spacing,
+furigana and themes (including the system theme). The reader's table of contents supports
+title filtering and shows each chapter's last position, rather than a whole-book completion rate.
+Scrolling updates the local snapshot immediately; server writes are debounced and ordered.
+If a server write fails, the reader shows whether the local fallback was saved.
+
+EPUB uses a consistent reader layout rather than fully reproducing publisher CSS, vertical
+typesetting or special author-provided ruby. Parser fixes apply to new imports; existing books
+are not reparsed and their saved highlight coordinates remain unchanged.
 
 #### 2.1 Book Learning Map
 

@@ -167,11 +167,24 @@ def _get_temp_upload_dir() -> str:
     return _resolve_path(user_path)
 
 
+def _get_knowledge_import_dir() -> str:
+    """Get the private directory used for external knowledge source files."""
+    if "KNOWLEDGE_IMPORT_DIR" in os.environ:
+        return _resolve_path(os.environ["KNOWLEDGE_IMPORT_DIR"])
+    user_path = _get_str_config(
+        "paths.knowledge_import_dir",
+        os.path.join(DATA_DIR, "knowledge_imports"),
+    )
+    return _resolve_path(user_path)
+
+
 DATA_DIR = _get_data_dir()
 UPLOAD_DIR = os.path.join(DATA_DIR, "books")
 # Immutable imported EPUB/PDF files.  This directory deliberately is not
 # mounted by FastAPI; only UPLOAD_DIR is exposed as /static/books.
 SOURCE_FILES_DIR = os.path.join(DATA_DIR, "sources")
+# User-supplied JLPT JSON files are read only from this private directory.
+KNOWLEDGE_IMPORT_DIR = _get_knowledge_import_dir()
 TEMP_UPLOAD_DIR = _get_temp_upload_dir()
 STATIC_URL_PREFIX = "/static"
 

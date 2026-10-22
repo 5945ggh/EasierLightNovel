@@ -185,7 +185,7 @@ export const TokenPopover: React.FC = () => {
         // 截取上下文句子（例句）
         const contextSentence = extractSentenceFromSegment(
           selectedToken.segmentIndex,
-          selectedToken.tokenIndex,
+          selectedToken.sourceTokenIndex,
           chapter?.segments
         );
 

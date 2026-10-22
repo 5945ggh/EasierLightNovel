@@ -20,6 +20,8 @@ export interface SelectedToken {
   token: TokenData;
   segmentIndex: number;
   tokenIndex: number;
+  /** Index in the original segment token array (distinct from legacy highlight coordinates). */
+  sourceTokenIndex: number;
   /** 原始文本（用于显示） */
   text: string;
 }
@@ -123,7 +125,7 @@ interface ReaderActions {
 
   // 高亮管理
   setHighlights: (highlights: ChapterHighlightData[]) => void;
-  addHighlight: (highlight: ChapterHighlightData) => void;
+  addHighlight: (highlight: ChapterHighlightData, origin: { bookId: string; chapterIndex: number }) => void;
   addHighlightOptimistic: (highlight: PendingHighlight) => void;
   removeHighlight: (id: number) => void;
   removePendingHighlight: (tempId: string) => void;
@@ -369,24 +371,21 @@ export const useReaderStore = create<ReaderState & ReaderActions>()((set, get) =
       highlightRevision: state.highlightRevision + 1,
     })),
 
-  addHighlight: (highlight) =>
+  addHighlight: (highlight, origin) =>
     set((state) => {
-      const newHighlights = [...state.highlights, highlight];
-      // 同时更新 allHighlights（用于高亮列表显示）
-      // 先过滤掉同一章节的旧数据（如果有），再添加新的
-      const newAllHighlights = state.allHighlights.filter(
-        h => !(h.chapter_index === state.chapterIndex && h.id === highlight.id)
-      );
-      // 添加章节信息到 highlight
-      const highlightWithChapter = {
-        ...highlight,
-        chapter_index: state.chapterIndex ?? 0,
-      };
-      newAllHighlights.push(highlightWithChapter);
+      // The response belongs to the request origin, even after navigation.
+      if (state.bookId !== origin.bookId) return state;
+      const highlightWithChapter = { ...highlight, chapter_index: origin.chapterIndex };
+      const allHighlights = [
+        ...state.allHighlights.filter((h) => h.id !== highlight.id),
+        highlightWithChapter,
+      ];
+      if (state.chapterIndex !== origin.chapterIndex) return { allHighlights };
+      const highlights = [...state.highlights.filter((h) => h.id !== highlight.id), highlightWithChapter];
       return {
-        highlights: newHighlights,
-        allHighlights: newAllHighlights,
-        highlightMap: buildHighlightMap(newHighlights, state.pendingHighlights, state.chapter?.segments),
+        highlights,
+        allHighlights,
+        highlightMap: buildHighlightMap(highlights, state.pendingHighlights, state.chapter?.segments),
         highlightRevision: state.highlightRevision + 1,
       };
     }),

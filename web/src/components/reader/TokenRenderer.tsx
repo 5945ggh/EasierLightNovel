@@ -19,6 +19,7 @@ interface TokenRendererProps {
   token: TokenData;
   segmentIndex: number;
   tokenIndex: number;
+  sourceTokenIndex?: number;
 }
 
 const highlightInlineStyleCache = new Map<string, { backgroundColor: string }>();
@@ -51,7 +52,7 @@ const getHighlightInlineStyle = (
  * 3. 只有当"选中状态"、"生词状态"或"高亮状态"改变时才重渲染
  */
 export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
-  ({ token, segmentIndex, tokenIndex }) => {
+  ({ token, segmentIndex, tokenIndex, sourceTokenIndex = tokenIndex }) => {
     // 1. 订阅选中状态 - 使用 selector 只在匹配时才触发重渲染
     const isSelected = useReaderStore((s) =>
       s.selectedToken?.segmentIndex === segmentIndex &&
@@ -96,7 +97,7 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
             client_event_id: createReaderLookupEventId(),
             chapter_index: chapterIndex,
             reader_segment_index: segmentIndex,
-            reader_token_index: tokenIndex,
+            reader_token_index: sourceTokenIndex,
             surface: token.s,
             query_text: token.b || token.s,
           }).catch((error) => {
@@ -109,6 +110,7 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
           token,
           segmentIndex,
           tokenIndex,
+          sourceTokenIndex,
           text: token.s,
         });
 
@@ -118,7 +120,7 @@ export const TokenRenderer: React.FC<TokenRendererProps> = React.memo(
           state.setActiveTab('dictionary');
         }
       },
-      [token, segmentIndex, tokenIndex, setSelectedToken, bookId, chapterIndex]
+      [token, segmentIndex, tokenIndex, sourceTokenIndex, setSelectedToken, bookId, chapterIndex]
     );
 
     // 8. 样式组合

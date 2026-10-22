@@ -150,19 +150,21 @@ export const saveChapterProgressSnapshot = (
   bookId: string,
   snapshot: ReadingProgressSnapshot,
   options: { updateResume?: boolean } = {}
-): void => {
-  if (typeof window === 'undefined') return;
+): boolean => {
+  if (typeof window === 'undefined') return false;
 
   const normalized = normalizeSnapshot(snapshot);
-  if (!normalized) return;
+  if (!normalized) return false;
 
   try {
     const store = loadReadingProgressStore(bookId);
     store.chapters[getChapterKey(normalized.chapterIndex)] = normalized;
     if (options.updateResume) store.resume = normalized;
     writeStore(bookId, store);
+    return true;
   } catch (error) {
     console.error('[readingProgress] Failed to save progress snapshot:', error);
+    return false;
   }
 };
 
@@ -170,8 +172,8 @@ export const saveChapterProgressSnapshot = (
 export const saveReadingProgressSnapshot = (
   bookId: string,
   snapshot: ReadingProgressSnapshot
-): void => {
-  saveChapterProgressSnapshot(bookId, snapshot, { updateResume: true });
+): boolean => {
+  return saveChapterProgressSnapshot(bookId, snapshot, { updateResume: true });
 };
 
 /** Return the book-level cursor used by the Continue Reading action. */

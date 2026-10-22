@@ -4,7 +4,12 @@ import pytest
 
 from pydantic import ValidationError
 
-from app.schemas import AnkiKnowledgeImportApplyRequest, ChapterHighlightData, HighlightResponse
+from app.schemas import (
+    AnkiKnowledgeImportApplyRequest,
+    ChapterHighlightData,
+    HighlightResponse,
+    JLPTKnowledgeImportApplyRequest,
+)
 
 
 def test_highlight_response_exposes_both_archive_fields_and_normalizes_style():
@@ -68,3 +73,15 @@ def test_anki_apply_requires_the_confirmed_preview_digest():
         preview_digest="a" * 64,
     )
     assert request.preview_digest == "a" * 64
+
+
+def test_jlpt_apply_requires_the_confirmed_preview_digest():
+    with pytest.raises(ValidationError):
+        JLPTKnowledgeImportApplyRequest(path="jlpt.json", levels=["N5"])
+
+    request = JLPTKnowledgeImportApplyRequest(
+        path="jlpt.json",
+        levels=["N5"],
+        preview_digest="b" * 64,
+    )
+    assert request.preview_digest == "b" * 64

@@ -9,7 +9,7 @@
  * 样式：使用 CSS 变量实现动态字体设置
  */
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReaderStore } from '@/stores/readerStore';
 import { updateReadingProgress } from '@/services/books.service';
@@ -18,9 +18,16 @@ import { ChevronLeft, ChevronRight, Home, ArrowLeft, Settings, List } from 'luci
 import { clsx } from 'clsx';
 import { useScrollProgress } from '@/hooks/useScrollProgress';
 import { saveReadingProgressSnapshot } from '@/utils/readingProgress';
-import type { ReadingProgressState } from '@/utils/readingProgress';
+import type { ReadingProgressState, ReadingProgressSnapshot } from '@/utils/readingProgress';
+import type { ChapterResponse } from '@/types/chapter';
+import { createProgressSaver } from '@/utils/progressPersistence';
+import type { ProgressSaveStatus } from '@/utils/progressPersistence';
+import { captureReaderAnchor } from '@/utils/readerAnchor';
 
 interface ContentCanvasProps {
+  bookId: string;
+  chapter: ChapterResponse;
+  layoutKey: string;
   // 滚动容器的 ref（从 ReaderPage 传入）
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   // 章节切换回调
@@ -36,10 +43,10 @@ interface ContentCanvasProps {
   onToggleSettings?: () => void;
 }
 
-// IntersectionObserver 配置：只有当段落进入视口中心区域时才触发
-const OBSERVER_ROOT_MARGIN = '-45% 0px -45% 0px'; // 只检测视口中间 10% 的区域
-
 export const ContentCanvas: React.FC<ContentCanvasProps> = ({
+  bookId,
+  chapter,
+  layoutKey,
   scrollContainerRef,
   onPrevChapter,
   onNextChapter,
@@ -51,169 +58,73 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   onToggleSettings,
 }) => {
   const navigate = useNavigate();
-  // 使用 selector 订阅特定状态，避免不必要的重渲染
-  const chapter = useReaderStore((s) => s.chapter);
-  const bookId = useReaderStore((s) => s.bookId);
-  const currentSegmentIndex = useReaderStore((s) => s.currentSegmentIndex);
-  const setCurrentSegmentIndex = useReaderStore((s) => s.setCurrentSegmentIndex);
-
-  const observerRef = useRef<IntersectionObserver | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const hasConfirmedReadingRef = useRef(false);
-  const segmentSaveTimeoutRef = useRef<number | null>(null);
-  const lastSavedSegmentRef = useRef(currentSegmentIndex);
-
-  // 当前缓存的滚动百分比（用于保存进度）
+  const [saveStatus, setSaveStatus] = useState<ProgressSaveStatus>('idle');
+  const mountedRef = useRef(false);
   const cachedPercentageRef = useRef(initialPercentage);
+  const navigatingRef = useRef(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
-  // 当 initialPercentage 变化时更新 ref（避免不滚动就切章节把 0 存回去）
-  useEffect(() => {
-    cachedPercentageRef.current = initialPercentage;
-  }, [initialPercentage]);
+  const saver = useMemo(() => createProgressSaver<ReadingProgressSnapshot>({
+    writeLocal: (snapshot) => saveReadingProgressSnapshot(bookId, snapshot),
+    writeRemote: (snapshot) => updateReadingProgress(bookId, {
+      current_chapter_index: snapshot.chapterIndex,
+      current_segment_index: snapshot.segmentIndex,
+      progress_percentage: Math.round(snapshot.percentage * 1000) / 10,
+      state: snapshot.state,
+    }),
+    onStatus: setSaveStatus,
+  }), [bookId]);
 
-  // 保存进度的核心函数（带 localStorage 降级）
-  const saveProgress = useCallback((
-    percentage: number,
-    state: ReadingProgressState = 'in_progress'
-  ): Promise<void> => {
-    if (!bookId || !chapter || currentSegmentIndex < 0) {
-      return Promise.resolve();
-    }
-
-    setIsSaving(true);
-    // 前端 0-1，后端 0-100（保留一位小数）
-    const percentageForBackend = Math.round(percentage * 1000) / 10;
-
-    const payload = {
-      current_chapter_index: chapter.index,
-      current_segment_index: currentSegmentIndex,
-      progress_percentage: percentageForBackend,
-      state,
-    };
-
-    saveReadingProgressSnapshot(bookId, {
+  const recordProgress = useCallback((percentage: number, state: ReadingProgressState = 'in_progress') => {
+    const container = scrollContainerRef.current;
+    const anchor = container ? captureReaderAnchor(container) : null;
+    const segmentIndex = anchor ? Number(anchor.segmentIndex) : useReaderStore.getState().currentSegmentIndex;
+    const snapshot: ReadingProgressSnapshot = {
       chapterIndex: chapter.index,
-      segmentIndex: currentSegmentIndex,
+      segmentIndex: Math.max(0, segmentIndex),
       percentage,
       state,
       timestamp: Date.now(),
-    });
-    lastSavedSegmentRef.current = currentSegmentIndex;
-
-    return updateReadingProgress(bookId, payload)
-      .then(() => {
-        setIsSaving(false);
-      })
-      .catch((err) => {
-        console.error('[ContentCanvas] Failed to save progress to server:', err);
-        setIsSaving(false);
-      });
-  }, [bookId, chapter, currentSegmentIndex]);
-
-  // 使用滚动进度 Hook（传入滚动容器 ref）
-  useScrollProgress(
-    scrollContainerRef,
-    (percentage) => {
-      hasConfirmedReadingRef.current = true;
-      cachedPercentageRef.current = percentage;
-      saveProgress(percentage);
-    },
-    {
-      initialPercentage,
-      isChapterSwitch,
-      restoreDelay: 150,
-      debounceDelay: 1000,
-    }
-  );
-
-  // 章节切换前先保存进度
-  const handlePrevChapter = useCallback(() => {
-    saveProgress(cachedPercentageRef.current).then(() => {
-      onPrevChapter?.();
-    });
-  }, [saveProgress, onPrevChapter]);
-
-  const handleNextChapter = useCallback(() => {
-    saveProgress(cachedPercentageRef.current, 'completed').then(() => {
-      onNextChapter?.();
-    });
-  }, [saveProgress, onNextChapter]);
-
-  // 1. 初始化 IntersectionObserver 监听段落切换
-  // 用于更新 currentSegmentIndex，辅助快速定位
-  useEffect(() => {
-    if (!chapter || !bookId) return;
-
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
-
-    const callback: IntersectionObserverCallback = (entries) => {
-      const visibleEntry = entries.find((entry) => entry.isIntersecting);
-
-      if (visibleEntry) {
-        const idx = Number(visibleEntry.target.getAttribute('data-segment-index'));
-
-        // 只在段落索引变化时才更新，避免频繁触发
-        if (!isNaN(idx) && idx !== currentSegmentIndex) {
-          setCurrentSegmentIndex(idx);
-        }
-      }
     };
+    cachedPercentageRef.current = percentage;
+    useReaderStore.getState().setCurrentSegmentIndex(snapshot.segmentIndex);
+    saver.record(snapshot);
+  }, [chapter.index, saver, scrollContainerRef]);
 
-    observerRef.current = new IntersectionObserver(callback, {
-      root: scrollContainerRef.current, // 使用传入的滚动容器作为 root
-      rootMargin: OBSERVER_ROOT_MARGIN,
-      threshold: 0,
-    });
-
-    const rafId = requestAnimationFrame(() => {
-      const elements = contentRef.current?.querySelectorAll('[data-segment-index]');
-      elements?.forEach((el) => observerRef.current?.observe(el));
-    });
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      observerRef.current?.disconnect();
-    };
-  }, [chapter, bookId, currentSegmentIndex, scrollContainerRef, setCurrentSegmentIndex]);
-
-  // 段落索引也属于可恢复坐标；只有确认发生过滚动后才防抖保存，
-  // 避免 IntersectionObserver 的首次布局事件生成 0% 检查点。
-  useEffect(() => {
-    if (
-      !chapter ||
-      currentSegmentIndex < 0 ||
-      !hasConfirmedReadingRef.current ||
-      currentSegmentIndex === lastSavedSegmentRef.current
-    ) {
-      return;
-    }
-
-    if (segmentSaveTimeoutRef.current) {
-      window.clearTimeout(segmentSaveTimeoutRef.current);
-    }
-
-    segmentSaveTimeoutRef.current = window.setTimeout(() => {
-      void saveProgress(cachedPercentageRef.current);
-    }, 1000);
-
-    return () => {
-      if (segmentSaveTimeoutRef.current) {
-        window.clearTimeout(segmentSaveTimeoutRef.current);
-        segmentSaveTimeoutRef.current = null;
-      }
-    };
-  }, [chapter, currentSegmentIndex, saveProgress]);
+  useScrollProgress(scrollContainerRef, recordProgress, {
+    initialPercentage, isChapterSwitch, layoutKey,
+  });
 
   useEffect(() => {
+    mountedRef.current = true;
+    const flush = () => { void saver.flush(); };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      if (segmentSaveTimeoutRef.current) {
-        window.clearTimeout(segmentSaveTimeoutRef.current);
-      }
+      mountedRef.current = false;
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
     };
-  }, []);
+  }, [saver]);
+
+  const changeChapter = useCallback(async (next: boolean) => {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+    setIsNavigating(true);
+    recordProgress(cachedPercentageRef.current, next ? 'completed' : 'in_progress');
+    await saver.flush();
+    if (mountedRef.current) {
+      if (next) onNextChapter?.();
+      else onPrevChapter?.();
+      navigatingRef.current = false;
+      setIsNavigating(false);
+    }
+  }, [recordProgress, saver, onNextChapter, onPrevChapter]);
+  const handlePrevChapter = () => { void changeChapter(false); };
+  const handleNextChapter = () => { void changeChapter(true); };
 
   if (!chapter) {
     return null;
@@ -231,16 +142,16 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       }}
     >
       {/* 阅读容器：限制最大宽度，居中 */}
-      <div className="max-w-3xl mx-auto px-6 py-12 md:px-12 md:py-16 lg:px-16 lg:py-20 min-h-[100dvh]">
+      <div style={{ maxWidth: 'var(--reader-width, 768px)' }} className="mx-auto px-6 py-12 md:px-12 md:py-16 lg:px-16 lg:py-20 min-h-[100dvh]">
         {/* 进度保存指示器 */}
-        {isSaving && (
-          <div className="fixed top-4 right-4 text-xs text-gray-400 bg-white/80 dark:bg-gray-800/80 backdrop-blur px-2 py-1 rounded shadow-sm z-10">
-            保存中...
+        {saveStatus !== 'idle' && (
+          <div role="status" className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4 right-2 max-w-[75vw] text-xs text-gray-600 bg-white/95 dark:text-gray-200 dark:bg-gray-800/95 backdrop-blur px-2 py-1 rounded shadow-sm z-30">
+            {saveStatus === 'pending' ? '保存中…' : saveStatus === 'saved' ? '进度已保存' : saveStatus === 'local-only' ? '已保存到本机，服务器保存失败' : '进度保存失败，请稍后重试'}
           </div>
         )}
 
         {/* 章节导航 - 固定在顶部 */}
-        <div className="sticky top-0 z-10 -mx-6 px-4 md:-mx-12 md:px-12 py-3 bg-stone-50/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm safe-area-top">
+        <div data-reader-navigation className="sticky top-0 z-10 -mx-6 px-4 md:-mx-12 md:px-12 py-3 bg-stone-50/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm safe-area-top">
           {/* 移动端：左侧按钮组（返回、目录） */}
           <div className="flex md:hidden items-center gap-1">
             <button
@@ -275,7 +186,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
           {/* 桌面端/移动端中间：上一章按钮 */}
           <button
             onClick={handlePrevChapter}
-            disabled={!hasPrevChapter}
+            disabled={!hasPrevChapter || isNavigating}
             className={clsx(
               'flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg transition-colors',
               hasPrevChapter
@@ -295,7 +206,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
           {/* 桌面端/移动端中间：下一章按钮 */}
           <button
             onClick={handleNextChapter}
-            disabled={!hasNextChapter}
+            disabled={!hasNextChapter || isNavigating}
             className={clsx(
               'flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg transition-colors',
               hasNextChapter
@@ -340,7 +251,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
         <div className="flex items-center justify-center gap-4 py-12 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={handlePrevChapter}
-            disabled={!hasPrevChapter}
+            disabled={!hasPrevChapter || isNavigating}
             className={clsx(
               'flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-colors',
               hasPrevChapter
@@ -354,7 +265,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
 
           <button
             onClick={handleNextChapter}
-            disabled={!hasNextChapter}
+            disabled={!hasNextChapter || isNavigating}
             className={clsx(
               'flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-colors',
               hasNextChapter

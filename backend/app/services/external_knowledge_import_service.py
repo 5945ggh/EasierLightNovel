@@ -1548,8 +1548,9 @@ class AnkiConnectKnowledgeSource:
 class JLPTJsonKnowledgeSource:
     """Load known JLPT entries from an explicit local JSON contract."""
 
-    def __init__(self, json_path: str | Path) -> None:
+    def __init__(self, json_path: str | Path, *, json_bytes: bytes | None = None) -> None:
         self.json_path = Path(json_path)
+        self.json_bytes = json_bytes
 
     def fetch_candidates(
         self,
@@ -1558,7 +1559,8 @@ class JLPTJsonKnowledgeSource:
     ) -> list[ImportCandidate | ImportSkip]:
         allowed_levels = _validate_levels(levels)
         try:
-            payload = json.loads(self.json_path.read_text(encoding="utf-8"))
+            source_bytes = self.json_bytes if self.json_bytes is not None else self.json_path.read_bytes()
+            payload = json.loads(source_bytes)
         except OSError as exc:
             raise ExternalKnowledgeImportError(f"Unable to read JLPT JSON: {self.json_path}") from exc
         except json.JSONDecodeError as exc:

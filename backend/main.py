@@ -10,6 +10,7 @@ from app.database import init_db, check_db_connection
 from app.config import (
     BASE_DIR, DATA_DIR, UPLOAD_DIR, STATIC_URL_PREFIX, HOST, PORT,
     CORS_ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, TEMP_UPLOAD_DIR, SOURCE_FILES_DIR,
+    KNOWLEDGE_IMPORT_DIR,
     LOG_LEVEL, LLMConfig
 )
 from app.services.book_service import recover_interrupted_processing_books
@@ -21,6 +22,7 @@ import os
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(SOURCE_FILES_DIR, exist_ok=True)
+os.makedirs(KNOWLEDGE_IMPORT_DIR, exist_ok=True)
 os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
 def _setup_logging():
@@ -51,6 +53,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(SOURCE_FILES_DIR, exist_ok=True)
+    os.makedirs(KNOWLEDGE_IMPORT_DIR, exist_ok=True)
     os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
     # 打印配置信息

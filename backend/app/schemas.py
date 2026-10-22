@@ -425,6 +425,12 @@ class JLPTKnowledgeImportRequest(BaseModel):
     levels: List[Literal["N5", "N4", "N3", "N2", "N1"]] = Field(..., min_length=1)
 
 
+class JLPTKnowledgeImportApplyRequest(JLPTKnowledgeImportRequest):
+    """Apply only the exact JLPT snapshot the user confirmed."""
+
+    preview_digest: str = Field(..., min_length=64, max_length=64)
+
+
 class ExternalKnowledgeImportApplyResponse(BaseModel):
     batch_id: str
     source_kind: Literal["anki", "jlpt"]

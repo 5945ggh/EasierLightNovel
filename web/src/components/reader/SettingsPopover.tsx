@@ -16,6 +16,7 @@ const FONT_SIZE_OPTIONS = [
 ] as const;
 
 const THEME_OPTIONS = [
+  { t: 'system' as Theme, bg: 'bg-gray-100 dark:bg-gray-800', border: 'border-gray-300', label: '系统', text: 'text-gray-900 dark:text-white' },
   { t: 'light' as Theme, bg: 'bg-white', border: 'border-gray-200', label: '白', text: 'text-gray-900' },
   { t: 'sepia' as Theme, bg: 'bg-[#f4ecd8]', border: 'border-[#e6dbbf]', label: '羊', text: 'text-[#5b4636]' },
   { t: 'dark' as Theme, bg: 'bg-gray-900', border: 'border-gray-700', label: '黒', text: 'text-white' },
@@ -41,6 +42,8 @@ const SegmentControl = React.memo(
         <button
           key={String(opt.value)}
           title={opt.title}
+          aria-label={opt.title}
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={clsx(
             'flex-1 flex items-center justify-center py-1.5 text-sm rounded-md transition-all',
@@ -60,6 +63,10 @@ const SegmentControl = React.memo(
 
 export const SettingsPopover: React.FC = () => {
   const {
+    fontFamily,
+    setFontFamily,
+    readerWidth,
+    setReaderWidth,
     fontSize,
     setFontSize,
     lineHeight,
@@ -77,7 +84,7 @@ export const SettingsPopover: React.FC = () => {
   );
 
   return (
-    <div className="md:absolute md:left-full md:ml-2 md:bottom-[-10px] md:w-72 w-full bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 md:p-4 p-3 z-50 md:animate-in md:slide-in-from-left-2 md:fade-in md:duration-200">
+    <div className="md:absolute md:left-full md:ml-2 md:bottom-[-10px] md:w-72 md:max-h-[calc(100dvh-2rem)] md:overflow-y-auto w-full bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 md:p-4 p-3 z-50 md:animate-in md:slide-in-from-left-2 md:fade-in md:duration-200">
       <div className="md:space-y-5 space-y-4">
         {/* 1. 字号控制 */}
         <div className="space-y-2">
@@ -91,23 +98,27 @@ export const SettingsPopover: React.FC = () => {
               disabled={fontSize <= 12}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title="减小字号"
+              aria-label="减小字号"
             >
               <Minus size={16} />
             </button>
             <input
+              aria-label="正文字号"
+              aria-valuetext={`${fontSize} 像素`}
               type="range"
               min="12"
               max="32"
               step="1"
               value={fontSize}
               onChange={(e) => setFontSize(Number(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              className="min-w-0 flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
             <button
               onClick={() => handleFontSizeChange(1)}
               disabled={fontSize >= 32}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title="增大字号"
+              aria-label="增大字号"
             >
               <Plus size={16} />
             </button>
@@ -131,11 +142,13 @@ export const SettingsPopover: React.FC = () => {
           <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
             テーマ
           </span>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {THEME_OPTIONS.map((item) => (
               <button
                 key={item.t}
                 onClick={() => setTheme(item.t)}
+                aria-label={`主题：${item.t === 'system' ? '跟随系统' : item.t === 'light' ? '浅色' : item.t === 'dark' ? '深色' : '羊皮纸'}`}
+                aria-pressed={theme === item.t}
                 className={clsx(
                   'h-10 rounded-lg border flex items-center justify-center text-xs transition-all',
                   item.bg,
@@ -148,6 +161,30 @@ export const SettingsPopover: React.FC = () => {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">字体</span>
+          <SegmentControl
+            value={fontFamily}
+            onChange={setFontFamily}
+            options={[
+              { value: '"Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif', label: '明朝', title: '明朝字体' },
+              { value: '"Noto Sans JP", "Hiragino Sans", sans-serif', label: '黑体', title: '黑体字体' },
+            ]}
+          />
+        </div>
+        <div className="space-y-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">正文宽度</span>
+          <SegmentControl
+            value={readerWidth}
+            onChange={setReaderWidth}
+            options={[
+              { value: 640, label: '窄', title: '窄正文：640 像素' },
+              { value: 768, label: '标准', title: '标准正文：768 像素' },
+              { value: 960, label: '宽', title: '宽正文：960 像素' },
+            ]}
+          />
         </div>
 
         {/* 4. 注音模式 */}

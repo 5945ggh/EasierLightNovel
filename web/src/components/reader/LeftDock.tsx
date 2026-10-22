@@ -42,6 +42,8 @@ const DockButton = memo<DockButtonProps>(({ icon: Icon, label, onClick, active }
   <button
     onClick={onClick}
     title={label}
+    aria-label={label}
+    aria-pressed={active}
     className={clsx(
       'p-3 rounded-xl transition-all duration-200 group relative flex items-center justify-center',
       active
@@ -63,6 +65,7 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
   const { bookId: routeBookId } = useParams<{ bookId: string }>();
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsRef = useRef<HTMLDivElement>(null);
 
   // 侧边栏状态
   const isSidebarOpen = useReaderStore((s) => s.isSidebarOpen);
@@ -73,15 +76,46 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
 
   // 点击外部关闭设置面板（使用 useCallback 稳定引用）
   const handleClickOutside = useCallback((event: MouseEvent) => {
-    if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-      setShowSettings(false);
-    }
+    const target = event.target as Node;
+    if (settingsRef.current?.contains(target) || mobileSettingsRef.current?.contains(target)) return;
+    if (target instanceof Element && target.closest('[aria-label="阅读设置"], [title="阅读设置"]')) return;
+    setShowSettings(false);
   }, []);
 
   useEffect(() => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [handleClickOutside]);
+
+  useEffect(() => {
+    if (!showSettings) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const mobile = window.matchMedia('(max-width: 767px)').matches;
+    const panel = mobile ? mobileSettingsRef.current : settingsRef.current;
+    panel?.querySelector<HTMLElement>(mobile ? 'button' : 'input')?.focus({ preventScroll: true });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setShowSettings(false);
+      }
+      if (!mobile || event.key !== 'Tab' || !panel) return;
+      const controls = Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'));
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, [showSettings]);
 
   // 使用 useCallback 稳定回调引用
   const handleNavigateHome = useCallback(() => navigate('/'), [navigate]);
@@ -150,7 +184,7 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
           <div className="relative" ref={settingsRef}>
             <DockButton
               icon={showSettings ? X : Settings}
-              label="阅读设置"
+              label={showSettings ? "关闭阅读设置" : "阅读设置"}
               active={showSettings}
               onClick={handleToggleSettings}
             />
@@ -168,11 +202,12 @@ export const LeftDock: React.FC<LeftDockProps> = memo(({ onToggleToc }) => {
             onClick={() => setShowSettings(false)}
           />
           {/* 设置面板 */}
-          <div className="relative bottom-0 mb-16 w-[95%] max-w-sm bg-white dark:bg-gray-800 rounded-t-2xl shadow-xl p-4 animate-in slide-in-from-bottom duration-300 ease-out max-h-[70vh] overflow-y-auto">
+          <div ref={mobileSettingsRef} role="dialog" aria-modal="true" aria-label="阅读设置" className="relative bottom-0 mb-16 w-[95%] max-w-sm bg-white dark:bg-gray-800 rounded-t-2xl shadow-xl p-4 animate-in slide-in-from-bottom duration-300 ease-out max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-gray-900 dark:text-white">阅读设置</h3>
               <button
                 onClick={() => setShowSettings(false)}
+                aria-label="关闭阅读设置"
                 className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >
                 <X size={18} />

@@ -3,6 +3,7 @@
  */
 
 import apiClient from './api-client';
+import { enqueueProgressWrite } from '@/utils/progressPersistence';
 import type {
   BookDetail,
   BookListItem,
@@ -16,6 +17,8 @@ import type {
   ChapterProgressUpdate,
   HighlightResponse,
 } from '@/types';
+
+const pendingProgressWrites = new Map<string, Promise<unknown>>();
 
 /**
  * 上传 EPUB 书籍
@@ -136,6 +139,7 @@ export const getVocabulariesBaseForms = async (
  * @returns 阅读进度
  */
 export const getReadingProgress = async (bookId: string): Promise<UserProgressResponse> => {
+  await pendingProgressWrites.get(bookId)?.catch(() => {});
   return apiClient.get<UserProgressResponse>(`/books/${bookId}/progress`);
 };
 
@@ -149,7 +153,9 @@ export const updateReadingProgress = async (
   bookId: string,
   data: UserProgressUpdate
 ): Promise<UserProgressResponse> => {
-  return apiClient.put<UserProgressResponse>(`/books/${bookId}/progress`, data);
+  return enqueueProgressWrite(pendingProgressWrites, bookId, () =>
+    apiClient.put<UserProgressResponse>(`/books/${bookId}/progress`, data)
+  );
 };
 
 /**
@@ -158,6 +164,7 @@ export const updateReadingProgress = async (
 export const getChapterProgresses = async (
   bookId: string
 ): Promise<ChapterProgressResponse[]> => {
+  await pendingProgressWrites.get(bookId)?.catch(() => {});
   return apiClient.get<ChapterProgressResponse[]>(`/books/${bookId}/progress/chapters`);
 };
 

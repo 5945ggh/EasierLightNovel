@@ -21,6 +21,7 @@ import { createHighlight, deleteHighlight } from '@/services/highlights.service'
 import { speak } from '@/utils/tts';
 import { clsx } from 'clsx';
 import { getHighlightOptions } from '@/utils/highlightStyles';
+import { getReaderSelectionCoordinates, getReaderSelectionText, isReaderSelectionRange } from '@/utils/readerSelection';
 
 /**
  * 选区坐标信息
@@ -81,26 +82,6 @@ export const SelectionMenu: React.FC = () => {
   }, [refs]);
 
   /**
-   * 从 DOM 节点向上查找，找到包含 data-segment-index 和 data-token-index 的元素
-   */
-  const findTokenData = useCallback((node: Node | null): { segIdx: number; tokIdx: number } | null => {
-    let current = node instanceof Element ? node : node?.parentElement;
-    while (current) {
-      if (current.hasAttribute('data-segment-index') && current.hasAttribute('data-token-index')) {
-        const segIdx = parseInt(current.getAttribute('data-segment-index')!, 10);
-        const tokIdx = parseInt(current.getAttribute('data-token-index')!, 10);
-        if (!isNaN(segIdx) && !isNaN(tokIdx)) {
-          return { segIdx, tokIdx };
-        }
-      }
-      current = current.parentElement;
-      // 边界：到达内容区域
-      if (current?.classList.contains('reader-content')) break;
-    }
-    return null;
-  }, []);
-
-  /**
    * 检测点击位置是否在选区范围内（用于移动端二次点击唤醒）
    */
   const isPointInSelection = useCallback((x: number, y: number, range: Range | null): boolean => {
@@ -150,7 +131,7 @@ export const SelectionMenu: React.FC = () => {
       }
 
       const r = selection.getRangeAt(0);
-      const text = selection.toString().trim();
+      const text = getReaderSelectionText(r);
 
       if (text.length === 0) {
         setIsOpen(false);
@@ -158,10 +139,7 @@ export const SelectionMenu: React.FC = () => {
       }
 
       // 检查选区是否在阅读器内容区域内
-      const container = r.commonAncestorContainer;
-      const inReaderArea =
-        container instanceof HTMLElement &&
-        (container.closest('.reader-content') || container.closest('[data-segment-index]'));
+      const inReaderArea = isReaderSelectionRange(r);
 
       if (!inReaderArea) {
         setIsOpen(false);
@@ -169,13 +147,10 @@ export const SelectionMenu: React.FC = () => {
       }
 
       // 解析选区坐标
-      const parsedCoords = {
-        start: findTokenData(r.startContainer)!,
-        end: findTokenData(r.endContainer)!,
-        text,
-      };
+      const boundaries = getReaderSelectionCoordinates(r);
+      const parsedCoords = boundaries ? { ...boundaries, text } : null;
 
-      if (!parsedCoords.start || !parsedCoords.end) {
+      if (!parsedCoords) {
         setIsOpen(false);
         return;
       }
@@ -208,7 +183,7 @@ export const SelectionMenu: React.FC = () => {
       refs.setReference(virtualEl);
       setIsOpen(true);
     }, 10);
-  }, [refs, findTokenData, highlights]);
+  }, [refs, highlights]);
 
   /**
    * 处理选区变化事件（用于移动端二次点击唤醒）
@@ -228,16 +203,13 @@ export const SelectionMenu: React.FC = () => {
 
         // 显示高亮菜单
         const r = lastSelectionRangeRef.current;
-        const text = selection.toString().trim();
+        const text = getReaderSelectionText(r);
 
         // 解析选区坐标
-        const parsedCoords = {
-          start: findTokenData(r.startContainer)!,
-          end: findTokenData(r.endContainer)!,
-          text,
-        };
+        const boundaries = getReaderSelectionCoordinates(r);
+        const parsedCoords = boundaries ? { ...boundaries, text } : null;
 
-        if (parsedCoords.start && parsedCoords.end) {
+        if (text && parsedCoords) {
           setCoords(parsedCoords);
 
           // 检查是否已有高亮
@@ -275,7 +247,7 @@ export const SelectionMenu: React.FC = () => {
       lastSelectionRangeRef.current = null;
       clickInSelectionRef.current = false;
     }
-  }, [refs, findTokenData, highlights]);
+  }, [refs, highlights]);
 
   /**
    * 事件监听器设置
@@ -352,7 +324,8 @@ export const SelectionMenu: React.FC = () => {
           end_segment_index: end.segIdx,
           end_token_idx: end.tokIdx,
           style_category: result.style_category,
-        });
+          selected_text: text,
+        }, { bookId, chapterIndex });
         removePendingHighlight(tempId);
       } catch (error) {
         console.error('Failed to create highlight:', error);

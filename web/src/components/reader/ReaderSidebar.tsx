@@ -11,6 +11,7 @@ import { analyzeAI } from '@/services/ai.service';
 import { saveAIAnalysis as saveAIAnalysisService, getArchiveItem } from '@/services/highlights.service';
 import { searchDictionary } from '@/services/dictionary.service';
 import { addVocabulary as addVocabularyService, deleteVocabulary } from '@/services/vocabularies.service';
+import { getReaderHighlightText } from '@/utils/readerText';
 import { extractSentenceFromSegment } from '@/utils/sentence';
 import { speak } from '@/utils/tts';
 import { getHighlightStyleWithFallback } from '@/utils/highlightStyles';
@@ -225,7 +226,7 @@ const DictionaryTab: React.FC = () => {
         const contextSentence = selectedToken
           ? extractSentenceFromSegment(
               selectedToken.segmentIndex,
-              selectedToken.tokenIndex,
+              selectedToken.sourceTokenIndex,
               chapter?.segments
             )
           : undefined;
@@ -470,27 +471,7 @@ const AITab: React.FC = () => {
     // ------------------------------------------
     // 1. 提取 Target Text（用户选中的文本）
     // ------------------------------------------
-    const targetTokens: string[] = [];
-
-    for (let s = highlight.start_segment_index; s <= highlight.end_segment_index; s++) {
-      const segment = chapter.segments[s];
-      if (segment?.type !== 'text' || !segment.tokens) continue;
-
-      const startT = (s === highlight.start_segment_index) ? highlight.start_token_idx : 0;
-      const endT = (s === highlight.end_segment_index) ? highlight.end_token_idx : segment.tokens.length - 1;
-
-      for (let t = startT; t <= endT; t++) {
-        const token = segment.tokens[t];
-        if (token?.s) {
-          // 处理 gap：当前 token 有 gap 且不是范围内第一个时加空格
-          const isFirstToken = (s === highlight.start_segment_index && t === startT);
-          const prefix = (token.gap && !isFirstToken) ? ' ' : '';
-          targetTokens.push(prefix + token.s);
-        }
-      }
-    }
-
-    const targetText = targetTokens.join('');
+    const targetText = getReaderHighlightText(chapter.segments, highlight);
 
     // ------------------------------------------
     // 2. 提取上下文（句子级扩展策略）
@@ -1138,22 +1119,7 @@ const HighlightsTab: React.FC = () => {
     // 降级：从 segments 中提取（当前章节的情况）
     if (!chapter?.segments) return '无法显示文本';
 
-    const tokens: string[] = [];
-    for (let s = highlight.start_segment_index; s <= highlight.end_segment_index; s++) {
-      const segment = chapter.segments[s];
-      if (segment?.type === 'text' && segment.tokens) {
-        const startT = s === highlight.start_segment_index ? highlight.start_token_idx : 0;
-        const endT = s === highlight.end_segment_index ? highlight.end_token_idx : (segment.tokens?.length || 0) - 1;
-
-        for (let t = startT; t <= endT; t++) {
-          const token = segment.tokens[t];
-          if (token?.s) {
-            tokens.push(token.s);
-          }
-        }
-      }
-    }
-    return tokens.join('');
+    return getReaderHighlightText(chapter.segments, highlight);
   }, [chapter]);
 
   // 章节选择处理

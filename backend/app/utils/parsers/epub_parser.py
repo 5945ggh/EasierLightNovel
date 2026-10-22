@@ -1,8 +1,10 @@
+import hashlib
 import os
+import posixpath
 import re
 import uuid
 import warnings
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 from typing import List, Dict, Any, Optional
 import ebooklib
 from ebooklib import epub
@@ -43,6 +45,13 @@ class LightNovelParser:
         self.book = epub.read_epub(epub_path)
         self.images_map = {} # map internal filename -> saved web path
         self._extract_all_images()
+        self.cover_image_url = self._find_declared_cover_image()
+        image_paths = sorted(self.images_map)
+        fallback_path = next(
+            (path for path in image_paths if "cover" in posixpath.basename(path).lower()),
+            image_paths[0] if image_paths else None,
+        )
+        self.fallback_cover_image_url = self.images_map.get(fallback_path)
         # A parser-source coordinate space kept outside the reader cache.  It
         # is persisted by BookService as a SourceContentVersion after import.
         self.source_documents: List[Dict[str, Any]] = []
@@ -111,12 +120,12 @@ class LightNovelParser:
             spine_id: spine 中的 item_id (如 "p-001")
             soup: BeautifulSoup 解析后的文档对象
             chapter_index: 章节索引（用于 fallback）
-            first_text_line_info: (标题文本, 是否需要从正文中删除)
+            first_text_line_info: (标题文本, 是否为引号候选)
 
         Returns:
             章节标题字符串
         """
-        first_text_line, should_remove = first_text_line_info
+        first_text_line, is_quoted = first_text_line_info
 
         # 1. 优先使用 TOC 标题
         if spine_id in self.toc_map:
@@ -139,73 +148,90 @@ class LightNovelParser:
 
         # 4. 使用正文首行提取结果
         if first_text_line:
-            # 引号标题（should_remove=True）不截断，其他策略才截断
-            if should_remove:
+            # 引号候选不截断，其他策略才截断
+            if is_quoted:
                 return first_text_line
             return first_text_line[:EPUB_MAX_TITLE_LENGTH]
 
         # 5. Fallback
         return f"Chapter {chapter_index + 1}"
 
+    @staticmethod
+    def _normalize_archive_path(path: str) -> str:
+        # ebooklib resource names are already decoded; '%' is literal here.
+        return posixpath.normpath(path.replace("\\", "/")).lstrip("/")
+
     def _extract_all_images(self):
-        """预先解压所有图片，建立映射关系"""
+        """Store images by package path; ambiguous basenames never alias."""
+        self.image_basename_map: Dict[str, Optional[str]] = {}
         for item in self.book.get_items():
-            if item.get_type() == ebooklib.ITEM_IMAGE:
-                # 获取原始文件名
-                raw_name = item.get_name()
-                clean_name = os.path.basename(raw_name)
+            if item.get_type() not in {ebooklib.ITEM_IMAGE, ebooklib.ITEM_COVER}:
+                continue
+            path = self._normalize_archive_path(item.get_name())
+            extension = posixpath.splitext(path)[1]
+            filename = hashlib.sha256(path.encode("utf-8")).hexdigest() + extension
+            with open(os.path.join(self.image_output_dir, filename), "wb") as output:
+                output.write(item.get_content())
+            web_path = f"{self.web_image_prefix}/{filename}"
+            self.images_map[path] = web_path
+            basename = posixpath.basename(path)
+            if basename in self.image_basename_map:
+                self.image_basename_map[basename] = None
+            else:
+                self.image_basename_map[basename] = web_path
 
-                # 写入磁盘
-                save_path = os.path.join(self.image_output_dir, clean_name)
-                with open(save_path, "wb") as f:
-                    f.write(item.get_content())
+    def _find_declared_cover_image(self) -> Optional[str]:
+        """Resolve EPUB 2 metadata IDs and EPUB 3 cover-image resources."""
+        metadata = self.book.get_metadata("OPF", "meta") + self.book.get_metadata("OPF", "cover")
+        for _, attributes in metadata:
+            if attributes.get("name") != "cover":
+                continue
+            item = self.book.get_item_with_id(attributes.get("content"))
+            if item is not None:
+                url = self.images_map.get(self._normalize_archive_path(item.get_name()))
+                if url:
+                    return url
+        for item in self.book.get_items_of_type(ebooklib.ITEM_COVER):
+            url = self.images_map.get(self._normalize_archive_path(item.get_name()))
+            if url:
+                return url
+        return None
 
-                # 记录多种可能的映射方式
-                # 1. 纯文件名
-                self.images_map[clean_name] = f"{self.web_image_prefix}/{clean_name}"
-
-                # 2. 原始路径（如果引用使用完整路径）
-                self.images_map[raw_name] = f"{self.web_image_prefix}/{clean_name}"
-
-                # 3. 处理路径分隔符差异（EPUB 用 /，Windows 用 \）
-                # 有些 EPUB 可能使用 Windows 风格路径
-                normalized_path = raw_name.replace('\\', '/')
-                if normalized_path != raw_name:
-                    self.images_map[normalized_path] = f"{self.web_image_prefix}/{clean_name}"
-
-    def _find_image_web_path(self, src_path: str) -> Optional[str]:
-        """
-        根据引用的 src 路径查找对应的 Web 访问路径
-        尝试多种匹配策略：
-        1. 直接查找
-        2. 只用文件名
-        3. 标准化路径分隔符后查找
-        """
+    def _find_image_web_path(self, src_path: str, document_path: str = "") -> Optional[str]:
+        """Resolve against the containing XHTML before package/fallback lookup."""
         if not src_path:
             return None
+        reference = urlsplit(src_path.replace("\\", "/"))
+        if reference.scheme or reference.netloc or not reference.path:
+            return None
+        # Only URI references need percent decoding, exactly once.
+        path = self._normalize_archive_path(unquote(reference.path))
+        if document_path and not reference.path.startswith("/"):
+            directory = posixpath.dirname(self._normalize_archive_path(document_path))
+            relative_path = posixpath.normpath(posixpath.join(directory, path))
+            if relative_path in self.images_map:
+                return self.images_map[relative_path]
+        if path in self.images_map:
+            return self.images_map[path]
+        return self.image_basename_map.get(posixpath.basename(path))
 
-        # 1. 直接查找
-        if src_path in self.images_map:
-            return self.images_map[src_path]
-
-        # 2. 尝试只用文件名
-        filename = os.path.basename(src_path)
-        if filename in self.images_map:
-            return self.images_map[filename]
-
-        # 3. 标准化路径分隔符后查找
-        normalized_path = src_path.replace('\\', '/')
-        if normalized_path in self.images_map:
-            return self.images_map[normalized_path]
-
-        # 4. 处理相对路径（如 ../images/cover.jpg）
-        # 去除开头的 ./ 或 ../
-        if src_path.startswith('./') or src_path.startswith('../'):
-            clean_rel = src_path.lstrip('./')
-            if clean_rel in self.images_map:
-                return self.images_map[clean_rel]
-
-        return None
+    @staticmethod
+    def _retain_text_node(node: NavigableString) -> bool:
+        """Keep horizontal inline gaps while discarding XHTML indentation."""
+        value = str(node)
+        if value.strip():
+            return True
+        if not value or any(character in value for character in "\r\n\t"):
+            return False
+        parent = node.parent
+        if parent is None or parent.name in {"body", "html", "[document]"}:
+            return False
+        blocks = {"p", "div", "h1", "h2", "h3", "blockquote", "li"}
+        # Whitespace between block siblings is formatting, even on one line.
+        return not any(
+            isinstance(sibling, Tag) and sibling.name in blocks
+            for sibling in (node.previous_sibling, node.next_sibling)
+        )
 
     @staticmethod
     def _normalize_text_with_boundary_map(text: str) -> tuple[str, List[int]]:
@@ -273,7 +299,7 @@ class LightNovelParser:
             chunks.append(current_buf)
         return chunks
 
-    def _process_node(self, node, text_buffer: List[str], segments: List[ContentSegment]):
+    def _process_node(self, node, text_buffer: List[str], segments: List[ContentSegment], document_path: str = ""):
         """
         递归 DOM 遍历，关键在于处理 Ruby 和 Block 元素
         """
@@ -286,8 +312,7 @@ class LightNovelParser:
         # 2. 文本节点
         if isinstance(node, NavigableString):
             text = str(node)
-            # 只有非纯空白才添加，或者它在 pre 标签里
-            if text.strip():
+            if self._retain_text_node(node):
                 text_buffer.append(text)
             return
 
@@ -301,8 +326,7 @@ class LightNovelParser:
                 # 寻找 src
                 src = node.get('src') or node.get('xlink:href')
                 if src:
-                    src = unquote(str(src))
-                    web_path = self._find_image_web_path(str(src))
+                    web_path = self._find_image_web_path(str(src), document_path)
                     if web_path:
                         alt = node.get('alt', '')
                         segments.append(ImageSegment(src_path=web_path, alt=str(alt)))
@@ -322,7 +346,7 @@ class LightNovelParser:
 
             # ** 递归遍历子节点 **
             for child in node.children:
-                self._process_node(child, text_buffer, segments)
+                self._process_node(child, text_buffer, segments, document_path)
 
             # 递归后：块级元素结束，补换行
             if is_block and text_buffer and not text_buffer[-1].endswith('\n'):
@@ -339,7 +363,7 @@ class LightNovelParser:
                 # EPUB writers often pretty-print <rb> children with
                 # indentation nodes. Those nodes are markup whitespace, not
                 # ruby base text and must not shift the captured span.
-                if value.strip():
+                if LightNovelParser._retain_text_node(child):
                     pieces.append(value)
             elif isinstance(child, Tag) and child.name not in {"rt", "rp"}:
                 for descendant in child.children:
@@ -407,7 +431,7 @@ class LightNovelParser:
                 return
             if isinstance(node, NavigableString):
                 value = str(node)
-                if value.strip():
+                if self._retain_text_node(node):
                     buffer.append(value)
                 return
             if not isinstance(node, Tag) or node.name in {"rt", "rp", "script", "style"}:
@@ -492,7 +516,7 @@ class LightNovelParser:
         """
         提取正文第一行文本（用于作为章节标题的 fallback）
 
-        返回: (标题文本, 是否需要从正文中删除)
+        返回: (标题文本, 是否为引号候选)
 
         策略优先级：
         1. 检测引号标题 『...』 或 「...」
@@ -515,7 +539,7 @@ class LightNovelParser:
                     title = body_text[start_idx:end_idx + 1]
                     title = re.sub(r'\s+', ' ', title).strip()  # 换行符替换为空格
                     if title:  # 只需要防止为空
-                        return title, True  # 返回标题，标记需要删除
+                        return title, True  # 仅作为标题标签，不修改正文
 
         # ========== 策略2: 第一个标点符号 + 向前找换行符 ==========
         # 常见日文/中文标点
@@ -548,44 +572,6 @@ class LightNovelParser:
 
         return None, False
 
-    def _remove_title_from_soup(self, soup: BeautifulSoup, title: str) -> None:
-        """
-        从 soup 中删除引号标题，避免在正文中重复出现
-
-        策略：找到包含标题文本的文本节点，将其父节点删除
-        """
-        # 标准化标题用于匹配（去除空格）
-        title_normalized = re.sub(r'\s+', '', title)
-
-        # 遍历所有文本节点
-        for text_node in list(soup.find_all(string=True)):
-            if not text_node.strip():
-                continue
-
-            # 标准化节点文本
-            node_normalized = re.sub(r'\s+', '', text_node)
-
-            # 检查是否包含标题
-            if title_normalized in node_normalized:
-                # 找到包含该文本的父元素
-                parent = text_node.parent
-                if parent:
-                    # 如果是纯标题节点（只有标题文本），直接删除
-                    # 如果标题是段落的一部分，只删除标题部分
-                    parent_text = parent.get_text()
-                    parent_text_normalized = re.sub(r'\s+', '', parent_text)
-
-                    # 如果整个元素就是标题，删除整个元素
-                    if parent_text_normalized == title_normalized:
-                        parent.decompose()
-                        break
-                    # 如果标题只是元素的一部分，替换文本
-                    elif title_normalized in parent_text_normalized:
-                        # 用空字符串替换标题文本
-                        new_text = re.sub(re.escape(title), '', parent_text, flags=re.IGNORECASE)
-                        parent.string = new_text
-                        break
-
     def parse(self) -> List[Chapter]:
         """
         解析 EPUB，返回章节列表
@@ -617,18 +603,16 @@ class LightNovelParser:
             soup = BeautifulSoup(item.get_content(), 'lxml')
 
             # 提取正文第一行（用于标题 fallback）
-            first_text_line, should_remove_title = self._extract_first_text_line(soup)
+            first_text_line, is_quoted = self._extract_first_text_line(soup)
 
-            # 如果检测到引号标题，从正文中删除它
-            if should_remove_title and first_text_line:
-                self._remove_title_from_soup(soup, first_text_line)
+            # Titles are labels only: fallback heuristics must never mutate prose.
 
             # 使用组合策略提取章节标题
             title_str = self._extract_chapter_title(
                 spine_id=item_id,
                 soup=soup,
                 chapter_index=i,
-                first_text_line_info=(first_text_line, should_remove_title)
+                first_text_line_info=(first_text_line, is_quoted)
             )
 
             current_chapter = Chapter(title_str, i)
@@ -638,7 +622,7 @@ class LightNovelParser:
             root = soup.body if soup.body else soup
             self.source_documents.append(self._extract_source_document(root, item_id, i))
             for child in root.children:
-                self._process_node(child, text_buffer, current_chapter.segments)
+                self._process_node(child, text_buffer, current_chapter.segments, item.get_name())
 
             self._flush_buffer(text_buffer, current_chapter.segments)
 
