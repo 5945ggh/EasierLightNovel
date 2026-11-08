@@ -1,0 +1,21 @@
+README.en-US.md
+  s_6469967620ae06::t_a1669de11f945b 9-10,387-397,399
+README.md
+  s_6469967620ae06::t_a1669de11f945b 9-10,388-396,398
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "254866d37dd36732919670b8d0dcf44052bb31c8",
+  "prompts": {},
+  "sessions": {
+    "s_6469967620ae06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b9fa-8884-7643-87ed-e984dcbc0306",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "5945ggh <1282835294@qq.com>"
+    }
+  }
+}
