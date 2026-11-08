@@ -6,6 +6,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-19+-cyan.svg)](https://react.dev/)
 
+> **Follow-up project: [Folio-J](https://github.com/5945ggh/folio-j)** is available for early testing. Take a look if you want horizontal or vertical Japanese EPUB reading, instant dictionary lookup, and contextual translation.
+
 ---
 
 ## Project Introduction
@@ -382,6 +384,16 @@ Issues and Pull Requests are welcome.
 
 The project's high-density iteration and optimization phase has come to an end. The author will continue basic maintenance, including occasional small updates and handling Issues and Pull Requests.
 
-Most future effort will go into a new project aimed at providing an open-source, free Immersion Learning Data Layer/Pipeline with multimodal input support. The experience and technical foundation from this project will inform that work.
+### Follow-up Project: Folio-J
 
-Updates will be shared here when available. Thank you again for supporting this project!
+Most future effort will go into [Folio-J](https://github.com/5945ggh/folio-j), continuing the exploration of reading and learning from Japanese texts. Building on the experience of EasierLightNovel, it focuses on keeping excerpts, translations, and explanations linked to their place in a book, so you can revisit them and continue a discussion.
+
+You can already:
+
+- Import Japanese EPUBs, read horizontally or vertically, add automatic furigana, and look up words with imported Yomitan dictionaries.
+- Select text for contextual translation, save excerpts with surrounding context and source locations, and follow up with AI questions or save explanations.
+- Organize books and excerpts by series or topic, and revisit translations and explanations beside the original text. You can also add excerpts manually and write or paste Markdown explanations.
+
+Folio-J is still in early development. [Beta source releases](https://github.com/5945ggh/folio-j/releases) are available; you need to install dependencies and run it locally. It has been verified on macOS, offers experimental Windows 11 x64 support, and has not yet been verified on Linux. Basic reading, dictionary lookup, and manual saving work without a model; in-app translation and AI discussions require your own model service. See the [Folio-J README](https://github.com/5945ggh/folio-j#readme) for setup and usage. Feedback is welcome!
+
+Thank you again for supporting this project!

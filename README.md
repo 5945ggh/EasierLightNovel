@@ -6,6 +6,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-19+-cyan.svg)](https://react.dev/)
 
+> **后续项目：[Folio-J](https://github.com/5945ggh/folio-j)** 已开放早期试用。如果你希望在阅读日文 EPUB 时使用横排／竖排、即时查词和语境翻译，欢迎前往了解。
+
 ---
 
 ## 项目简介
@@ -383,8 +385,16 @@ A: 学习地图只读取完成且 active 的分析结果，避免将新旧分词
 
 本项目的高密度迭代与优化已经告一段落, 作者仍会持续进行基本的维护, 包括不定期小规模更新、处理 Issue 与 PR 等
 
-后续主要精力将投入到一个新项目中, 旨在提供一套开源免费的、支持多模态输入的 "Immersion Learning Data Layer/Pipeline", 本项目的经验与技术积累预计会被大量参考、应用
+### 后续项目：Folio-J
 
-有进展后将在这里同步更新, 彼时欢迎大家体验
+后续主要精力将投入到 [Folio-J](https://github.com/5945ggh/folio-j)，继续探索日语原版阅读与学习。它延续了 EasierLightNovel 的探索，更关注阅读中留下的片段、译文和讲解，让这些内容带着书中出处保存下来，便于回看与继续讨论。
+
+目前已经可以：
+
+- 导入日文 EPUB，横排或竖排阅读，自动补齐振假名，并使用导入的 Yomitan 词典即时查词。
+- 划选原文获取语境翻译，保存带有前后文与出处的片段，再向 AI 追问或保存讲解。
+- 按作品系列或自定专题组织书籍与片段，在原文旁回看译文和讲解；也可以手动添加片段、编写或粘贴 Markdown 讲解。
+
+Folio-J 仍处于早期开发阶段，目前提供 [Beta 源码发行包](https://github.com/5945ggh/folio-j/releases)，需要安装依赖后在本机启动。已在 macOS 上验证，Windows 11 x64 为实验性支持，Linux 尚未完成验证。基础阅读、查词和手动保存资料无需配置模型；应用内翻译与 AI 讨论需要接入自己的模型服务。安装与使用方式请以 [Folio-J README](https://github.com/5945ggh/folio-j#readme) 为准，欢迎试用和反馈。
 
 在这里, 再次感谢大家对本项目的支持!
